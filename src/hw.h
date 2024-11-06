@@ -18,6 +18,19 @@ typedef struct  hw_CStr     hw_CStr;
 typedef struct  hw_uintArr  hw_uintArr;
 typedef struct  hw_byteArr  hw_byteArr;
 
+/************************************************************/
+
+typedef hw_uint (*hw_VarFn2) (hw_Var *self, hw_Var const *B, hw_Var const *C);
+typedef hw_uint (*hw_VarFn) (hw_Var *self, hw_Var const *list, hw_uint const count);
+
+typedef struct  hw_VarFnArr hw_VarFnArr;
+typedef struct  hw_VarFn2Arr hw_VarFn2Arr;
+
+typedef struct  hw_Type         hw_Type;
+typedef struct  hw_TypeArr      hw_TypeArr;
+
+/************************************************************/
+
 typedef union   hw_code     hw_code;
 typedef struct  hw_codeArr  hw_codeArr;
 
@@ -25,13 +38,14 @@ typedef struct  hw_FnState      hw_FnState;
 typedef struct  hw_FnSave       hw_FnSave;
 typedef struct  hw_FnSaveArr    hw_FnSaveArr;
 
-typedef struct  hw_Type         hw_Type;
-
 typedef struct  hw_Module       hw_Module;
 typedef struct  hw_ModuleArr    hw_ModuleArr;
 typedef struct  hw_Thread       hw_Thread;
 typedef struct  hw_ThreadArr    hw_ThreadArr;
 typedef struct  hw_State        hw_State;
+
+/************************************************************/
+/************************************************************/
 
 union hw_Var {
     hw_ptr          as_ptr;
@@ -82,6 +96,29 @@ struct hw_VarArr {
 /****************************************************/
 /****************************************************/
 
+struct hw_VarFnArr {
+    hw_VarFn        *data;
+    hw_uint         len;
+    hw_uint         lenUsed;
+};
+
+struct hw_VarFn2Arr {
+    hw_VarFn2       *data;
+    hw_uint         len;
+    hw_uint         lenUsed;
+};
+
+struct hw_Type {
+    hw_uint         id;
+    hw_String       name;
+    hw_uint         unitsize;
+    hw_VarFn2       vt2[16];
+    hw_VarFn        vt[4];
+};
+
+/****************************************************/
+/****************************************************/
+
 union hw_code {
     uint64_t         raw;
     struct {
@@ -97,6 +134,7 @@ union hw_code {
         };
     };
 };
+
 
 struct hw_codeArr {
     hw_code *data;
@@ -219,7 +257,8 @@ struct hw_ThreadArr {
 struct hw_State {
     hw_CStr         name;
     hw_uint         pid;
-    hw_ThreadArr    threads;
+    hw_ThreadArr    *threads;
+    hw_TypeArr      *types;
 };
 
 #define hw_CStr_makelit(s)     ((hw_CStr){.data = #s, .len = sizeof(#s) - 1})
