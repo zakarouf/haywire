@@ -11,6 +11,7 @@ typedef double              hw_float;
 typedef void*               hw_ptr;
 
 typedef union   hw_Var      hw_Var;
+
 typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarArr   hw_VarArr;
 typedef struct  hw_String   hw_String;
@@ -20,14 +21,17 @@ typedef struct  hw_byteArr  hw_byteArr;
 
 /************************************************************/
 
-typedef hw_uint (*hw_VarFn2) (hw_Var *self, hw_Var const *B, hw_Var const *C);
-typedef hw_uint (*hw_VarFn) (hw_Var *self, hw_Var const *list, hw_uint const count);
+typedef struct  hw_Type         hw_Type;
+typedef struct  hw_TypeArr      hw_TypeArr;
+
+typedef hw_uint (*hw_VarFn2)
+        (hw_Var *self, hw_Type const * const types, hw_uint type_count, hw_Var const *B, hw_Var const *C);
+
+typedef hw_uint (*hw_VarFn) 
+        (hw_Var *self, hw_Type const * const types, hw_uint type_count, hw_Var const *list, hw_uint const count);
 
 typedef struct  hw_VarFnArr hw_VarFnArr;
 typedef struct  hw_VarFn2Arr hw_VarFn2Arr;
-
-typedef struct  hw_Type         hw_Type;
-typedef struct  hw_TypeArr      hw_TypeArr;
 
 /************************************************************/
 
