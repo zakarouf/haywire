@@ -4,11 +4,15 @@
 #include <stdint.h>
 #include <float.h>
 
+typedef void*               hw_ptr;
+typedef uint8_t             hw_byte;
+
 typedef int64_t             hw_int;
 typedef uint64_t            hw_uint;
-typedef uint8_t             hw_byte;
 typedef double              hw_float;
-typedef void*               hw_ptr;
+
+#define HW_UINT_MAX UINT64_MAX
+#define HW_INT_MAX  INT64_MAX
 
 typedef union   hw_Var      hw_Var;
 
@@ -25,10 +29,12 @@ typedef struct  hw_Type         hw_Type;
 typedef struct  hw_TypeArr      hw_TypeArr;
 
 typedef hw_uint (*hw_VarFn2)
-        (hw_Var *self, hw_Type const * const types, hw_uint type_count, hw_Var const *B, hw_Var const *C);
+        (hw_Var *self, hw_Type const * const types, hw_uint const type_count
+         , hw_Var const *B, hw_Var const *C);
 
 typedef hw_uint (*hw_VarFn) 
-        (hw_Var *self, hw_Type const * const types, hw_uint type_count, hw_Var const *list, hw_uint const count);
+        (hw_Var *self, hw_Type const * const types, hw_uint const type_count
+         , hw_Var const *list, hw_uint const count);
 
 typedef struct  hw_VarFnArr hw_VarFnArr;
 typedef struct  hw_VarFn2Arr hw_VarFn2Arr;

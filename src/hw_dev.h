@@ -33,7 +33,9 @@ typedef enum hw_LexTokenType hw_LexTokenType;
     void CAT(name, delete)(ARRT* arr);          \
     VT* CAT(name, push)(ARRT** arr, VT value);  \
     VT* CAT(name, pushstream)(ARRT** arr, VT values[static 1], hw_uint len);\
-    hw_uint CAT(name, pop)(ARRT** arr);         
+    hw_uint CAT(name, pop)(ARRT** arr);         \
+    ARRT *CAT(name, clone)(ARRT const **arr);   \
+    ARRT *CAT(name, copy)(ARRT const **arr);    \
 
 #define HW_ARR_FOREACH(T, iterator, arr, from, upto, step)\
     for(T iterator = (arr).data + from  \

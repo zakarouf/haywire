@@ -72,6 +72,14 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
         (ARR)->lenUsed -= 1;    \
     }
 
+#define ARR_CLONE(ARR, DEST_ARR)\
+    {\
+        ARR_NEW(DEST_ARR, (ARR)->len);\
+        memcpy(                                                         \
+            (DEST_ARR), (ARR)                                           \
+          , (sizeof(*(ARR)->data) * (ARR)->lenUsed) + sizeof(*(ARR)) );   \
+    }
+
 #define ARR_SERIALIZE(ARR, BARR)\
     {\
         hw_byteArr_pushstream(          \
@@ -85,6 +93,9 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
     {\
         if(SIZE_LEFT < AGAINST) { __VA_ARGS__; }\
     }
+
+/*************************************************************/
+/*************************************************************/
 
 #define ARR_IMPL_NEW(ARRT, name, VT, ...)\
     ARRT* CAT(name, new)(hw_uint len) {     \
@@ -123,6 +134,13 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
         return (prep_arr)->lenUsed;             \
     }                                           \
 
+#define ARR_IMPL_CLONE(ARRT, name, VT, ...)     \
+    ARRT *CAT(name, clone)(ARRT const **arr) {  \
+        ARRT *res = NULL;                       \
+        ARR_CLONE(*arr,  res);                  \
+        return res;                             \
+    }
+
 #define ARR_IMPL_SERIALIZE(ARRT, name, VT, ...)
 
 #define ARR_IMPL(ARRT, name, VT)\
@@ -130,7 +148,9 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
     ARR_IMPL_DELETE(ARRT, name, VT)\
     ARR_IMPL_PUSH(ARRT, name, VT)\
     ARR_IMPL_PUSHSTREAM(ARRT, name, VT)\
-    ARR_IMPL_POP(ARRT, name, VT)
+    ARR_IMPL_POP(ARRT, name, VT)\
+    ARR_IMPL_CLONE(ARRT, name, VT)\
+    //ARR_IMPL_COPY(ARRT, name, VT)\
 
 /**
  * Section: hw_uintArr
