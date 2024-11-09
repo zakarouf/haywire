@@ -26,15 +26,10 @@ typedef struct  hw_byteArr  hw_byteArr;
 /************************************************************/
 
 typedef struct  hw_Type         hw_Type;
-typedef struct  hw_TypeArr      hw_TypeArr;
+typedef struct  hw_TypeSys      hw_TypeSys;
 
-typedef hw_uint (*hw_VarFn2)
-        (hw_Var *self, hw_Type const * const types, hw_uint const type_count
-         , hw_Var const *B, hw_Var const *C);
-
-typedef hw_uint (*hw_VarFn) 
-        (hw_Var *self, hw_Type const * const types, hw_uint const type_count
-         , hw_Var const *list, hw_uint const count);
+typedef hw_uint (*hw_VarFn)
+        (hw_Var *self, hw_Var const *T_sys, hw_Var const *B, hw_Var const *C);
 
 typedef struct  hw_VarFnArr hw_VarFnArr;
 typedef struct  hw_VarFn2Arr hw_VarFn2Arr;
@@ -58,12 +53,24 @@ typedef struct  hw_State        hw_State;
 /************************************************************/
 
 union hw_Var {
-    hw_ptr          as_ptr;
-    hw_Var*         as_var;
+    hw_ptr          as_ptr,     *as_ptr_p;
+    hw_Var          *as_reff,   **as_reff_p;
 
-    hw_uint         as_uint,    *as_uintp,  **as_uintpp;
-    hw_int          as_int,     *as_intp,   **as_intpp;
-    hw_float        as_float,   *as_floatp, **as_floatpp;
+    hw_VarList      *as_list,   **as_list_p;
+    hw_VarArr       *as_arr,    **as_arr_p;
+
+    hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
+    hw_int          as_int,     *as_int_p,   **as_int_pp;
+    hw_float        as_float,   *as_float_p, **as_float_pp;
+    
+    hw_String       *as_string, *as_string_p;
+
+    hw_Type         *as_type,       **as_type_p;
+    hw_Type const   *as_type_const, **as_type_const_p;
+    hw_TypeSys      *as_typesys;
+
+    hw_Module       *as_module;
+    hw_Thread       *as_thread;
 };
 
 struct hw_uintArr {
@@ -112,18 +119,24 @@ struct hw_VarFnArr {
     hw_uint         lenUsed;
 };
 
-struct hw_VarFn2Arr {
-    hw_VarFn2       *data;
-    hw_uint         len;
-    hw_uint         lenUsed;
-};
-
 struct hw_Type {
     hw_uint         id;
-    hw_String       name;
+    hw_byte         name[256];
+    hw_uint         name_size;
     hw_uint         unitsize;
-    hw_VarFn2       vt2[16];
-    hw_VarFn        vt[4];
+    hw_VarFn        vt[8];
+};
+
+struct hw_TypeSys {
+    hw_uint     head;
+
+    hw_Type     *types;
+    hw_uint     types_used;
+    hw_uint     types_total;
+
+    hw_ptr  (*alloc)(size_t size);
+    hw_uint (*free)(hw_ptr pointer);
+    hw_ptr  (*realloc)(hw_ptr, size_t size);
 };
 
 /****************************************************/
@@ -232,7 +245,6 @@ struct hw_FnSaveArr {
  */
 
 
-
 struct hw_Module {
     hw_uint head;
     hw_byteArr *data;
@@ -255,7 +267,7 @@ struct hw_Thread {
 
     hw_FnState      fn;
 
-    hw_State *global;
+    hw_State const  *global;
 };
 
 struct hw_ThreadArr {
@@ -268,7 +280,7 @@ struct hw_State {
     hw_CStr         name;
     hw_uint         pid;
     hw_ThreadArr    *threads;
-    hw_TypeArr      *types;
+    hw_TypeSys      *tsys;
 };
 
 #define hw_CStr_makelit(s)     ((hw_CStr){.data = #s, .len = sizeof(#s) - 1})

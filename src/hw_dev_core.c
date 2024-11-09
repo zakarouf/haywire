@@ -174,3 +174,8 @@ ARR_IMPL(hw_codeArr, hw_codeArr, hw_code);
  */
 
 ARR_IMPL(hw_String, hw_String, hw_byte);
+hw_String *hw_String_newFrom(hw_byte *data, hw_uint size)
+{
+    
+}
+
