@@ -13,6 +13,7 @@ typedef double              hw_float;
 
 #define HW_UINT_MAX UINT64_MAX
 #define HW_INT_MAX  INT64_MAX
+#define HW_TYPEID_MAX UINT8_MAX
 
 typedef union   hw_Var      hw_Var;
 
@@ -61,19 +62,52 @@ union hw_Var {
 
     hw_byteArr      *as_barr,   **as_barr_p;
     hw_String       *as_string, *as_string_p;
+
     hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
     hw_int          as_int,     *as_int_p,   **as_int_pp;
     hw_float        as_float,   *as_float_p, **as_float_pp;
-    
 
 
     hw_Type    const    *as_type,     **as_type_p;
     hw_TypeSys const    *as_typesys,  **as_typesys_p;
 
     hw_Type         *as_type_mut, **as_type_mut_p;
+
     hw_Module       *as_module, **as_module_p;
     hw_Thread       *as_thread, **as_thread_p;
 };
+
+enum hw_TypeID {
+      hw_TypeID_NIL = 0
+    , hw_TypeID_REFF
+
+    , hw_TypeID_ERROR
+    , hw_TypeID_LIST
+    , hw_TypeID_ARR
+
+    , hw_TypeID_BARR
+    , hw_TypeID_STRING
+
+    , hw_TypeID_UINT
+    , hw_TypeID_INT
+    , hw_TypeID_FLOAT
+
+
+    , hw_TypeID_TYPE
+    , hw_TypeID_TYPESYS
+
+    , hw_TypeID_MODULE
+    , hw_TypeID_THREAD
+};
+
+struct hw_Error {
+    hw_uint ecode;
+    hw_byte const *str;
+    hw_uint       str_size;
+};
+
+/*************************************************************/
+/*************************************************************/
 
 struct hw_uintArr {
     hw_uint*        data;
@@ -98,6 +132,7 @@ struct hw_CStr {
     hw_uint         len;
 };
 
+
 struct hw_VarList {
     hw_Var          *data;
     hw_byte         *tid;
@@ -115,6 +150,10 @@ struct hw_VarArr {
 /****************************************************/
 /****************************************************/
 
+typedef hw_uint (*hw_VarFn)
+        (hw_Var *self, hw_Var const *T_sys
+         , hw_Var const *arg, hw_byte const *tid, hw_uint const count);
+
 struct hw_VarFnArr {
     hw_VarFn        *data;
     hw_uint         len;
@@ -127,6 +166,7 @@ struct hw_Type {
     hw_uint         name_size;
     hw_uint         unitsize;
     hw_VarFn        vt[8];
+    hw_uint         vt_used;
 };
 
 struct hw_TypeSys {

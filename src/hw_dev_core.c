@@ -193,4 +193,6 @@ ARR_IMPL(hw_String, hw_String, hw_byte);
  *      - var_new -> Create a new variable/object from the passed data
  *      - var_del -> delete the variable
  *      - var_tobyte -> convert data to bytestream
+ *      - var_tostr  -> convert data to string_data
  */
+
