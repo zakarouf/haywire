@@ -24,12 +24,11 @@ typedef struct  hw_uintArr  hw_uintArr;
 typedef struct  hw_byteArr  hw_byteArr;
 
 /************************************************************/
+typedef struct hw_Error         hw_Error;
+/************************************************************/
 
 typedef struct  hw_Type         hw_Type;
 typedef struct  hw_TypeSys      hw_TypeSys;
-
-typedef hw_uint (*hw_VarFn)
-        (hw_Var *self, hw_Var const *T_sys, hw_Var const *B, hw_Var const *C);
 
 typedef struct  hw_VarFnArr hw_VarFnArr;
 typedef struct  hw_VarFn2Arr hw_VarFn2Arr;
@@ -56,21 +55,24 @@ union hw_Var {
     hw_ptr          as_ptr,     *as_ptr_p;
     hw_Var          *as_reff,   **as_reff_p;
 
+    hw_Error const  *as_error;
     hw_VarList      *as_list,   **as_list_p;
     hw_VarArr       *as_arr,    **as_arr_p;
 
+    hw_byteArr      *as_barr,   **as_barr_p;
+    hw_String       *as_string, *as_string_p;
     hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
     hw_int          as_int,     *as_int_p,   **as_int_pp;
     hw_float        as_float,   *as_float_p, **as_float_pp;
     
-    hw_String       *as_string, *as_string_p;
 
-    hw_Type         *as_type,       **as_type_p;
-    hw_Type const   *as_type_const, **as_type_const_p;
-    hw_TypeSys      *as_typesys;
 
-    hw_Module       *as_module;
-    hw_Thread       *as_thread;
+    hw_Type    const    *as_type,     **as_type_p;
+    hw_TypeSys const    *as_typesys,  **as_typesys_p;
+
+    hw_Type         *as_type_mut, **as_type_mut_p;
+    hw_Module       *as_module, **as_module_p;
+    hw_Thread       *as_thread, **as_thread_p;
 };
 
 struct hw_uintArr {
