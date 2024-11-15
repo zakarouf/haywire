@@ -25,6 +25,13 @@
  */
 typedef enum hw_LexTokenType hw_LexTokenType;
 
+
+/**
+ * Assert
+ */
+#define HW_ASSERT(exp) (exp? (void)0; abort())
+
+
 /**
  * Section ARR_EXPORT
  */
