@@ -34,7 +34,6 @@ typedef struct  hw_TypeSys      hw_TypeSys;
 
 typedef struct hw_Var_VTCore hw_Var_VTCore;
 typedef struct  hw_VarFnArr hw_VarFnArr;
-typedef struct  hw_VarFn2Arr hw_VarFn2Arr;
 
 /************************************************************/
 
