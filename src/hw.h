@@ -68,7 +68,6 @@ union hw_Var {
     hw_int          as_int,     *as_int_p,   **as_int_pp;
     hw_float        as_float,   *as_float_p, **as_float_pp;
 
-
     hw_Type    const    *as_type,     **as_type_p;
     hw_TypeSys const    *as_typesys,  **as_typesys_p;
 
@@ -153,6 +152,10 @@ struct hw_VarArr {
     hw_uint         len;
     hw_uint         lenUsed;
     hw_byte         tid;
+};
+
+struct hw_VarHash {
+
 };
 
 /****************************************************/
