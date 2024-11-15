@@ -17,6 +17,7 @@ typedef double              hw_float;
 
 typedef union   hw_Var      hw_Var;
 
+typedef struct  hw_VarP     hw_VarP;
 typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarArr   hw_VarArr;
 typedef struct  hw_String   hw_String;
@@ -75,6 +76,9 @@ union hw_Var {
 
     hw_Module       *as_module, **as_module_p;
     hw_Thread       *as_thread, **as_thread_p;
+struct hw_VarP {
+    hw_Var  value;
+    hw_byte type;
 };
 
 enum hw_TypeID {
@@ -150,9 +154,19 @@ struct hw_VarArr {
 /****************************************************/
 /****************************************************/
 
-typedef hw_uint (*hw_VarFn)
-        (hw_Var *self, hw_Var const *T_sys
-         , hw_Var const *arg, hw_byte const *tid, hw_uint const count);
+typedef hw_Var (*hw_VarFn)
+        (hw_Var *self, hw_TypeSys const *T_sys
+         , hw_Var const *args, hw_byte const *tid, hw_uint const count);
+
+struct hw_Var_VTCore {
+    hw_VarFn    init;
+    hw_VarFn    init_default;
+    hw_VarFn    deinit;
+    hw_VarFn    reset;
+    hw_VarFn    to_string;
+    hw_VarFn    to_data;
+    hw_VarFn    to_hash;
+};
 
 struct hw_VarFnArr {
     hw_VarFn        *data;
@@ -161,12 +175,12 @@ struct hw_VarFnArr {
 };
 
 struct hw_Type {
-    hw_uint         id;
-    hw_byte         name[256];
-    hw_uint         name_size;
-    hw_uint         unitsize;
-    hw_VarFn        vt[8];
-    hw_uint         vt_used;
+    hw_uint             id;
+    hw_byte             name[256];
+    hw_uint             name_size;
+    hw_uint             unitsize;
+    hw_Var_VTCore       vtcore;
+    hw_VarFn            vt[8];
 };
 
 struct hw_TypeSys {
