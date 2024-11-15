@@ -54,7 +54,7 @@ typedef struct  hw_State        hw_State;
 
 union hw_Var {
     hw_ptr          as_ptr,     *as_ptr_p;
-    hw_Var          *as_reff,   **as_reff_p;
+    hw_int          as_reff,    *as_reff_p;
 
     hw_Error const  *as_error;
     hw_VarList      *as_list,   **as_list_p;
