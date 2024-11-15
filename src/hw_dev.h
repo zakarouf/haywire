@@ -157,9 +157,12 @@ void hw_Lexer_next_until(hw_Lexer *lex, hw_LexTokenType type);
  */
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count
-        , void *(*alloc)(size_t size)
-        , void *(*realloc)(void *, size_t)
-        , hw_uint (*free)(void *));
+        , hw_ptr allocator
+        , void *(*_alloc)   (hw_ptr *allocator, size_t size)
+        , void *(*_realloc) (hw_ptr *allocator, void *, size_t)
+        , hw_uint (*_free)  (hw_ptr *allocator, void *));
+
+
 void hw_TypeSys_delete(hw_TypeSys *t);
 hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
 

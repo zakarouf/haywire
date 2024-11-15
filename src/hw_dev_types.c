@@ -5,16 +5,19 @@
 #include <string.h>
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count
-        , void *(*_alloc)(size_t size)
-        , void *(*_realloc)(void *, size_t)
-        , hw_uint (*_free)(void *))
+        , hw_ptr allocator
+        , void *(*_alloc)   (hw_ptr *allocator, size_t size)
+        , void *(*_realloc) (hw_ptr *allocator, void *, size_t)
+        , hw_uint (*_free)  (hw_ptr *allocator, void *))
 {
-    hw_TypeSys *tsys = _alloc(sizeof(hw_TypeSys) 
+    hw_TypeSys *tsys = _alloc(&allocator, sizeof(hw_TypeSys) 
                         + (sizeof(hw_Type) * type_count) );
 
     tsys->types = (void *)(tsys + 1);
     tsys->types_total = type_count;
     tsys->types_used = 0;
+
+    tsys->allocator = allocator;
 
     tsys->alloc = _alloc;
     tsys->realloc = _realloc;
@@ -25,8 +28,8 @@ hw_TypeSys *hw_TypeSys_new(hw_uint type_count
 
 void hw_TypeSys_delete(hw_TypeSys *t)
 {
-    hw_uint (*_free)(void *) = t->free;
-    _free(t);
+    hw_uint (*_free)(hw_ptr *allocator, void *) = t->free;
+    _free(&t->allocator, t);
 }
 
 hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)

@@ -197,9 +197,10 @@ struct hw_TypeSys {
     hw_uint     types_used;
     hw_uint     types_total;
 
-    hw_ptr  (*alloc)(size_t size);
-    hw_uint (*free)(hw_ptr pointer);
-    hw_ptr  (*realloc)(hw_ptr, size_t size);
+    hw_ptr  allocator;
+    hw_ptr  (*alloc)    (hw_ptr *allocator, size_t size);
+    hw_uint (*free)     (hw_ptr *allocator, hw_ptr pointer);
+    hw_ptr  (*realloc)  (hw_ptr *allocator, hw_ptr, size_t size);
 };
 
 /****************************************************/
