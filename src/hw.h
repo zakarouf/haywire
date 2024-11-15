@@ -76,6 +76,9 @@ union hw_Var {
 
     hw_Module       *as_module, **as_module_p;
     hw_Thread       *as_thread, **as_thread_p;
+    hw_State        *as_vm,  **as_vm_p;
+};
+
 struct hw_VarP {
     hw_Var  value;
     hw_byte type;
@@ -102,6 +105,7 @@ enum hw_TypeID {
 
     , hw_TypeID_MODULE
     , hw_TypeID_THREAD
+    , hw_TypeID_STATE
 };
 
 struct hw_Error {
