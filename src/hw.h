@@ -183,8 +183,8 @@ struct hw_VarHash {
 /****************************************************/
 /****************************************************/
 
-typedef hw_Var (*hw_VarFn)
-        (hw_Var *self, hw_TypeSys const *T_sys
+typedef hw_VarP (*hw_VarFn)
+        (hw_Var *self, hw_TypeSys *T_sys
          , hw_Var const *args, hw_byte const *tid, hw_uint const count);
 
 struct hw_Var_VTCore {
