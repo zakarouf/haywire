@@ -191,6 +191,7 @@ struct hw_Var_VTCore {
     hw_VarFn    init;
     hw_VarFn    init_default;
     hw_VarFn    deinit;
+    hw_VarFn    copy;
     hw_VarFn    reset;
     hw_VarFn    to_string;
     hw_VarFn    to_data;
