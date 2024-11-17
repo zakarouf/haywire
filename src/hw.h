@@ -113,6 +113,8 @@ enum hw_TypeID {
     , hw_TypeID_MODULE
     , hw_TypeID_THREAD
     , hw_TypeID_STATE
+
+    , hw_TypeID_TOTAL
 };
 
 struct hw_Error {
