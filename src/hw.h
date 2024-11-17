@@ -11,9 +11,11 @@ typedef int64_t             hw_int;
 typedef uint64_t            hw_uint;
 typedef double              hw_float;
 
-#define HW_UINT_MAX UINT64_MAX
-#define HW_INT_MAX  INT64_MAX
-#define HW_TYPEID_MAX UINT8_MAX
+#define HW_WORD_SIZE        (sizeof(hw_uint))
+
+#define HW_UINT_MAX         UINT64_MAX
+#define HW_INT_MAX          INT64_MAX
+#define HW_TYPEID_MAX       UINT8_MAX
 
 typedef union   hw_Var      hw_Var;
 
