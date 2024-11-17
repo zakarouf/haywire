@@ -67,6 +67,7 @@ union hw_Var {
 
     hw_byteArr      *as_barr,   **as_barr_p;
     hw_String       *as_string, *as_string_p;
+    hw_byte         as_word[HW_WORD_SIZE],   *as_word_p[HW_WORD_SIZE];
 
     hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
     hw_int          as_int,     *as_int_p,   **as_int_pp;
