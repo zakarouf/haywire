@@ -31,11 +31,13 @@ typedef struct  hw_byteArr  hw_byteArr;
 typedef struct hw_Error         hw_Error;
 /************************************************************/
 
+typedef struct  hw_Allocator    hw_Allocator;
+
 typedef struct  hw_Type         hw_Type;
 typedef struct  hw_TypeSys      hw_TypeSys;
 
-typedef struct hw_Var_VTCore hw_Var_VTCore;
-typedef struct  hw_VarFnArr hw_VarFnArr;
+typedef struct  hw_Var_VTCore   hw_Var_VTCore;
+typedef struct  hw_VarFnArr     hw_VarFnArr;
 
 /************************************************************/
 
@@ -113,6 +115,13 @@ struct hw_Error {
     hw_uint ecode;
     hw_byte const *str;
     hw_uint       str_size;
+};
+
+struct hw_Allocator {
+    hw_ptr  state;
+    hw_ptr  (*alloc)    (hw_ptr *state, size_t size);
+    void    (*free)     (hw_ptr *state, hw_ptr pointer);
+    hw_ptr  (*realloc)   (hw_ptr *state, hw_ptr, size_t size);
 };
 
 /*************************************************************/
@@ -199,17 +208,14 @@ struct hw_TypeSys {
     hw_uint     types_used;
     hw_uint     types_total;
 
-    hw_ptr  allocator;
-    hw_ptr  (*alloc)    (hw_ptr *allocator, size_t size);
-    hw_uint (*free)     (hw_ptr *allocator, hw_ptr pointer);
-    hw_ptr  (*realloc)  (hw_ptr *allocator, hw_ptr, size_t size);
+    hw_Allocator allocator;
 };
 
 /****************************************************/
 /****************************************************/
 
 union hw_code {
-    uint64_t         raw;
+    uint64_t         as_raw;
     struct {
         hw_byte opcode, attr;
         uint16_t A;
