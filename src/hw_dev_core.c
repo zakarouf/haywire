@@ -20,7 +20,6 @@
 
 static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len)
 {
-    void *op = p;
     p = HW_REALLOC(p, objsize + (unitsize * len));
     if (p == NULL) { perror("OUT OF MEMORY"); abort(); }
     return p;
@@ -85,51 +84,36 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
         ARR_NEWFROM(ARR, (DEST_ARR)->data, (DEST_ARR)->lenUsed);\
     }
 
-#define ARR_SERIALIZE(ARR, BARR)\
-    {\
-        hw_byteArr_pushstream(          \
-            BARR                        \
-          , (void *)&(ARR)->lenUsed     \
-          , sizeof((ARR)->lenUsed));    \
-        \
-    }
-
-#define _ARR_DESERIALIZE_SIZE_CHECK(SIZE_LEFT, AGAINST, ...)\
-    {\
-        if(SIZE_LEFT < AGAINST) { __VA_ARGS__; }\
-    }
-
 /*************************************************************/
 /*************************************************************/
 
-#define ARR_IMPL_NEW(ARRT, name, VT, ...)\
+#define ARR_IMPL_NEW(ARRT, name, VT)\
     ARRT* CAT(name, new)(hw_uint len) {     \
         ARRT *arr;                          \
         ARR_NEW(arr, len);                  \
-        __VA_ARGS__;                        \
         return arr;                         \
     }                                       \
 
-#define ARR_IMPL_NEWFROM(ARRT, name, VT, ...)\
+#define ARR_IMPL_NEWFROM(ARRT, name, VT)\
     ARRT *CAT(name, newFrom)(VT data[static const 1], hw_uint const len) {\
         ARRT *arr;\
         ARR_NEWFROM(arr, data, len);\
         return arr;\
     }
 
-#define ARR_IMPL_CLONE(ARRT, name, VT, ...)     \
+#define ARR_IMPL_CLONE(ARRT, name, VT)     \
     ARRT *CAT(name, clone)(ARRT const **arr) {  \
         ARRT *res = NULL;                       \
         ARR_CLONE(res,  *arr);                  \
         return res;                             \
     }
 
-#define ARR_IMPL_DELETE(ARRT, name, VT, ...)\
+#define ARR_IMPL_DELETE(ARRT, name, VT)\
     void CAT(name, delete)(ARRT* arr) {     \
         ARR_DELETE(arr);                    \
     }                                       \
 
-#define ARR_IMPL_PUSH(ARRT, name, VT, ...)\
+#define ARR_IMPL_PUSH(ARRT, name, VT)\
     VT* CAT(name, push)(ARRT** arr, VT value){  \
         ARRT* prep_arr = *arr;                  \
         ARR_PUSH(prep_arr, value);              \
@@ -137,7 +121,7 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
         return (prep_arr)->data + ((prep_arr)->lenUsed-1);  \
     }                                                       \
 
-#define ARR_IMPL_PUSHSTREAM(ARRT, name, VT, ...)\
+#define ARR_IMPL_PUSHSTREAM(ARRT, name, VT)\
     VT* CAT(name, pushstream)(ARRT** arr, VT values[static const 1], hw_uint len){    \
         ARRT* prep_arr = *arr;                                  \
         ARR_PUSHSTREAM(prep_arr, values, len);                  \
@@ -146,14 +130,14 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
     }                                                       \
 
 
-#define ARR_IMPL_POP(ARRT, name, VT, ...)\
+#define ARR_IMPL_POP(ARRT, name, VT)\
     hw_uint CAT(name, pop)(ARRT** arr) {        \
         ARRT *prep_arr = *arr;                  \
         ARR_POP(prep_arr);                      \
         return (prep_arr)->lenUsed;             \
     }                                           \
 
-#define ARR_IMPL_SERIALIZE(ARRT, name, VT, ...)
+#define ARR_IMPL_SERIALIZE(ARRT, name, VT)
 
 #define ARR_IMPL(ARRT, name, VT)\
     ARR_IMPL_NEW(ARRT, name, VT)\
@@ -167,23 +151,23 @@ static void *realloc_arr(void *p, hw_uint objsize, hw_uint unitsize, hw_uint len
 /**
  * Section: hw_uintArr
  */
-ARR_IMPL(hw_uintArr, hw_uintArr, hw_uint);
+ARR_IMPL(hw_uintArr, hw_uintArr, hw_uint)
 
 /**
  * Section: hw_byteArr
  */
-ARR_IMPL(hw_byteArr, hw_byteArr, hw_byte);
+ARR_IMPL(hw_byteArr, hw_byteArr, hw_byte)
 
 /**
  * Section: hw_codeArr
  */
 
-ARR_IMPL(hw_codeArr, hw_codeArr, hw_code);
+ARR_IMPL(hw_codeArr, hw_codeArr, hw_code)
 
 /**
  * Section: hw_String
  */
-ARR_IMPL(hw_String, hw_String, hw_byte);
+ARR_IMPL(hw_String, hw_String, hw_byte)
 
 /**************************************************************************/
 /**************************************************************************/
