@@ -172,7 +172,12 @@ struct hw_VarArr {
 };
 
 struct hw_VarHash {
+    hw_Var *key;
+    hw_Var *val;
 
+    hw_byte *keyT;
+    hw_byte *valT;
+    hw_byte *is_used;
 };
 
 /****************************************************/
