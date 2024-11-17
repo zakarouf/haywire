@@ -21,15 +21,22 @@
 #define HW_REALLOC(X, NEW_SZ)      realloc(X, NEW_SZ)
 
 /**
- * Types
+ * Section: Cast
  */
-typedef enum hw_LexTokenType hw_LexTokenType;
+#define HW_CAST(T, ...) ((T)(__VA_ARGS__))
 
+/**
+ * Exit
+ */
+void hw_exit(const char *msg, size_t size);
 
 /**
  * Assert
  */
-#define HW_ASSERT(exp) (exp? (void)0; abort())
+#define HW_ASSERT(exp)\
+        (exp?\
+            (void)0: \
+            hw_exit(HW_STR("Assertion Failure: " #exp)))
 
 
 /**
@@ -51,10 +58,10 @@ typedef enum hw_LexTokenType hw_LexTokenType;
 /**
  * DECLARATION
  */
-ARR_EXPORT(hw_uintArr, hw_uintArr, hw_uint);
-ARR_EXPORT(hw_byteArr, hw_byteArr, hw_byte);
-ARR_EXPORT(hw_codeArr, hw_codeArr, hw_code);
-ARR_EXPORT(hw_String, hw_String, hw_byte);
+ARR_EXPORT(hw_uintArr, hw_uintArr, hw_uint)
+ARR_EXPORT(hw_byteArr, hw_byteArr, hw_byte)
+ARR_EXPORT(hw_codeArr, hw_codeArr, hw_code)
+ARR_EXPORT(hw_String, hw_String, hw_byte)
 
 
 /**
@@ -121,6 +128,7 @@ enum hw_LexTokenType {
 };
 
 
+typedef enum hw_LexTokenType hw_LexTokenType;
 typedef struct hw_LexToken hw_LexToken;
 struct hw_LexToken {
     hw_byte const   *start;
@@ -163,15 +171,19 @@ void hw_Lexer_next_until(hw_Lexer *lex, hw_LexTokenType type);
  * Section: Type Impl
  */
 
-hw_TypeSys *hw_TypeSys_new(hw_uint type_count
-        , hw_ptr allocator
-        , void *(*_alloc)   (hw_ptr *allocator, size_t size)
-        , void *(*_realloc) (hw_ptr *allocator, void *, size_t)
-        , hw_uint (*_free)  (hw_ptr *allocator, void *));
-
-
+hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator allocator);
 void hw_TypeSys_delete(hw_TypeSys *t);
 hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
+
+#define HW_TYPESYS_ALLOC(TS, SIZE)\
+            (TS)->allocator.alloc(&(TS)->allocator.state, SIZE)
+
+#define HW_TYPESYS_REALLOC(TS, PTR, SIZE)\
+            (TS)->allocator.realloc(&(TS)->allocator.state, PTR, SIZE)
+
+#define HW_TYPESYS_FREE(TS, PTR)\
+            (TS)->allocator.free(&(TS)->allocator.state, PTR)
+
 
 /**
  * Section: Undef
