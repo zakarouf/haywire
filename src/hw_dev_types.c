@@ -28,6 +28,13 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 {
     if(type->id >= ts->types_total) { return NULL; }
     hw_Type *dest = &ts->types[type->id];
+
+    HW_DEBUG(
+        if(dest->name_size) {
+            HW_DLOG("RE SET OF TypeSys Type %s", dest->name);
+        }
+    )
+
     memcpy(dest, type, sizeof(*type));
     return dest;
 }
@@ -82,6 +89,21 @@ DEFN(hw_VarList_deinit) {
     return (hw_VarP){0};
 }
 
+
+// STRINGS
+DEFN(hw_String_vt_core_init_default) {
+    const hw_uint default_size = 8;
+    self->as_string = _ALLOC(sizeof(hw_String)
+                            + (sizeof(self->as_string->data) * ));
+
+
+    return (hw_VarP){0};
+}
+
+DEFN(hw_String_vt_core_deinit) {
+    _FREE(self)
+}
+
 /*
  * Default TypeSys
  */
@@ -98,17 +120,29 @@ hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator)
                     ,   .name = "nil"
                     ,   .name_size = 3
                     ,   .unitsize = 0
-                    ,   .vt = {hw_unreachable_func}
+                }));
+
+    HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_LIST
+                    ,   .name = "list"
+                    ,   .name_size = 4
+                    ,   .unitsize = sizeof(hw_VarList)
+                    ,   .vtcore = {
+                            .init = hw_unreachable_func
+                           ,.init_default = hw_VarList_init_default
+                           ,.deinit = hw_VarList_deinit
+                        }
+                }));
+
+    HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_STRING
+                    ,   .name = "string"
+                    ,   .name_size = 6
+                    ,   .unitsize = sizeof(hw_String)
                     ,   .vtcore = {
                             .init = hw_unreachable_func
                            ,.init_default = hw_unreachable_func
                            ,.deinit = hw_unreachable_func
-                           ,.copy = hw_unreachable_func
-                           ,.reset = hw_unreachable_func
-                           ,.to_data = hw_unreachable_func
-                           ,.to_hash = hw_unreachable_func
-                           ,.to_string = hw_unreachable_func
-
                         }
                 }));
 
