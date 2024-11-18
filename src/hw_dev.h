@@ -9,6 +9,12 @@
 #define CAT2(X, Y) X##_##Y
 #define CAT(X, Y) CAT2(X, Y)
 
+#ifdef HW_DEBUG_CODE_ENABLE
+#define HW_DEBUG(...) __VA_ARGS__
+#else
+#define HW_DEBUG(...)
+#endif
+
 /**
  */
 #define HW_STR(s) (void*)s, (sizeof(s)-1)
@@ -26,9 +32,14 @@
 #define HW_CAST(T, ...) ((T)(__VA_ARGS__))
 
 /**
- * Exit
+ * Log & Exit
  */
-void hw_exit(const char *msg, size_t size);
+void hw_exit(hw_int code, const char *msg, size_t const size);
+void hw_logp(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+void hw_logstr(const char *msg, size_t const);
+
+#define HW_DLOG(fmt, ...)\
+    hw_logp("[DLOG]: " __FILE__ ":%d:" fmt "\n", __LINE__, __VA_ARGS__)
 
 /**
  * Assert
@@ -36,8 +47,7 @@ void hw_exit(const char *msg, size_t size);
 #define HW_ASSERT(exp)\
         (exp?\
             (void)0: \
-            hw_exit(HW_STR("Assertion Failure: " #exp)))
-
+            hw_exit(-1, HW_STR("Assertion Failure: " #exp)))
 
 /**
  * Section ARR_EXPORT
