@@ -70,6 +70,7 @@ DEFN(hw_unreachable_func) {
 
 DEFN(hw_VarList_init_default) {
     const hw_uint default_len = 8;
+    
     self->as_list = _ALLOC(sizeof(hw_VarList)
                             + (sizeof(hw_Var) * default_len)
                             + (sizeof(hw_byte) * default_len)
@@ -85,7 +86,15 @@ DEFN(hw_VarList_init_default) {
 }
 
 DEFN(hw_VarList_deinit) {
+    hw_VarList *list = self->as_list;
+    for (hw_uint i = 0; i < list->lenUsed; i++) {
+        hw_byte const T = list->tid[i];
+        if(ts->types[T].is_obj) {
+            ts->types[T].vtcore.deinit(list->data + i, ts, NULL, NULL, 0);
+        }
+    }
     _FREE(self->as_list);
+    self->as_list = NULL;
     return (hw_VarP){0};
 }
 
@@ -93,15 +102,19 @@ DEFN(hw_VarList_deinit) {
 // STRINGS
 DEFN(hw_String_vt_core_init_default) {
     const hw_uint default_size = 8;
-    self->as_string = _ALLOC(sizeof(hw_String)
-                            + (sizeof(self->as_string->data) * ));
+    hw_String *string = _ALLOC(sizeof(hw_String)
+                            + (sizeof(self->as_string->data) * default_size));
 
+    string->len = default_size;
+    string->lenUsed = 0;
 
+    self->as_string = string;
     return (hw_VarP){0};
 }
 
 DEFN(hw_String_vt_core_deinit) {
-    _FREE(self)
+    _FREE(self);
+    return (hw_VarP){0};
 }
 
 /*
