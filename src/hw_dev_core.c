@@ -205,3 +205,27 @@ ARR_IMPL(hw_String, hw_String, hw_byte)
  *      - var_tostr  -> convert data to string_data
  */
 
+
+static void* _malloc_wrapper(void **state, size_t size)
+{
+    return HW_MALLOC(size);
+}
+
+static void* _realloc_wrapper(void **state, void *ptr, size_t size)
+{
+    return HW_REALLOC(ptr, size);
+}
+
+static void  _free_wrapper(void **state, void *ptr)
+{
+    HW_FREE(ptr);
+}
+
+void hw_Allocator_default(hw_Allocator *self)
+{
+    self->state = NULL;
+    self->alloc = _malloc_wrapper;
+    self->realloc = _realloc_wrapper;
+    self->free = _free_wrapper;
+}
+
