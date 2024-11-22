@@ -55,6 +55,11 @@ typedef struct  hw_ThreadArr    hw_ThreadArr;
 typedef struct  hw_State        hw_State;
 
 /************************************************************/
+
+typedef struct hw_ModuleObj hw_ModuleObj;
+typedef struct hw_ObjCompiler hw_ObjCompiler;
+
+/************************************************************/
 /************************************************************/
 
 union hw_Var {
@@ -70,7 +75,7 @@ union hw_Var {
     hw_CStr         *as_cstr,   **as_cstr_p;
 
     hw_byte         as_byte,    *as_byte_p,  **as_byte_pp;
-    hw_byte         as_word[HW_WORD_SIZE],   *as_word_p[HW_WORD_SIZE];
+    hw_byte         as_word[HW_WORD_SIZE],   *(as_word_p[HW_WORD_SIZE]);
 
     hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
     hw_int          as_int,     *as_int_p,   **as_int_pp;
@@ -211,6 +216,7 @@ struct hw_Type {
     hw_uint             unitsize;
     hw_Var_VTCore       vtcore;
     hw_VarFn            vt[8];
+    hw_byte             is_obj;
 };
 
 struct hw_TypeSys {
@@ -249,6 +255,30 @@ struct hw_codeArr {
     hw_uint lenUsed;
 };
 
+struct hw_FuncInfo {
+    
+    hw_byte *name;
+    hw_uint name_size;
+
+    /**
+     * var = local variable
+     * arg = passed variable
+     * ret = returned variable,
+     *          pushed to stack, on function return
+     */
+    hw_uint var_count;
+    hw_uint arg_count;
+    hw_uint ret_count;
+
+    // Total Instructions
+    hw_uint code_len;
+
+    // Type IDs
+    hw_byte *varT;
+    hw_byte *mutT;
+    hw_byte *retT;
+};
+
 struct hw_FnState {
     hw_Var          *vars;
     hw_uint         var_count;
@@ -275,65 +305,53 @@ struct hw_FnSaveArr {
 /****************************************************/
 
 /**
+ * hw_Module:
  * LEGEND: 
  *    . -> bit
  *    o -> byte, hw_byte
- *    X -> 8byte, hw_uint | hw_int | hw_float
+ *    X -> 8byte = 8o = 64. , hw_uint | hw_int | hw_float
  *    [] -> Stream of data, [o] bytes, [X] 8 bytes
  *  NOTE: If there is a number prefix the symbol that just a mutiple,
  *        4o = 4 bytes,
  *        8. = 8bits = 1byte = o,
  *        8o = X = 8bytes
+ *   {o} -> Byte Stream of irregular objects
  *-------------------------------------------------------------------
  * Module Layout
- *    X -> Module Magic Number & Module version
+ *    X -> Module Magic Number & Version
  *    X -> Module Size
  *
  *    X -> Module Name Size
- *    [o] -> Module Name
- *
- *    X -> Module Function Count
- *    [X] -> Module Function Start points
- *
- *    X -> Public Function Count
- *    [] => {
- *      [X] -> Function Name Size
- *      [o] -> Function Name
- *    }
+ *    X -> Module Name Hash
  *    
- *    X -> Data Length
- *    [] -> Data Stream { Function Data }
- * 
- *    X -> Code Length
- *    [] => Functions { [X] -> Function Code }
- * ------------------------------------------------------------------
- * Function Data Layout
- *    [o] -> Name Data      <- Function_Layout::Data_Start_Index
- *    [X] -> Arg Types
- *    [X] -> Mut Types
- *    [] => Rest            <- [end] = Function_Layout::Data_Size
- *-------------------------------------------------------------------
- * Function Layout
- *    10X 1  -> Data Size 
- *        2  -> Name Size
- *        3  -> Code Size
- *        4  -> Arg Count
- *        5  -> Mut Count
- *        6  -> Var Count
- *        7  -> Data Start (Inside the Module data stream)
- *        8  -> Name Start (Inside the Function data stream)
- *        9  -> ArgT Start (Inside the Function data stream)
- *        10 -> MutT Start (Inside the Function data stream)
- *    [X] -> Code
+ *    X -> FuncInfo (Index under .data)
+ *    X -> Const Objects (Index under .data)
+ *
+ *    X -> Pub Func uintArray (Index under .data)
+ *    X -> Pub Const uintArray (Index under .data)
+ *
+ *    X -> .data Size
+ *    X -> .code Size
+ *
+ *    {o} => .data Section
+ *              {o} -> Func Info (hw_FuncInfo)
+ *              {o} -> Const Var (hw_Var)
+ *              {o} -> rest
+ *    [X] => .code Section (hw_code)
  *-------------------------------------------------------------------
  */
-
-
 struct hw_Module {
-    hw_uint head;
-    hw_byteArr *data;
-    hw_codeArr *code;
-    hw_uintArr fn_points;
+    hw_uint data_size;
+    hw_uint code_len;
+    
+    hw_uint func;
+    hw_uint pubfunc;
+
+    hw_uint constant;
+    hw_uint pubconst;
+
+    hw_byte *data;
+    hw_code *code;
 };
 
 struct hw_ModuleArr {
@@ -346,8 +364,8 @@ struct hw_Thread {
     hw_uint         id;
     hw_CStr         name;
 
-    hw_VarList      vstack;
-    hw_FnSaveArr    fstack;
+    hw_VarList      *vstack;
+    hw_FnSaveArr    *fstack;
 
     hw_FnState      fn;
 
@@ -365,6 +383,42 @@ struct hw_State {
     hw_uint         pid;
     hw_ThreadArr    *threads;
     hw_TypeSys      *tsys;
+};
+
+
+/**
+ *  Section: Compiler
+ *
+ * Filetype:
+ *  .hw : Source File
+ *  .hwasm : Intermediate Bytecode Assembly
+ *  .hwo : Compiled Code From .hwasm for the vm
+ * Other File Types:
+ *  .c : C source file 
+ *  .s : Native Assembly
+ *  .o : Native object
+ *
+ * Functionality of various Compiler in hw:
+ *  to_hwasm: Convert higher level language source .hw -> .hwasm
+ *  to_hwo: Compile .hwasm -> .hwo
+ *  to_asm: Convert .hwasm -> .s
+ *  to_c: Convert .hwasm -> .c
+ */
+
+struct hw_ModuleObj {
+    hw_codeArr *code;
+    hw_byteArr *data;
+    hw_VarList *constants;
+};
+
+struct hw_ObjCompiler {
+    hw_State *const vm_parent;
+    hw_State vm_child;
+    
+    hw_ModuleObj *obj;
+    
+    hw_String *in;
+    hw_Module *out;
 };
 
 #define hw_CStr_makelit(s)     ((hw_CStr){.data = #s, .len = sizeof(#s) - 1})
