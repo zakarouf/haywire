@@ -49,41 +49,7 @@ void hw_logstr(const char *msg, size_t const);
             (void)0: \
             hw_exit(-1, HW_STR("Assertion Failure: " #exp)))
 
-/**
- * Section ARR_EXPORT
- */
-#define DEFN(T, NAME)\
-    hw_VarP CAT2(T, NAME) (     \
-        hw_Var *self            \
-      , hw_TypeSys *ts          \
-      , hw_Var  const *args     \
-      , hw_byte const *tid      \
-      , hw_uint const count)
-#define INTERFACE_EXPORT(T)\
-    DEFN(T, init);              \
-    DEFN(T, initFrom_data);     \
-    DEFN(T, initFrom_string);   \
-    DEFN(T, initFrom_copy);     \
-    DEFN(T, reset);             \
-    DEFN(T, deinit);            \
-    DEFN(T, compare_bin);       \
-    DEFN(T, compare_all);       \
-    DEFN(T, to_string);         \
-    DEFN(T, to_data);           \
-    DEFN(T, to_hash);           \
 
-#define HW_ARR_FOREACH(T, iterator, arr, from, upto, step)\
-    for(T iterator = (arr).data + from  \
-       ;iterator < (arr).data + upto    \
-       ;iterator += step)               \
-
-/**
- * DECLARATION
- */
-INTERFACE_EXPORT(hw_uintArr)
-
-#undef DEFN
-#undef INTERFACE_EXPORT
 /**
  * Section: Tokens
  */
@@ -148,14 +114,12 @@ enum hw_LexTokenType {
 };
 #undef TOKEN
 
-
-typedef enum hw_LexTokenType hw_LexTokenType;
 typedef struct hw_LexToken hw_LexToken;
 struct hw_LexToken {
     hw_byte const   *start;
     hw_uint         size;
     hw_uint         line;
-    hw_LexTokenType type;
+    hw_byte         type;
 };
 
 /**
@@ -222,15 +186,51 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
         (ts)->types[tid].vt[interface](var, ts, __VA_ARGS__);   \
     }
 
-enum {
-    hw_VT_list_push = 0
-  , hw_VT_list_pop
-  , hw_VT_list_append
+/**
+ * Section ARR_EXPORT
+ */
+#define DEFN(T, NAME)\
+    hw_VarP CAT2(T, NAME) (     \
+        hw_Var *self            \
+      , hw_TypeSys *ts          \
+      , hw_Var  const *args     \
+      , hw_byte const *tid      \
+      , hw_uint const count)
+#define INTERFACE_EXPORT(T)\
+    DEFN(T, init);              \
+    DEFN(T, initFrom_data);     \
+    DEFN(T, initFrom_string);   \
+    DEFN(T, initFrom_copy);     \
+    DEFN(T, reset);             \
+    DEFN(T, deinit);            \
+    DEFN(T, compare_bin);       \
+    DEFN(T, compare_all);       \
+    DEFN(T, to_string);         \
+    DEFN(T, to_data);           \
+    DEFN(T, to_hash);           \
 
-  , hw_VT_string_append
-  , hw_VT_string_fmt
-};
+#define HW_ARR_FOREACH(T, iterator, arr, from, upto, step)\
+    for(T iterator = (arr).data + from  \
+       ;iterator < (arr).data + upto    \
+       ;iterator += step)               \
 
+/**
+ * DECLARATION
+ */
+INTERFACE_EXPORT(hw_uintArr)
+INTERFACE_EXPORT(hw_byteArr)
+
+INTERFACE_EXPORT(hw_uint)
+INTERFACE_EXPORT(hw_int)
+INTERFACE_EXPORT(hw_ptr)
+
+INTERFACE_EXPORT(hw_String)
+INTERFACE_EXPORT(hw_VarList)
+INTERFACE_EXPORT(hw_VarList)
+INTERFACE_EXPORT(hw_VarArr)
+
+#undef DEFN
+#undef INTERFACE_EXPORT
 
 /**
  * Section: Undef
