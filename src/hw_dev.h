@@ -195,6 +195,32 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
             (TS)->allocator.free(&(TS)->allocator.state, PTR)
 
 
+
+/**
+ * Section: Var Interface Call
+ */
+#define HW_VAR_CALL_CORE(var, tid, ts, interface, ...)      \
+    {                                                       \
+        HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)         \
+        (ts)->types[tid].interface(var, ts, __VA_ARGS__);   \
+    }
+
+#define HW_VAR_CALL(var, tid, ts, interface, ...)\
+    {                                                           \
+        HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)             \
+        (ts)->types[tid].vt[interface](var, ts, __VA_ARGS__);   \
+    }
+
+enum {
+    hw_VT_list_push = 0
+  , hw_VT_list_pop
+  , hw_VT_list_append
+
+  , hw_VT_string_append
+  , hw_VT_string_fmt
+};
+
+
 /**
  * Section: Undef
  */
