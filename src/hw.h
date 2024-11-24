@@ -98,7 +98,12 @@ struct hw_VarP {
 
 enum hw_TypeID {
       hw_TypeID_NIL = 0
+    , hw_TypeID_PTR
     , hw_TypeID_REFF
+ 
+    , hw_TypeID_UINT
+    , hw_TypeID_INT
+    , hw_TypeID_FLOAT
 
     , hw_TypeID_ERROR
     , hw_TypeID_LIST
@@ -106,12 +111,6 @@ enum hw_TypeID {
 
     , hw_TypeID_BARR
     , hw_TypeID_STRING
-
-    , hw_TypeID_UINT
-    , hw_TypeID_INT
-    , hw_TypeID_FLOAT
-
-
     , hw_TypeID_TYPE
     , hw_TypeID_TYPESYS
 
