@@ -52,13 +52,25 @@ void hw_logstr(const char *msg, size_t const);
 /**
  * Section ARR_EXPORT
  */
-#define ARR_EXPORT(ARRT, name, VT)\
-    ARRT* CAT(name, new)(hw_uint len);          \
-    ARRT* CAT(name, newFrom)(VT [static const 1], hw_uint len);\
-    void CAT(name, delete)(ARRT* arr);          \
-    VT* CAT(name, push)(ARRT** arr, VT value);  \
-    VT* CAT(name, pushstream)(ARRT** arr, VT values[static 1], hw_uint len);\
-    hw_uint CAT(name, pop)(ARRT** arr);         \
+#define DEFN(T, NAME)\
+    hw_VarP CAT2(T, NAME) (     \
+        hw_Var *self            \
+      , hw_TypeSys *ts          \
+      , hw_Var  const *args     \
+      , hw_byte const *tid      \
+      , hw_uint const count)
+#define INTERFACE_EXPORT(T)\
+    DEFN(T, init);              \
+    DEFN(T, initFrom_data);     \
+    DEFN(T, initFrom_string);   \
+    DEFN(T, initFrom_copy);     \
+    DEFN(T, reset);             \
+    DEFN(T, deinit);            \
+    DEFN(T, compare_bin);       \
+    DEFN(T, compare_all);       \
+    DEFN(T, to_string);         \
+    DEFN(T, to_data);           \
+    DEFN(T, to_hash);           \
 
 #define HW_ARR_FOREACH(T, iterator, arr, from, upto, step)\
     for(T iterator = (arr).data + from  \
@@ -68,12 +80,10 @@ void hw_logstr(const char *msg, size_t const);
 /**
  * DECLARATION
  */
-ARR_EXPORT(hw_uintArr, hw_uintArr, hw_uint)
-ARR_EXPORT(hw_byteArr, hw_byteArr, hw_byte)
-ARR_EXPORT(hw_codeArr, hw_codeArr, hw_code)
-ARR_EXPORT(hw_String, hw_String, hw_byte)
+INTERFACE_EXPORT(hw_uintArr)
 
-
+#undef DEFN
+#undef INTERFACE_EXPORT
 /**
  * Section: Tokens
  */
@@ -136,6 +146,7 @@ enum hw_LexTokenType {
     /* Total number of defined tokens */                
     , TOKEN(TOTAL)
 };
+#undef TOKEN
 
 
 typedef enum hw_LexTokenType hw_LexTokenType;
@@ -174,7 +185,7 @@ struct hw_Lexer {
 void hw_Lexer_start(hw_Lexer *lex, hw_byte const *data, hw_uint size);
 void hw_Lexer_next(hw_Lexer *lex);
 void hw_Lexer_next_skipws(hw_Lexer *lex);
-void hw_Lexer_next_until(hw_Lexer *lex, hw_LexTokenType type);
+void hw_Lexer_next_until(hw_Lexer *lex, enum hw_LexTokenType type);
 
 
 /**
@@ -226,7 +237,5 @@ enum {
  */
 #undef CAT
 #undef CAT2
-#undef ARR_EXPORT
-#undef TOKEN
 #endif
 

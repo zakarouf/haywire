@@ -193,13 +193,72 @@ typedef hw_VarP (*hw_VarFn)
          , hw_Var const *args, hw_byte const *tid, hw_uint const count);
 
 struct hw_Var_VTCore {
-    hw_VarFn    init;
-    hw_VarFn    init_default;
-    hw_VarFn    deinit;
-    hw_VarFn    copy;
+    /**
+     * Default initialization
+     * args: none
+     **/
+    hw_VarFn    new;
+
+    /**
+     * Init from Serialized data
+     * args: (hw_ptr ptr, hw_uint size)
+     **/
+    hw_VarFn    newFrom_data;
+
+    /**
+     * Init from Serialized String
+     * args: (hw_String *string)
+     **/
+    hw_VarFn    newFrom_string;
+
+    /**
+     * Init from Serialized String
+     * args: (typeof(self))
+     **/
+    hw_VarFn    newFrom_copy;
+ 
+    /**
+     * args: NONE
+     **/
+    hw_VarFn    delete;
+
+    /**
+     * args: NONE
+     **/
     hw_VarFn    reset;
+
+    /**
+     * args: (typeof(self))
+     **/
+    hw_VarFn    reset_copy;
+
+    /**
+     * args: (typeof(self))
+     * ret: hw_int(-MAX, 0, +MAX)
+     **/
+    hw_VarFn    compare_bin;
+
+    /**
+     * args: (list(any))
+     **/
+    hw_VarFn    compare_all;
+
+    /**
+     * args: NONE
+     * ret: hw_String *
+     **/
     hw_VarFn    to_string;
+
+    /**
+     * args: none
+     * ret: hw_byteArr *
+     **/
     hw_VarFn    to_data;
+
+    /**
+     * args: none
+     * ret: hw_uint 
+     **/
     hw_VarFn    to_hash;
 };
 

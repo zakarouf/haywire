@@ -1,6 +1,5 @@
 #include "hw.h"
 #include "hw_dev.h"
-#include <malloc.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -48,9 +47,9 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
  */
 /**********************************************************************/
 #define DEFN(NAME)\
-    static hw_VarP NAME (       \
+    hw_VarP NAME (              \
         hw_Var *self            \
-      , hw_TypeSys *ts    \
+      , hw_TypeSys *ts          \
       , hw_Var  const *args     \
       , hw_byte const *tid      \
       , hw_uint const count)
@@ -68,7 +67,7 @@ DEFN(hw_unreachable_func) {
     return (hw_VarP){0};
 }
 
-DEFN(hw_VarList_init_default) {
+DEFN(hw_VarList_new) {
     const hw_uint default_len = 8;
     
     self->as_list = _ALLOC(sizeof(hw_VarList)
@@ -85,12 +84,12 @@ DEFN(hw_VarList_init_default) {
     return (hw_VarP){0};
 }
 
-DEFN(hw_VarList_deinit) {
+DEFN(hw_VarList_delete) {
     hw_VarList *list = self->as_list;
     for (hw_uint i = 0; i < list->lenUsed; i++) {
         hw_byte const T = list->tid[i];
         if(ts->types[T].is_obj) {
-            ts->types[T].vtcore.deinit(list->data + i, ts, NULL, NULL, 0);
+            ts->types[T].vtcore.delete(list->data + i, ts, NULL, NULL, 0);
         }
     }
     _FREE(self->as_list);
@@ -100,7 +99,7 @@ DEFN(hw_VarList_deinit) {
 
 
 // STRINGS
-DEFN(hw_String_vt_core_init_default) {
+DEFN(hw_String_init) {
     const hw_uint default_size = 8;
     hw_String *string = _ALLOC(sizeof(hw_String)
                             + (sizeof(self->as_string->data) * default_size));
@@ -112,10 +111,16 @@ DEFN(hw_String_vt_core_init_default) {
     return (hw_VarP){0};
 }
 
-DEFN(hw_String_vt_core_deinit) {
+DEFN(hw_String_pushstream) {
+    
+}
+
+DEFN(hw_String_deinit) {
     _FREE(self);
     return (hw_VarP){0};
 }
+
+
 
 /*
  * Default TypeSys
@@ -141,9 +146,8 @@ hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator)
                     ,   .name_size = 4
                     ,   .unitsize = sizeof(hw_VarList)
                     ,   .vtcore = {
-                            .init = hw_unreachable_func
-                           ,.init_default = hw_VarList_init_default
-                           ,.deinit = hw_VarList_deinit
+                            .new = hw_VarList_new
+                           ,.delete = hw_VarList_delete
                         }
                 }));
 
@@ -153,9 +157,8 @@ hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator)
                     ,   .name_size = 6
                     ,   .unitsize = sizeof(hw_String)
                     ,   .vtcore = {
-                            .init = hw_unreachable_func
-                           ,.init_default = hw_unreachable_func
-                           ,.deinit = hw_unreachable_func
+                            .new = hw_unreachable_func
+                           ,.delete = hw_unreachable_func
                         }
                 }));
 

@@ -17,7 +17,7 @@
 
 #define hw_Lexer_check(lex, is) ((lex).token.type == is)
 
-static inline void _make_token(hw_Lexer *lex, hw_LexTokenType token_type)
+static inline void _make_token(hw_Lexer *lex, enum hw_LexTokenType token_type)
 {
     lex->token.type = token_type;
     lex->token.size = lex->at - lex->token.start;
