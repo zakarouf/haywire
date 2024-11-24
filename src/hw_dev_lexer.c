@@ -1,5 +1,6 @@
 #include "hw.h"
 #include "hw_dev.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 
@@ -91,7 +92,7 @@ static int _check_if_char(hw_Lexer *lex)
 
         /* Single Char Case */
         #define _match(ch, Token)\
-            case ch: _make_token(lex, TOKEN(Token)); return 1; break
+            break; case ch: {_make_token(lex, TOKEN(Token)); return 1;}
 
         _match(' ', SPACE);
         _match('\t', TABSPACE);
@@ -100,7 +101,7 @@ static int _check_if_char(hw_Lexer *lex)
             _make_token(lex, TOKEN(NEWLINE));
         } break;
 
-        _match(EOF, END_OF_SOURCE);
+        //_match(EOF, END_OF_SOURCE);
 
         _match('(', PAREN_LEFT);
         _match(')', PAREN_RIGHT);
