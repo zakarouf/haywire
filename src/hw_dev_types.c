@@ -48,7 +48,7 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 /**********************************************************************/
 #define DEFN(NAME)\
     hw_VarP NAME (              \
-        hw_Var *self            \
+        hw_Var *_self_          \
       , hw_TypeSys *ts          \
       , hw_Var  const *args     \
       , hw_byte const *tid      \
@@ -57,6 +57,13 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 #define _ALLOC(SIZE)            HW_TYPESYS_ALLOC(ts, SIZE)
 #define _REALLOC(PTR, SIZE)     HW_TYPESYS_REALLOC(ts,PTR, SIZE)
 #define _FREE(PTR)              HW_TYPESYS_FREE(ts, PTR)
+
+#define _SELF(T) T self
+#define _SELF_ASSIGN(as) _self_->as = self;
+#define _SELF_BIND(T, as) T self = _self_->as
+
+#define _GET_ARG(n, as) (args[n].as)
+#define _MAKE_VAR(value, as) ((hw_Var){.as = value})
 
 /**
  * Var List
@@ -68,59 +75,87 @@ DEFN(hw_unreachable_func) {
 }
 
 DEFN(hw_VarList_new) {
+    _SELF(hw_VarList *);
     const hw_uint default_len = 8;
     
-    self->as_list = _ALLOC(sizeof(hw_VarList)
+    self = _ALLOC(sizeof(hw_VarList)
                             + (sizeof(hw_Var) * default_len)
-                            + (sizeof(hw_byte) * default_len)
-                        );
+                            + (sizeof(hw_byte) * default_len));
 
-    self->as_list->data = HW_CAST(void *, self->as_list + 1);
-    self->as_list->tid  = HW_CAST(void *, self->as_list->data + default_len);
+    self->data = HW_CAST(void *, self + 1);
+    self->tid  = HW_CAST(void *, self->data + default_len);
 
-    self->as_list->len = default_len;
-    self->as_list->lenUsed = 0;
+    self->len = default_len;
+    self->lenUsed = 0;
 
+    _SELF_ASSIGN(as_list);
     return (hw_VarP){0};
 }
 
 DEFN(hw_VarList_delete) {
-    hw_VarList *list = self->as_list;
-    for (hw_uint i = 0; i < list->lenUsed; i++) {
-        hw_byte const T = list->tid[i];
+    _SELF_BIND(hw_VarList *, as_list);
+    for (hw_uint i = 0; i < self->lenUsed; i++) {
+        hw_byte const T = self->tid[i];
         if(ts->types[T].is_obj) {
-            ts->types[T].vtcore.delete(list->data + i, ts, NULL, NULL, 0);
+            ts->types[T].vtcore.delete( self->data + i, ts, NULL, NULL, 0);
         }
     }
-    _FREE(self->as_list);
-    self->as_list = NULL;
-    return (hw_VarP){0};
-}
-
-
-// STRINGS
-DEFN(hw_String_init) {
-    const hw_uint default_size = 8;
-    hw_String *string = _ALLOC(sizeof(hw_String)
-                            + (sizeof(self->as_string->data) * default_size));
-
-    string->len = default_size;
-    string->lenUsed = 0;
-
-    self->as_string = string;
-    return (hw_VarP){0};
-}
-
-DEFN(hw_String_pushstream) {
-    
-}
-
-DEFN(hw_String_deinit) {
     _FREE(self);
     return (hw_VarP){0};
 }
 
 
+// STRINGS
+DEFN(hw_String_new) {
+    
+    const hw_uint default_size = 8;
+    _SELF(hw_String *) = _ALLOC(sizeof(hw_String)
+                            + (sizeof(self->data) * default_size));
+
+    self->len = default_size;
+    self->lenUsed = 0;
+
+    _SELF_ASSIGN(as_string);
+    return (hw_VarP){0};
+}
+
+DEFN(hw_String_delete) {
+    _SELF_BIND(hw_String *, as_string);
+    _FREE(self);
+    return (hw_VarP){0};
+}
+
+DEFN(hw_String_newFrom_cstr) {
+    _SELF(hw_String *);
+    
+    hw_byte *data = _GET_ARG(0, as_byte_p);
+    hw_uint dsize = _GET_ARG(1, as_uint);
+
+    self = _ALLOC( (sizeof(*self))
+                  +(sizeof(*self->data) * dsize));
+
+    self->data = HW_CAST(void *, self + 1);
+    self->len = dsize;
+    self->lenUsed = dsize;
+
+    memcpy(self->data, data, dsize);
+
+    _SELF_ASSIGN(as_string);
+    return (hw_VarP){0};
+}
+
+DEFN(hw_String_newFrom_copy) {
+    hw_String const *string = _GET_ARG(0, as_string);
+
+    hw_Var const size = _MAKE_VAR(string->lenUsed, as_uint);
+    hw_Var const data = _MAKE_VAR(string->data, as_ptr);
+
+    return hw_String_newFrom_cstr(
+        _self_, ts
+      , (hw_Var const[]){ data, size }
+      , (hw_byte const[]){ hw_TypeID_PTR, hw_TypeID_UINT }
+      , 2);
+}
 
 /*
  * Default TypeSys
