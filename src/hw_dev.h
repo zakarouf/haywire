@@ -17,7 +17,7 @@
 
 /**
  */
-#define HW_STR(s) (void*)s, (sizeof(s)-1)
+#define HW_STR(s) (void *)s, (sizeof(s)-1)
 
 /**
  * Section: Allocator
@@ -198,12 +198,14 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
       , hw_byte const *tid      \
       , hw_uint const count)
 #define INTERFACE_EXPORT(T)\
-    DEFN(T, init);              \
-    DEFN(T, initFrom_data);     \
-    DEFN(T, initFrom_string);   \
-    DEFN(T, initFrom_copy);     \
+    DEFN(T, new);               \
+    DEFN(T, newFrom_data);      \
+    DEFN(T, newFrom_conf);      \
+    DEFN(T, newFrom_string);    \
+    DEFN(T, newFrom_copy);      \
     DEFN(T, reset);             \
-    DEFN(T, deinit);            \
+    DEFN(T, reset_copy);        \
+    DEFN(T, delete);            \
     DEFN(T, compare_bin);       \
     DEFN(T, compare_all);       \
     DEFN(T, to_string);         \

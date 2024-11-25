@@ -63,8 +63,17 @@ typedef struct hw_ObjCompiler hw_ObjCompiler;
 /************************************************************/
 
 union hw_Var {
+    hw_byte         as_nil;
     hw_ptr          as_ptr,     *as_ptr_p;
     hw_int          as_reff,    *as_reff_p;
+
+    hw_int          as_bool;
+    hw_byte         as_byte,    *as_byte_p,  **as_byte_pp;
+    hw_byte         as_word[HW_WORD_SIZE],   *(as_word_p[HW_WORD_SIZE]);
+
+    hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
+    hw_int          as_int,     *as_int_p,   **as_int_pp;
+    hw_float        as_float,   *as_float_p, **as_float_pp;
 
     hw_Error const  *as_error;
     hw_VarList      *as_list,   **as_list_p;
@@ -73,13 +82,6 @@ union hw_Var {
     hw_byteArr      *as_barr,   **as_barr_p;
     hw_String       *as_string, **as_string_p;
     hw_CStr         *as_cstr,   **as_cstr_p;
-
-    hw_byte         as_byte,    *as_byte_p,  **as_byte_pp;
-    hw_byte         as_word[HW_WORD_SIZE],   *(as_word_p[HW_WORD_SIZE]);
-
-    hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
-    hw_int          as_int,     *as_int_p,   **as_int_pp;
-    hw_float        as_float,   *as_float_p, **as_float_pp;
 
     hw_Type    const    *as_type,     **as_type_p;
     hw_TypeSys const    *as_typesys,  **as_typesys_p;
@@ -97,26 +99,28 @@ struct hw_VarP {
 };
 
 enum hw_TypeID {
-      hw_TypeID_NIL = 0
-    , hw_TypeID_PTR
-    , hw_TypeID_REFF
+      hw_TypeID_nil = 0
+    , hw_TypeID_ptr
+    , hw_TypeID_reff
  
-    , hw_TypeID_UINT
-    , hw_TypeID_INT
-    , hw_TypeID_FLOAT
+    , hw_TypeID_bool
+    , hw_TypeID_byte
+    , hw_TypeID_uint
+    , hw_TypeID_int
+    , hw_TypeID_float
 
-    , hw_TypeID_ERROR
-    , hw_TypeID_LIST
-    , hw_TypeID_ARR
+    , hw_TypeID_error
+    , hw_TypeID_list
+    , hw_TypeID_arr
 
-    , hw_TypeID_BARR
-    , hw_TypeID_STRING
-    , hw_TypeID_TYPE
-    , hw_TypeID_TYPESYS
+    , hw_TypeID_barr
+    , hw_TypeID_string
+    , hw_TypeID_type
+    , hw_TypeID_typesys
 
-    , hw_TypeID_MODULE
-    , hw_TypeID_THREAD
-    , hw_TypeID_STATE
+    , hw_TypeID_module
+    , hw_TypeID_thread
+    , hw_TypeID_state
 
     , hw_TypeID_TOTAL
 };
@@ -203,6 +207,12 @@ struct hw_Var_VTCore {
      * args: (hw_ptr ptr, hw_uint size)
      **/
     hw_VarFn    newFrom_data;
+
+    /**
+     * Init from passed config as hw_Vars
+     * args: (...) <- dependent on each type
+     */
+    hw_VarFn    newFrom_conf;
 
     /**
      * Init from Serialized String
@@ -476,5 +486,15 @@ struct hw_ObjCompiler {
 };
 
 #define hw_CStr_makelit(s)     ((hw_CStr){.data = #s, .len = sizeof(#s) - 1})
+
+#define HW_VARP(_value, _as_)\
+    ((hw_VarP){.value.as_##_as_ = _value, .type = hw_TypeID_##_as_})
+
+#define HW_VARP_NIL()       HW_VARP(0, nil)
+#define HW_VARP_INT(v)      HW_VARP(v, int)
+#define HW_VARP_UINT(v)     HW_VARP(v, uint)
+#define HW_VARP_FLOAT(v)    HW_VARP(v, float)
+#define HW_VARP_BYTE(v)     HW_VARP(v, byte)
+#define HW_VARP_BOOL(v)     HW_VARP(v, bool)
 
 #endif
