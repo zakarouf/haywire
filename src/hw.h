@@ -293,17 +293,13 @@ struct hw_TypeSys {
 union hw_code {
     uint64_t         as_raw;
     struct {
-        hw_byte opcode, attr;
-        uint16_t A;
-        union {
-            uint32_t x32 ;
-            int32_t  xi32;
-            float    xf32;
-            struct {
-                uint16_t B, C;
-            }; 
-        };
-    };
+        uint8_t opcode;
+        uint8_t attr;
+        struct {
+            uint16_t A;
+
+        } reg;
+    } get;
 };
 
 

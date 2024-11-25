@@ -147,14 +147,32 @@ DEFN(hw_String_newFrom_cstr) {
 DEFN(hw_String_newFrom_copy) {
     hw_String const *string = _GET_ARG(0, as_string);
 
-    hw_Var const size = _MAKE_VAR(string->lenUsed, as_uint);
     hw_Var const data = _MAKE_VAR(string->data, as_ptr);
+    hw_Var const size = _MAKE_VAR(string->lenUsed, as_uint);
 
     return hw_String_newFrom_cstr(
         _self_, ts
       , (hw_Var const[]){ data, size }
       , (hw_byte const[]){ hw_TypeID_PTR, hw_TypeID_UINT }
       , 2);
+}
+
+DEFN(hw_String_append_cstr) {
+    _SELF_BIND(hw_String *, as_string);
+    hw_byte *data = _GET_ARG(0, as_byte_p);
+    hw_uint dsize = _GET_ARG(1, as_uint);
+
+    hw_uint const availiable_len = self->len - self->lenUsed;
+    if(availiable_len < dsize) {
+        self = _REALLOC(self, (sizeof(*self))
+                            +  (sizeof(*self->data) * (1 + self->len + dsize)));
+        self->data = HW_CAST(void *, self + 1);
+    }
+    
+    memcpy(self->data + self->lenUsed, data, dsize);
+    self->lenUsed += dsize;
+    _SELF_ASSIGN(as_string);
+    return (hw_VarP){0};
 }
 
 /*

@@ -155,8 +155,10 @@ void hw_Lexer_next_until(hw_Lexer *lex, enum hw_LexTokenType type);
 /**
  * Section: Type Impl
  */
+void hw_Allocator_default(hw_Allocator *self);
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator allocator);
+hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator);
 void hw_TypeSys_delete(hw_TypeSys *t);
 hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
 
@@ -168,7 +170,6 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
 
 #define HW_TYPESYS_FREE(TS, PTR)\
             (TS)->allocator.free(&(TS)->allocator.state, PTR)
-
 
 
 /**
@@ -225,6 +226,9 @@ INTERFACE_EXPORT(hw_int)
 INTERFACE_EXPORT(hw_ptr)
 
 INTERFACE_EXPORT(hw_String)
+    DEFN(hw_String, append_str);
+    DEFN(hw_String, newFrom_copy);
+
 INTERFACE_EXPORT(hw_VarList)
 INTERFACE_EXPORT(hw_VarList)
 INTERFACE_EXPORT(hw_VarArr)
