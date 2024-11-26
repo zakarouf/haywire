@@ -279,12 +279,13 @@ struct hw_VarFnArr {
 
 struct hw_Type {
     hw_uint             id;
-    hw_byte             name[256];
-    hw_uint             name_size;
     hw_uint             unitsize;
     hw_Var_VTCore       vtcore;
     hw_VarFn            vt[8];
+    hw_byte             name[256];
+
     hw_byte             is_obj;
+    hw_byte             name_size;
 };
 
 struct hw_TypeSys {
@@ -424,16 +425,29 @@ struct hw_ModuleArr {
     hw_uint lenUsed;
 };
 
+enum hw_ThreadStatus {
+    hw_ThreadStatus_READY
+  , hw_ThreadStatus_DONE
+  , hw_ThreadStatus_RUNNING
+  , hw_ThreadStatus_WAITING
+  , hw_ThreadStatus_SLEEPING
+  , hw_ThreadStatus_CRASH
+  , hw_ThreadStatus_TOTAL
+};
+
 struct hw_Thread {
-    hw_uint         id;
-    hw_CStr         name;
+    hw_uint                 id;
+    hw_byte                 name[128];
 
-    hw_VarList      *vstack;
-    hw_FnSaveArr    *fstack;
+    hw_VarList              *vstack;
+    hw_FnSaveArr            fstack;
 
-    hw_FnState      fn;
+    hw_FnState              fn;
 
-    hw_State const  *global;
+    hw_State const          *global;
+
+    hw_byte                 name_size;
+    enum hw_ThreadStatus    status;
 };
 
 struct hw_ThreadArr {
@@ -445,6 +459,7 @@ struct hw_ThreadArr {
 struct hw_State {
     hw_CStr         name;
     hw_uint         pid;
+    hw_Thread       main_thread;
     hw_ThreadArr    *threads;
     hw_TypeSys      *tsys;
 };
