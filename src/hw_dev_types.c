@@ -239,6 +239,14 @@ DEFN(hw_VarArr_delete) {
     (void)count;
 
     _SELF_BIND(hw_VarArr *, as_arr);
+
+    if (ts->types[self->tid].is_obj) {
+        for (hw_uint i = 0; i < self->lenUsed; i++) {
+            HW_VAR_CALL_CORE(
+                self->data + i, self->tid, ts, vtcore.delete, NULL, NULL, 0);
+        }
+    }
+
     _FREE(self);
     _SELF_ASSIGN(as_arr);
     return HW_VARP_NIL();
