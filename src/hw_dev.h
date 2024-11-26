@@ -228,15 +228,24 @@ INTERFACE_EXPORT(hw_int)
 INTERFACE_EXPORT(hw_ptr)
 
 INTERFACE_EXPORT(hw_String)
+    DEFN(hw_String, newFrom_cstr);
     DEFN(hw_String, append_str);
-    DEFN(hw_String, newFrom_copy);
 
 INTERFACE_EXPORT(hw_VarList)
-INTERFACE_EXPORT(hw_VarList)
 INTERFACE_EXPORT(hw_VarArr)
+    DEFN(hw_VarArr, push);
 
 #undef DEFN
 #undef INTERFACE_EXPORT
+
+
+/**
+ * Threads;
+ */
+hw_VarP hw_Thread_init(
+    hw_Thread *t, hw_State const *global, hw_uint id, const char *name
+  , hw_byte name_size);
+hw_VarP hw_Thread_deinit(hw_Thread *t);
 
 /**
  * Section: Undef
