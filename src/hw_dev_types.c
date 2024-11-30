@@ -6,9 +6,11 @@
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator allocator)
 {
-    hw_TypeSys *tsys = allocator.alloc(&allocator.state, sizeof(hw_TypeSys) 
-                        + (sizeof(hw_Type) * type_count) );
-
+    const hw_uint size = sizeof(hw_TypeSys) 
+                        + ( sizeof(hw_Type) * type_count );
+    hw_TypeSys *tsys = allocator.alloc(&allocator.state, size);
+    memset(tsys, 0, size);
+    
     tsys->types = (void *)(tsys + 1);
     tsys->types_total = type_count;
     tsys->types_used = 0;
@@ -31,7 +33,7 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 
     HW_DEBUG(
         if(dest->name_size) {
-            HW_DLOG("RE SET OF TypeSys Type %s", dest->name);
+            HW_LOG("RE SET OF TypeSys Type %s", dest->name);
         }
     )
 
@@ -69,6 +71,28 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 /**
  * Var List
  */
+
+static void *_loadfile(
+    hw_TypeSys *ts, char const path[], hw_uint unitsize, hw_uint *len)
+{
+    FILE *fp;
+    if ((fp = fopen(path, "rb")) == NULL) {
+        return NULL;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    hw_uint fsize = ftell(fp);
+    *len = fsize;
+    fseek(fp, 0, SEEK_SET);  /* same as rewind(f); */
+
+    hw_uint extra = fsize/unitsize;
+
+    void *data = _ALLOC(fsize * extra);
+    fread(data, 1, fsize, fp);
+    fclose(fp);
+
+    return data;
+}
 
 DEFN(hw_unreachable_func) {
     (void)_self_;
@@ -187,7 +211,6 @@ DEFN(hw_String_newFrom_copy) {
 }
 
 DEFN(hw_String_append_cstr) {
-    (void)args;
     (void)tid;
     (void)count;
 
@@ -205,6 +228,14 @@ DEFN(hw_String_append_cstr) {
     
     memcpy(self->data + self->lenUsed, data, dsize);
     self->lenUsed += dsize;
+    _SELF_ASSIGN(as_string);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_String_loadfile) {
+    _SELF(hw_String *);
+    hw_ptr data = _loadfile(ts, const char *path, hw_uint unitsize, hw_uint *len);
+
     _SELF_ASSIGN(as_string);
     return HW_VARP_NIL();
 }
@@ -305,7 +336,36 @@ hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator)
                 }));
 
     HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_ptr
+                    ,   .name = "ptr"
+                    ,   .name_size = 3
+                    ,   .unitsize = sizeof(hw_ptr)
+                }));
+
+    HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_int
+                    ,   .name = "int"
+                    ,   .name_size = 3
+                    ,   .unitsize = sizeof(hw_int)
+                }));
+
+    HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_uint
+                    ,   .name = "uint"
+                    ,   .name_size = 4
+                    ,   .unitsize = sizeof(hw_uint)
+                }));
+
+    HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_float
+                    ,   .name = "float"
+                    ,   .name_size = 5
+                    ,   .unitsize = sizeof(hw_float)
+                }));
+
+    HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
                         .id = hw_TypeID_list
+                    ,   .is_obj = 1
                     ,   .name = "list"
                     ,   .name_size = 4
                     ,   .unitsize = sizeof(hw_VarList)
@@ -316,13 +376,26 @@ hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator)
                 }));
 
     HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_arr
+                    ,   .is_obj = 1
+                    ,   .name = "arr"
+                    ,   .name_size = 3
+                    ,   .unitsize = sizeof(hw_VarArr)
+                    ,   .vtcore = {
+                            .new = hw_unreachable_func
+                        ,   .delete = hw_VarArr_delete
+                    }
+                }));
+
+    HW_ASSERT(hw_TypeSys_set(ts, &(hw_Type){
                         .id = hw_TypeID_string
+                    ,   .is_obj = 1
                     ,   .name = "string"
                     ,   .name_size = 6
                     ,   .unitsize = sizeof(hw_String)
                     ,   .vtcore = {
-                            .new = hw_unreachable_func
-                           ,.delete = hw_unreachable_func
+                            .new = hw_String_new
+                           ,.delete = hw_String_delete
                         }
                 }));
 

@@ -38,8 +38,8 @@ void hw_exit(hw_int code, const char *msg, size_t const size);
 void hw_logp(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void hw_logstr(const char *msg, size_t const);
 
-#define HW_DLOG(fmt, ...)\
-    hw_logp("[DLOG]: " __FILE__ ":%d:" fmt "\n", __LINE__, __VA_ARGS__)
+#define HW_LOG(fmt, ...)\
+    hw_logp("[HWLOG]: " __FILE__ ":%d:" fmt "\n", __LINE__, __VA_ARGS__)
 
 /**
  * Assert
@@ -238,7 +238,70 @@ INTERFACE_EXPORT(hw_VarArr)
 #undef DEFN
 #undef INTERFACE_EXPORT
 
+/**
+ * INSTS
+ */
+#define INST(x) CAT2(hw_Inst, x)
+enum hw_Inst {
+    INST(nop) = 0
+  , INST(defn)
+  , INST(return)
+  , INST(reserve)
 
+  /* Variable Interface */
+  , INST(v_new)
+  , INST(v_newc)
+  , INST(v_newd)
+  , INST(v_del)
+  , INST(v_reset)
+  , INST(v_resetc)
+  , INST(v_copy)
+  , INST(v_hash)
+  , INST(v_data)
+  , INST(v_string)
+
+  /* Interface call */
+  , INST(v_call) // R(Bx[0]) = R(Ax).R(Cx)((Bx[1:]))
+
+  /* Define Variable */
+  , INST(set_dup)
+  , INST(set_type)
+  , INST(set_nil)
+  , INST(set_32a)
+  , INST(set_32b)
+  , INST(set_list)
+  , INST(set_string)
+
+  /**/
+  
+  /* Comaparism And Jump*/
+  , INST(cmp) // R(Cx) = R(Ax).compare_bin(R(Bx))
+  , INST(jmp)
+  , INST(jmp0)
+  
+  , INST(typeq) // if(typeof(Ax) == typeof(Bx)) pc++
+  , INST(tideq) // if(typeof(Ax) == Bx) pc++
+  , INST(veq) // if(Ax == Bx) pc++
+  , INST(vle) // if(Ax <= Bx) pc++
+  , INST(vlt) // if(Ax < Bx) pc++
+
+  /* Print */
+  , INST(print)
+  , INST(pinfo)
+
+  , INST(TOTAL)
+};
+
+#undef INST
+
+enum hw_InstType {
+    hw_InstType_nop  // [ins nil nil nil]
+  , hw_InstType_a    // [ins ax nil nil]
+  , hw_InstType_ab   // [ins ax bx nil] 
+  , hw_InstType_abc  // [ins ax bx cx]
+  , hw_InstType_ax32 // [ins ax x32]
+  , hw_InstType_x32  // [ins nil x32]
+};
 /**
  * Threads;
  */
@@ -252,5 +315,6 @@ hw_VarP hw_Thread_deinit(hw_Thread *t);
  */
 #undef CAT
 #undef CAT2
+
 #endif
 

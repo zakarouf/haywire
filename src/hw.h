@@ -259,6 +259,12 @@ struct hw_Var_VTCore {
     hw_VarFn    to_string;
 
     /**
+     * args: NONE
+     * ret: hw_String *
+     **/
+    hw_VarFn    to_info;
+ 
+    /**
      * args: none
      * ret: hw_byteArr *
      **/
@@ -300,17 +306,31 @@ struct hw_TypeSys {
 
 /****************************************************/
 /****************************************************/
+struct hw_CodeStructX {
+    uint8_t opcode;
+    uint8_t attr;
+    uint16_t A;
+    uint32_t x32;
+};
+
+struct hw_CodeStructS {
+    uint8_t opcode;
+    uint8_t attr;
+    uint16_t A;
+     int32_t s32;
+};
+
+struct hw_CodeStruct {
+    uint8_t opcode;
+    uint8_t attr;
+    uint16_t A, B, C;
+};
 
 union hw_code {
-    uint64_t         as_raw;
-    struct {
-        uint8_t opcode;
-        uint8_t attr;
-        struct {
-            uint16_t A;
-
-        } reg;
-    } get;
+    uint64_t                raw;
+    struct hw_CodeStruct    get;
+    struct hw_CodeStructX   getx;
+    struct hw_CodeStructS   gets;
 };
 
 
@@ -500,10 +520,19 @@ struct hw_ObjCompiler {
     hw_Module *out;
 };
 
+#define HW_STATIC_ASSERT(exp)\
+    ((void)(char[(exp)? 1:-1]){0})
+
 #define hw_CStr_makelit(s)     ((hw_CStr){.data = #s, .len = sizeof(#s) - 1})
 
 #define HW_VARP(_value, _as_)\
     ((hw_VarP){.value.as_##_as_ = _value, .type = hw_TypeID_##_as_})
+
+#define hw_code_x32(code, ins, a, _32)\
+    ((hw_code){.opcode = ins, .getx.A = a, .getx.x32 = _32})
+
+#define HW_FALSE 0
+#define HW_TRUE (!HW_FALSE)
 
 #define HW_VARP_NIL()       HW_VARP(0, nil)
 #define HW_VARP_INT(v)      HW_VARP(v, int)
