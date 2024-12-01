@@ -42,16 +42,19 @@ void hw_exit(hw_int code, const char *msg, size_t const size)
  */
 static void* _malloc_wrapper(void **state, size_t size)
 {
+    (void)state;
     return HW_MALLOC(size);
 }
 
 static void* _realloc_wrapper(void **state, void *ptr, size_t size)
 {
+    (void)state;
     return HW_REALLOC(ptr, size);
 }
 
 static void  _free_wrapper(void **state, void *ptr)
 {
+    (void)state;
     HW_FREE(ptr);
 }
 
@@ -88,8 +91,7 @@ hw_VarP hw_Thread_init(
     t->fstack.lenUsed = 0;
     
     hw_Var vstack = {0};
-    hw_VarList_new(
-        &vstack, global->tsys, (const hw_Var[]){0}, (const hw_byte[]){0}, 0);
+    hw_VarList_new(global->tsys, &vstack, (hw_byte[]){0}, 1);
     t->vstack = vstack.as_list;
     
     memset(&t->fn, 0, sizeof(t->fn));
@@ -100,11 +102,10 @@ hw_VarP hw_Thread_init(
 
 hw_VarP hw_Thread_deinit(hw_Thread *t)
 {
+    hw_Var vstack = {.as_list = t->vstack};
     hw_VarList_delete(
-        &(hw_Var){.as_list = t->vstack}
-      , t->global->tsys, (const hw_Var[]){0}
-      , (const hw_byte[]){0}
-      , 0);
+        t->global->tsys, &vstack
+      , (hw_byte[]){hw_TypeID_list}, 1);
 
     void(*mfree)(void **, void *) = t->global->tsys->allocator.free;
     void **alloc_obj = &t->global->tsys->allocator.state;
@@ -112,3 +113,4 @@ hw_VarP hw_Thread_deinit(hw_Thread *t)
 
     return HW_VARP_NIL();
 }
+

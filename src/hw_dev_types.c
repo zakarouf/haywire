@@ -44,10 +44,6 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 
 /**********************************************************************/
 /* All Types VTables:
- * IMPORTANT ONES:
- *      -> VarArr
- *      -> VarList
- *      -> VarHash
  */
 /**********************************************************************/
 #define DEFN(NAME)\
@@ -64,11 +60,19 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 #define _GET_SELF() (args[0])
 #define _GET_SELF_TID() (tid[0])
 #define _SELF(T) T self
-#define _SELF_ASSIGN(as) _GET_SELF().as = self;
+#define _SELF_ASSIGN(as) (_GET_SELF()).as = self;
 #define _SELF_BIND(T, as) T self = _GET_SELF().as
 
-#define _GET_ARG(n, as) (args[n+1].as)
+#define _GET_ARG_RAW(n) (args[n+1])
+#define _GET_ARG(n, as) (_GET_ARG_RAW(n).as)
 #define _MAKE_VAR(value, as) ((hw_Var){.as = value})
+
+#define _CHECK_ARGS(_c, ...)\
+    do {\
+        hw_uint c = _c;\
+        HW_ASSERT(c == count);\
+        HW_ASSERT(!memcmp((hw_byte[]){__VA_ARGS__}, tid, count));\
+    } while(0)
 
 /**
  * Var List
@@ -109,6 +113,10 @@ DEFN(hw_VarList_new) {
     (void)args;
     (void)tid;
     (void)count;
+    
+    HW_DEBUG(
+            _CHECK_ARGS(1, hw_TypeID_nil)
+    );
 
     _SELF(hw_VarList *);
     const hw_uint default_len = 8;
@@ -172,7 +180,6 @@ DEFN(hw_String_delete) {
 }
 
 DEFN(hw_String_newFrom_cstr) {
-    (void)args;
     (void)tid;
     (void)count;
 
@@ -204,11 +211,12 @@ DEFN(hw_String_newFrom_copy) {
     hw_Var const data = _MAKE_VAR(string->data, as_ptr);
     hw_Var const size = _MAKE_VAR(string->lenUsed, as_uint);
 
-    return hw_String_newFrom_cstr(
-        ts
-      , (hw_Var []){ _GET_SELF(), data, size }
-      , (hw_byte []){ _GET_SELF_TID(), hw_TypeID_ptr, hw_TypeID_uint }
-      , 3);
+    hw_Var ar[] = { _GET_SELF(), data, size };
+    hw_byte ti[] = { _GET_SELF_TID(), hw_TypeID_ptr, hw_TypeID_uint };
+    hw_VarP ret = hw_String_newFrom_cstr(ts, ar, ti, 3);
+    args[0] = ar[0];
+
+    return ret;
 }
 
 DEFN(hw_String_append_cstr) {
@@ -233,10 +241,16 @@ DEFN(hw_String_append_cstr) {
     return HW_VARP_NIL();
 }
 
-DEFN(hw_String_loadfile) {
+DEFN(hw_String_newFrom_file) {
     _SELF(hw_String *);
     HW_ASSERT(0 && "NOT IMPLEMENTED");
-
+    hw_uint filesize = 0;
+    hw_ptr filedata = _loadfile(ts, "X", 1, &filesize);
+    if(filedata == NULL) {
+        return HW_VARP_ERROR(
+            &((hw_Error){.error = 0, .str = "FNF", .str_size = 3}));
+    }
+    
     _SELF_ASSIGN(as_string);
     return HW_VARP_NIL();
 }
@@ -290,8 +304,9 @@ DEFN(hw_VarArr_push) {
     _SELF_BIND(hw_VarArr *, as_arr);
 
     HW_DEBUG(
-            HW_ASSERT(count == 1);
-            HW_ASSERT(tid[0] == self->tid)
+            HW_ASSERT(count == 2);
+            HW_ASSERT(tid[0] == hw_TypeID_arr);
+            HW_ASSERT(tid[1] == self->tid);
     );
     
     
@@ -302,13 +317,13 @@ DEFN(hw_VarArr_push) {
         self->data = HW_CAST(void *, self + 1);
     }
 
-    self->data[self->lenUsed] = args[0];
+    self->data[self->lenUsed] = _GET_ARG_RAW(0);
     self->lenUsed += 1;
 
     _SELF_ASSIGN(as_arr);
     return HW_VARP_NIL();
 }
-
+ 
 DEFN(hw_VarArr_pushStream) {
     _SELF_BIND(hw_VarArr *, as_arr);
     

@@ -44,11 +44,15 @@ void hw_logstr(const char *msg, size_t const);
 /**
  * Assert
  */
-#define HW_ASSERT(exp)\
-        (exp?\
-            (void)0: \
-            hw_exit(-1, HW_STR("Assertion Failure: " #exp)))
+#define HW_ASSERTEX(exp, fmt, ...)\
+        do {                \
+            if(!(exp)) {    \
+                HW_LOG("ASSERT FAIL:" fmt, __VA_ARGS__); \
+                hw_exit(-1, HW_STR(#exp));\
+            }                                                   \
+        } while(0)
 
+#define HW_ASSERT(exp) HW_ASSERTEX(exp, "%s", ":=")
 
 /**
  * Section: Tokens
@@ -227,6 +231,7 @@ INTERFACE_EXPORT(hw_ptr)
 
 INTERFACE_EXPORT(hw_String)
     DEFN(hw_String, newFrom_cstr);
+    DEFN(hw_String, newFrom_file);
     DEFN(hw_String, append_str);
 
 INTERFACE_EXPORT(hw_VarList)

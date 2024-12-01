@@ -1,8 +1,8 @@
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <inttypes.h>
 #include "hw.h"
 #include "hw_dev.h"
 
@@ -52,6 +52,7 @@ struct hw_InstData const HW_INST_DATA[] = {
   /* Comaparism And Jump*/
   , ID(jmp,     HW_FALSE, a)
   , ID(jmp0,    HW_FALSE, x32)
+  , ID(jmpif,   HW_FALSE, ax32)
   
   , ID(cmp,     HW_FALSE, abc) 
   , ID(typeq,   HW_FALSE, abc) 
@@ -95,21 +96,34 @@ void hw_delete(hw_State *self)
 
 static hw_VarArr *wrap_args(hw_TypeSys *ts, int argc, char *argv[])
 {
-    hw_Var arr = {0};
-    hw_VarArr_newFrom_conf(
-        &arr, ts
-      , (hw_Var[]){ (hw_Var){.as_uint = hw_TypeID_string} }
-      , (hw_byte[]){hw_TypeID_uint}, 1);
+    hw_Var arr;
+    hw_Var args[4] = {
+                {0}
+              , (hw_Var){.as_uint = hw_TypeID_string} };
+
+    hw_VarArr_newFrom_conf( ts, args 
+      , (hw_byte[]){hw_TypeID_list, hw_TypeID_uint}, 2);
+    arr = args[0];
 
     for (int i = 0; i < argc; i++) {
         hw_Var string;
-        hw_Var arg0_data = {.as_ptr = argv[i]};
-        hw_Var arg1_size = {.as_uint = strlen(argv[i])};
-        hw_String_newFrom_cstr(&string, ts
-            , (hw_Var[]){ arg0_data, arg1_size }
-            , (hw_byte[]){ hw_TypeID_ptr, hw_TypeID_uint}, 2);
 
-        hw_VarArr_push(&arr, ts, &string, (hw_byte[]){hw_TypeID_string}, 1);
+        args[1].as_ptr = argv[i];
+        args[2].as_uint = strlen(argv[i]);
+        hw_String_newFrom_cstr(ts, args
+            , (hw_byte[]){
+            hw_TypeID_nil, 
+            hw_TypeID_ptr, 
+            hw_TypeID_uint}, 3);
+        string = args[0];
+      
+        args[0] = arr;
+        args[1] = string;
+        hw_VarArr_push(ts, args, (hw_byte[]){
+              hw_TypeID_arr,
+              hw_TypeID_string}, 2);
+        HW_LOG("vm = %p", (void *)arr.as_arr->data[i].as_string);
+        arr = args[0];
     }
 
     return arr.as_arr;
@@ -117,9 +131,14 @@ static hw_VarArr *wrap_args(hw_TypeSys *ts, int argc, char *argv[])
 
 void check_vm_inst(void)
 {
-    for (size_t i = 0; i < hw_Inst_TOTAL; i++) {
-        HW_ASSERT(HW_INST_DATA[i].name);
-        HW_ASSERT(HW_INST_DATA[i].name_size);
+    size_t i;
+    for (i = 0; i < hw_Inst_TOTAL; i++) {
+        HW_DEBUG( 
+          hw_logstr(HW_INST_DATA[i].name, HW_INST_DATA[i].name_size);
+          putc(' ', stdout);
+        )
+        HW_ASSERTEX(HW_INST_DATA[i].name, "%"PRIu64"", i);
+        HW_ASSERTEX(HW_INST_DATA[i].name_size, "%"PRIu64, i);
     }
 }
 

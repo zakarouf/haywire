@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <float.h>
 
+
 typedef void*               hw_ptr;
 typedef uint8_t             hw_byte;
 
@@ -56,7 +57,18 @@ typedef struct  hw_ThreadArr    hw_ThreadArr;
 typedef struct  hw_State        hw_State;
 
 /************************************************************/
-
+/*
+ * NOTE: `args` passed as list assume the list is allocated from somewhere else,
+ *      therefore it doesn't mutate the list but can mutate its members.
+ *      This interface will result in Failure if the allocated list is created
+ *      on function call. Such as:=
+ *
+ *          fn(typesystem, (hw_Var[]){ var }, ...)
+ *
+ *      Here `var` is only exist on the scope of function call.
+ *      If `var` is mutated in anyway, such as allocating memory on heap and
+ *      assigning ptr to var; results in memory leak
+ */
 typedef hw_VarP (*hw_VarFn)
         (hw_TypeSys *T_sys, hw_Var *args, hw_byte *tid, hw_uint const count);
 
@@ -73,6 +85,7 @@ union hw_Var {
     hw_byte         as_nil;
     hw_ptr          as_ptr,     *as_ptr_p;
     hw_int          as_reff,    *as_reff_p;
+    hw_Var          *as_vptr;
 
     hw_int          as_bool;
     hw_byte         as_byte,    *as_byte_p,  **as_byte_pp;
@@ -561,5 +574,6 @@ struct hw_ObjCompiler {
 #define HW_VARP_FLOAT(v)    HW_VARP(v, float)
 #define HW_VARP_BYTE(v)     HW_VARP(v, byte)
 #define HW_VARP_BOOL(v)     HW_VARP(v, bool)
+#define HW_VARP_ERROR(v)    HW_VARP(v, error)
 
 #endif
