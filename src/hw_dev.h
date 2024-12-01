@@ -175,16 +175,14 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
 /**
  * Section: Var Interface Call
  */
-#define HW_VAR_CALL_CORE(var, tid, ts, interface, ...)      \
-    {                                                       \
-        HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)         \
-        (ts)->types[tid].interface(var, ts, __VA_ARGS__);   \
-    }
+#define HW_VAR_CALL_CORE(tid, ts, interface, ...)               \
+        { HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)          \
+        (ts)->types[tid].interface(ts, __VA_ARGS__); }
 
-#define HW_VAR_CALL(var, tid, ts, interface, ...)\
+#define HW_VAR_CALL(tid, ts, interface, ...)\
     {                                                           \
         HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)             \
-        (ts)->types[tid].vt[interface](var, ts, __VA_ARGS__);   \
+        (ts)->types[tid].vt[interface](ts, __VA_ARGS__);        \
     }
 
 /**
@@ -192,11 +190,11 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
  */
 #define DEFN(T, NAME)\
     hw_VarP CAT2(T, NAME) (     \
-        hw_Var *self            \
-      , hw_TypeSys *ts          \
-      , hw_Var  const *args     \
-      , hw_byte const *tid      \
+        hw_TypeSys  *ts          \
+      , hw_Var      *args     \
+      , hw_byte     *tid      \
       , hw_uint const count)
+
 #define INTERFACE_EXPORT(T)\
     DEFN(T, new);               \
     DEFN(T, newFrom_data);      \
@@ -243,51 +241,47 @@ INTERFACE_EXPORT(hw_VarArr)
  */
 #define INST(x) CAT2(hw_Inst, x)
 enum hw_Inst {
-    INST(nop) = 0
-  , INST(defn)
-  , INST(return)
-  , INST(reserve)
-
-  /* Variable Interface */
-  , INST(v_new)
-  , INST(v_newc)
-  , INST(v_newd)
-  , INST(v_del)
-  , INST(v_reset)
-  , INST(v_resetc)
-  , INST(v_copy)
-  , INST(v_hash)
-  , INST(v_data)
-  , INST(v_string)
-
-  /* Interface call */
-  , INST(v_call) // R(Bx[0]) = R(Ax).R(Cx)((Bx[1:]))
-
-  /* Define Variable */
-  , INST(set_dup)
-  , INST(set_type)
-  , INST(set_nil)
-  , INST(set_32a)
-  , INST(set_32b)
-  , INST(set_list)
-  , INST(set_string)
-
   /**/
+    INST(nop) = 0
+  , INST(defn)    // Point to FuncInfo
+  , INST(return)  // ret with val R(Ax)
+  , INST(tailret) // ret with function call
+  , INST(reserve) // reserve variables in stack
+  , INST(release) // release variables in stack with (optional) delete
+
+  /* Gets */
+  , INST(get_type)     // R(Ax) = @typeof(R(Bx))
+  , INST(get_routine)  // R(Ax) = Thread(R(Bx))
+
+  /* Call */
+  , INST(call)      // call R(Ax) with R(Bx) args, save return val to R(Cx)
+  , INST(calln)     // Call native functions implemented for haywire
+                    // call R(Ax) with R(Bx) args, save return val to R(Cx)
+
+  , INST(callc)     // Call any c function through ffi
+
+  /* Variable Manupulation */
+  , INST(dup)
+  , INST(dups) // [R(Ax):R(Cx)] = [R(Bx):R(Cx)]
+  , INST(type)
+  , INST(nil)
+  , INST(a32_0)
+  , INST(a32_1)
+  , INST(list)
+  , INST(string)
+
+  /* Jump */
+  , INST(jmp) // pc += R(Ax)
+  , INST(jmp0) // pc += Ax
+  , INST(jmpif) // if(R(Ax)) pc += R(Bx)
   
-  /* Comaparism And Jump*/
+  /* Comaparism */
   , INST(cmp) // R(Cx) = R(Ax).compare_bin(R(Bx))
-  , INST(jmp)
-  , INST(jmp0)
-  
   , INST(typeq) // if(typeof(Ax) == typeof(Bx)) pc++
   , INST(tideq) // if(typeof(Ax) == Bx) pc++
   , INST(veq) // if(Ax == Bx) pc++
   , INST(vle) // if(Ax <= Bx) pc++
   , INST(vlt) // if(Ax < Bx) pc++
-
-  /* Print */
-  , INST(print)
-  , INST(pinfo)
 
   , INST(TOTAL)
 };

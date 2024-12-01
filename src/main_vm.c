@@ -26,31 +26,28 @@ struct hw_InstData const HW_INST_DATA[] = {
     ID(nop,     HW_FALSE, nop)
   , ID(defn,    HW_FALSE, nop)
   , ID(return,  HW_FALSE, a)
+  , ID(tailret, HW_FALSE, abc) // ret with function call
   , ID(reserve, HW_FALSE, a)
+  , ID(release, HW_FALSE, a) // release variables in stack with (optional) delete
+
+  /* Gets */
+  , ID(get_type, HW_FALSE, ab)     // R(Ax) = @typeof(R(Bx))
+  , ID(get_routine, HW_FALSE, ab)  // R(Ax) = Thread(R(Bx))
+
+  /* Call */
+  , ID(call,      HW_TRUE, abc)
+  , ID(calln,      HW_TRUE, abc)
+  , ID(callc,      HW_TRUE, abc)
 
   // ------
-  , ID(v_new,       HW_FALSE, a)
-  , ID(v_newc,      HW_FALSE, ab)
-  , ID(v_newd,      HW_FALSE, ax32)
-  , ID(v_del,       HW_FALSE, a)
-  , ID(v_reset,     HW_FALSE, a)
-  , ID(v_resetc,    HW_FALSE, ab)
-  , ID(v_copy,      HW_FALSE, ab)
-  , ID(v_hash,      HW_TRUE , ab)
-  , ID(v_data,      HW_TRUE , ab)
-  , ID(v_string,    HW_TRUE , ab)
-
-  // ------
-  , ID(v_call,      HW_TRUE, abc)
-
-  // ------
-  , ID(set_dup,     HW_FALSE, ab)
-  , ID(set_type,    HW_FALSE, ab)
-  , ID(set_nil,     HW_FALSE, a)
-  , ID(set_32a,     HW_FALSE, ax32)
-  , ID(set_32b,     HW_FALSE, ax32)
-  , ID(set_list,    HW_FALSE, ax32)
-  , ID(set_string,  HW_FALSE, ax32)
+  , ID(dup,     HW_FALSE, ab)
+  , ID(dups,     HW_FALSE, abc)
+  , ID(type,    HW_FALSE, ab)
+  , ID(nil,     HW_FALSE, a)
+  , ID(a32_0,     HW_FALSE, ax32)
+  , ID(a32_1,     HW_FALSE, ax32)
+  , ID(list,    HW_FALSE, ax32)
+  , ID(string,  HW_FALSE, ax32)
   
   /* Comaparism And Jump*/
   , ID(jmp,     HW_FALSE, a)
@@ -62,10 +59,6 @@ struct hw_InstData const HW_INST_DATA[] = {
   , ID(veq,     HW_FALSE, abc) 
   , ID(vle,     HW_FALSE, abc)
   , ID(vlt,     HW_FALSE, abc)
-
-  /* Print */
-  , ID(print, HW_FALSE, a)
-  , ID(pinfo, HW_FALSE, a)
 
   , ID(TOTAL, HW_FALSE, nop)
 };

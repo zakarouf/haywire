@@ -1,6 +1,7 @@
 #include "hw.h"
 #include "hw_dev.h"
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
@@ -51,21 +52,22 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 /**********************************************************************/
 #define DEFN(NAME)\
     hw_VarP NAME (              \
-        hw_Var *_self_          \
-      , hw_TypeSys *ts          \
-      , hw_Var  const *args     \
-      , hw_byte const *tid      \
+        hw_TypeSys   *ts        \
+      , hw_Var       *args      \
+      , hw_byte      *tid       \
       , hw_uint const count)
 
 #define _ALLOC(SIZE)            HW_TYPESYS_ALLOC(ts, SIZE)
 #define _REALLOC(PTR, SIZE)     HW_TYPESYS_REALLOC(ts,PTR, SIZE)
 #define _FREE(PTR)              HW_TYPESYS_FREE(ts, PTR)
 
+#define _GET_SELF() (args[0])
+#define _GET_SELF_TID() (tid[0])
 #define _SELF(T) T self
-#define _SELF_ASSIGN(as) _self_->as = self;
-#define _SELF_BIND(T, as) T self = _self_->as
+#define _SELF_ASSIGN(as) _GET_SELF().as = self;
+#define _SELF_BIND(T, as) T self = _GET_SELF().as
 
-#define _GET_ARG(n, as) (args[n].as)
+#define _GET_ARG(n, as) (args[n+1].as)
 #define _MAKE_VAR(value, as) ((hw_Var){.as = value})
 
 /**
@@ -95,7 +97,6 @@ static void *_loadfile(
 }
 
 DEFN(hw_unreachable_func) {
-    (void)_self_;
     (void)ts;
     (void)args;
     (void)tid;
@@ -135,7 +136,7 @@ DEFN(hw_VarList_delete) {
     for (hw_uint i = 0; i < self->lenUsed; i++) {
         hw_byte const T = self->tid[i];
         if(ts->types[T].is_obj) {
-            ts->types[T].vtcore.delete( self->data + i, ts, NULL, NULL, 0);
+            HW_VAR_CALL_CORE(T, ts, vtcore.delete, self->data + i, self->tid + i, 1);
         }
     }
     _FREE(self);
@@ -204,10 +205,10 @@ DEFN(hw_String_newFrom_copy) {
     hw_Var const size = _MAKE_VAR(string->lenUsed, as_uint);
 
     return hw_String_newFrom_cstr(
-        _self_, ts
-      , (hw_Var const[]){ data, size }
-      , (hw_byte const[]){ hw_TypeID_ptr, hw_TypeID_uint }
-      , 2);
+        ts
+      , (hw_Var []){ _GET_SELF(), data, size }
+      , (hw_byte []){ _GET_SELF_TID(), hw_TypeID_ptr, hw_TypeID_uint }
+      , 3);
 }
 
 DEFN(hw_String_append_cstr) {
@@ -234,7 +235,7 @@ DEFN(hw_String_append_cstr) {
 
 DEFN(hw_String_loadfile) {
     _SELF(hw_String *);
-    hw_ptr data = _loadfile(ts, const char *path, hw_uint unitsize, hw_uint *len);
+    HW_ASSERT(0 && "NOT IMPLEMENTED");
 
     _SELF_ASSIGN(as_string);
     return HW_VARP_NIL();
@@ -274,7 +275,7 @@ DEFN(hw_VarArr_delete) {
     if (ts->types[self->tid].is_obj) {
         for (hw_uint i = 0; i < self->lenUsed; i++) {
             HW_VAR_CALL_CORE(
-                self->data + i, self->tid, ts, vtcore.delete, NULL, NULL, 0);
+                self->tid, ts, vtcore.delete, self->data + i, &self->tid, 1);
         }
     }
 
