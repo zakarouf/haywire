@@ -198,6 +198,16 @@ void hw_Module_disasm(hw_Module *m)
     }
 }
 
+void hw_vm(hw_Thread *th)
+{
+
+    #define ON_INST(x) break; case hw_Inst_##x:
+    
+    while(1) {
+        
+    }
+}
+
 int main(int argc, char *argv[])
 {
     hw_State *s = hw_new();
