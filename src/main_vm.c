@@ -67,34 +67,20 @@ struct hw_InstData const HW_INST_DATA[] = {
 #undef INST
 #undef ID
 
-
-hw_State *hw_new(void)
+static void _check_vm_inst(void)
 {
-    hw_Allocator allocator;
-    hw_Allocator_default(&allocator);
-    hw_TypeSys *ts = hw_TypeSys_default_with_allocator(allocator);
-
-    hw_State *self = HW_TYPESYS_ALLOC(ts, sizeof(*self));
-    memset(self, 0, sizeof(*self));
-
-    self->tsys = ts;
-    
-    hw_Thread_init(&self->main_thread, self, 0, "main", 4);  
-
-    return self;
+    size_t i;
+    for (i = 0; i < hw_Inst_TOTAL; i++) {
+        HW_DEBUG( 
+          hw_logstr(HW_INST_DATA[i].name, HW_INST_DATA[i].name_size);
+          putc(' ', stdout);
+        )
+        HW_ASSERTEX(HW_INST_DATA[i].name, "%"PRIu64"", i);
+        HW_ASSERTEX(HW_INST_DATA[i].name_size, "%"PRIu64, i);
+    }
 }
 
-void hw_delete(hw_State *self)
-{
-    hw_TypeSys *ts = self->tsys;
-
-    hw_Thread_deinit(&self->main_thread);
-
-    HW_TYPESYS_FREE(ts, self);
-    hw_TypeSys_delete(ts);
-}
-
-static hw_VarArr *wrap_args(hw_TypeSys *ts, int argc, char *argv[])
+static hw_VarArr *_wrap_args(hw_TypeSys *ts, int argc, char *argv[])
 {
     hw_Var arr;
     hw_Var args[4] = {
@@ -129,19 +115,53 @@ static hw_VarArr *wrap_args(hw_TypeSys *ts, int argc, char *argv[])
     return arr.as_arr;
 }
 
-void check_vm_inst(void)
+static void _static_checks(void)
 {
-    size_t i;
-    for (i = 0; i < hw_Inst_TOTAL; i++) {
-        HW_DEBUG( 
-          hw_logstr(HW_INST_DATA[i].name, HW_INST_DATA[i].name_size);
-          putc(' ', stdout);
-        )
-        HW_ASSERTEX(HW_INST_DATA[i].name, "%"PRIu64"", i);
-        HW_ASSERTEX(HW_INST_DATA[i].name_size, "%"PRIu64, i);
-    }
+    #define X(exp) HW_STATIC_ASSERT(exp);
+
+    // Sanity
+    X(1);
+    X(!0);
+    X(!!10);
+
+    // Type Size
+    #define WORD_SIZE (8)
+    X(sizeof(hw_float) == WORD_SIZE);
+    X(sizeof(hw_int) == WORD_SIZE);
+    X(sizeof(hw_uint) == WORD_SIZE);
+    X(sizeof(hw_code) == WORD_SIZE);
 }
 
+
+/**********************************************************************
+ *                            Public
+ **********************************************************************/
+
+hw_State *hw_new(void)
+{
+    hw_Allocator allocator;
+    hw_Allocator_default(&allocator);
+    hw_TypeSys *ts = hw_TypeSys_default_with_allocator(allocator);
+
+    hw_State *self = HW_TYPESYS_ALLOC(ts, sizeof(*self));
+    memset(self, 0, sizeof(*self));
+
+    self->tsys = ts;
+    
+    hw_Thread_init(&self->main_thread, self, 0, "main", 4);  
+
+    return self;
+}
+
+void hw_delete(hw_State *self)
+{
+    hw_TypeSys *ts = self->tsys;
+
+    hw_Thread_deinit(&self->main_thread);
+
+    HW_TYPESYS_FREE(ts, self);
+    hw_TypeSys_delete(ts);
+}
 
 void hw_code_disasm_default(
     struct hw_InstData insdata, hw_code code)
@@ -178,41 +198,26 @@ void hw_Module_disasm(hw_Module *m)
     }
 }
 
-void static_checks(void)
-{
-    #define X(exp) HW_STATIC_ASSERT(exp);
-
-    // Sanity
-    X(1);
-    X(!0);
-    X(!!10);
-
-    // Type Size
-    #define WORD_SIZE (8)
-    X(sizeof(hw_float) == WORD_SIZE);
-    X(sizeof(hw_int) == WORD_SIZE);
-    X(sizeof(hw_uint) == WORD_SIZE);
-    X(sizeof(hw_code) == WORD_SIZE);
-}
-
-
 int main(int argc, char *argv[])
 {
     hw_State *s = hw_new();
-    check_vm_inst();
+    _static_checks();
+    _check_vm_inst();
 
-    hw_VarArr *args = wrap_args(s->tsys, argc, argv);
+    hw_VarArr *c_args = _wrap_args(s->tsys, argc, argv);
     HW_DEBUG( 
-        for (size_t i = 0; i < args->lenUsed; i++) {
+        for (size_t i = 0; i < c_args->lenUsed; i++) {
             fwrite(
-                args->data[i].as_string->data
-              , args->data[i].as_string->lenUsed
+                c_args->data[i].as_string->data
+              , c_args->data[i].as_string->lenUsed
               , 1, stdout);
             printf(" ");
         }
     );
 
     hw_logp("All Ok\n");
+    hw_Var args = {.as_arr = c_args};
+    hw_byte tid = hw_TypeID_arr;
     hw_delete(s);
     return EXIT_SUCCESS;
 }
