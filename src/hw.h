@@ -18,8 +18,9 @@ typedef double              hw_float;
 #define HW_TYPEID_MAX       UINT8_MAX
 
 typedef union   hw_Var      hw_Var;
-
 typedef struct  hw_VarP     hw_VarP;
+
+
 typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarArr   hw_VarArr;
 typedef struct  hw_String   hw_String;
@@ -56,6 +57,11 @@ typedef struct  hw_State        hw_State;
 
 /************************************************************/
 
+typedef hw_VarP (*hw_VarFn)
+        (hw_TypeSys *T_sys, hw_Var *args, hw_byte *tid, hw_uint const count);
+
+/************************************************************/
+
 typedef struct hw_ModuleObj hw_ModuleObj;
 typedef struct hw_ObjCompiler hw_ObjCompiler;
 
@@ -63,19 +69,26 @@ typedef struct hw_ObjCompiler hw_ObjCompiler;
 /************************************************************/
 
 union hw_Var {
+    /* Primitives */
     hw_byte         as_nil;
     hw_ptr          as_ptr,     *as_ptr_p;
     hw_int          as_reff,    *as_reff_p;
 
     hw_int          as_bool;
     hw_byte         as_byte,    *as_byte_p,  **as_byte_pp;
-    hw_byte         as_word[HW_WORD_SIZE],   *(as_word_p[HW_WORD_SIZE]);
-
     hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
     hw_int          as_int,     *as_int_p,   **as_int_pp;
     hw_float        as_float,   *as_float_p, **as_float_pp;
 
+    hw_byte         as_word[HW_WORD_SIZE],   *(as_word_p[HW_WORD_SIZE]);
+    
+    /* FnPtr */
+    hw_VarFn        as_nativefn;
+    
+    /* Error Object */
     hw_Error const  *as_error;
+
+    /* Objects */
     hw_VarList      *as_list,   **as_list_p;
     hw_VarArr       *as_arr,    **as_arr_p;
 
@@ -83,11 +96,13 @@ union hw_Var {
     hw_String       *as_string, **as_string_p;
     hw_CStr         *as_cstr,   **as_cstr_p;
 
+    /* Type System */
     hw_Type    const    *as_type,     **as_type_p;
     hw_TypeSys const    *as_typesys,  **as_typesys_p;
 
     hw_Type         *as_type_mut, **as_type_mut_p;
 
+    /* VM */
     hw_Module       *as_module, **as_module_p;
     hw_Thread       *as_thread, **as_thread_p;
     hw_State        *as_vm,  **as_vm_p;
@@ -126,9 +141,11 @@ enum hw_TypeID {
 };
 
 struct hw_Error {
-    hw_uint ecode;
+    hw_uint error;
+    hw_uint table;
     hw_byte const *str;
     hw_uint       str_size;
+    hw_VarP context;
 };
 
 struct hw_Allocator {
@@ -191,9 +208,14 @@ struct hw_VarHash {
 /****************************************************/
 /****************************************************/
 
-typedef hw_VarP (*hw_VarFn)
-        (hw_Var *self, hw_TypeSys *T_sys
-         , hw_Var const *args, hw_byte const *tid, hw_uint const count);
+
+struct hw_VarFnInfo {
+    char const *name;
+    hw_uint name_size;
+    hw_byte const *argT;
+    hw_byte const *retT;
+};
+
 
 struct hw_Var_VTCore {
     /**
@@ -295,12 +317,11 @@ struct hw_Type {
 };
 
 struct hw_TypeSys {
-    hw_uint     head;
-
     hw_Type     *types;
     hw_uint     types_used;
     hw_uint     types_total;
 
+    hw_State    **state;
     hw_Allocator allocator;
 };
 
