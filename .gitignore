@@ -57,3 +57,6 @@ a.out
 logtest
 valgrind.rpt
 hw
+obj/
+bin/
+debug/
