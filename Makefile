@@ -2,7 +2,7 @@
 CXX := gcc
 CXXFLAGS := -ansi -Wno-unused-parameter\
 			-Wfatal-errors -g -Wall -Wextra -pedantic -std=c99
-DBGFLAGS := -ggdb3 -fsanitize=address
+DBGFLAGS := -ggdb3 -Werror -fsanitize=address
 CCOBJFLAGS := $(CXXFLAGS) -c
 
 # path macros
