@@ -428,41 +428,34 @@ struct hw_FnSaveArr {
 
 /**
  * hw_Module:
- * LEGEND: 
- *    . -> bit
- *    o -> byte, hw_byte
- *    X -> 8byte = 8o = 64. , hw_uint | hw_int | hw_float
- *    [] -> Stream of data, [o] bytes, [X] 8 bytes
- *  NOTE: If there is a number prefix the symbol that just a mutiple,
- *        4o = 4 bytes,
- *        8. = 8bits = 1byte = o,
- *        8o = X = 8bytes
- *   {o} -> Byte Stream of irregular objects
  *-------------------------------------------------------------------
- * Module Layout
- *    X -> Module Magic Number & Version
- *    X -> Module Size
+ * Module Layout (Revision)
+ *      magic_and_version: u64
  *
- *    X -> Module Name Size
- *    X -> Module Name Hash
- *    
- *    X -> FuncInfo (Index under .data)
- *    X -> Const Objects (Index under .data)
+ *      module_namesize: u64
+ *      module_hash: u64
+ *      
+ *      func_count: u64
+ *      cnst_count: u64
+ *      
+ *      pub_fn_count: u64
+ *      pub_const_count: u64
  *
- *    X -> Pub Func uintArray (Index under .data)
- *    X -> Pub Const uintArray (Index under .data)
+ *      code_len: u64
+ *      data_sz: u64
  *
- *    X -> .data Size
- *    X -> .code Size
+ *      .data := 
+ *          module_name:    [ sizeof(byte) * module_namesize ]
+ *          fn_points:      [ sizeof(u64) * func_count ]
+ *          const_points:   [ sizeof(u64) * cnst_count ]
+ *          pub_fnInfo:     [ hw_FuncInfo * pub_fn_count ]
+ *          pub_const:      [ hw_Var * pub_const_count ]
  *
- *    {o} => .data Section
- *              {o} -> Func Info (hw_FuncInfo)
- *              {o} -> Const Var (hw_Var)
- *              {o} -> rest
- *    [X] => .code Section (hw_code)
+ *      .code := [sizeof(code) * code_len]
  *-------------------------------------------------------------------
  */
 struct hw_Module {
+    //TODO: Match the specifications above
     hw_uint data_size;
     hw_uint code_len;
     
@@ -499,8 +492,7 @@ struct hw_Thread {
     hw_VarList              *vstack;
     hw_FnSaveArr            fstack;
 
-    hw_FnState              fn;
-
+    hw_FnState              f;
     hw_State const          *global;
 
     hw_byte                 name_size;
@@ -519,8 +511,9 @@ struct hw_State {
     hw_Thread       main_thread;
     hw_ThreadArr    *threads;
     hw_TypeSys      *tsys;
+    hw_InstData     const *insts;
+    hw_byte         insts_count;
 };
-
 
 /**
  *  Section: Compiler
