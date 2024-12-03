@@ -293,14 +293,6 @@ enum hw_Inst {
 
 #undef INST
 
-enum hw_InstType {
-    hw_InstType_nop  // [ins nil nil nil]
-  , hw_InstType_a    // [ins ax nil nil]
-  , hw_InstType_ab   // [ins ax bx nil] 
-  , hw_InstType_abc  // [ins ax bx cx]
-  , hw_InstType_ax32 // [ins ax x32]
-  , hw_InstType_x32  // [ins nil x32]
-};
 /**
  * Threads;
  */
@@ -316,4 +308,3 @@ hw_VarP hw_Thread_deinit(hw_Thread *t);
 #undef CAT2
 
 #endif
-

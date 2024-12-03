@@ -367,6 +367,24 @@ union hw_code {
     struct hw_CodeStructS   gets;
 };
 
+enum hw_InstType {
+    hw_InstType_nop  // [ins nil nil nil]
+  , hw_InstType_a    // [ins ax nil nil]
+  , hw_InstType_ab   // [ins ax bx nil] 
+  , hw_InstType_abc  // [ins ax bx cx]
+  , hw_InstType_ax32 // [ins ax x32]
+  , hw_InstType_x32  // [ins nil x32]
+  , hw_InstType_as32 // [ins ax s32]
+  , hw_InstType_s32  // [ins nil s32]
+};
+
+typedef struct hw_InstData hw_InstData;
+struct hw_InstData {
+    char const       name[16];
+    hw_byte          name_size;
+    enum hw_InstType inst_type;
+    hw_byte          does_return;
+};
 
 struct hw_codeArr {
     hw_code *data;
@@ -379,36 +397,21 @@ struct hw_FuncInfo {
     hw_byte *name;
     hw_uint name_size;
 
-    /**
-     * var = local variable
-     * arg = passed variable
-     * ret = returned variable,
-     *          pushed to stack, on function return
-     */
-    hw_uint var_count;
-    hw_uint arg_count;
     hw_uint ret_count;
-
-    // Total Instructions
-    hw_uint code_len;
-
-    // Type IDs
-    hw_byte *varT;
-    hw_byte *mutT;
     hw_byte *retT;
 };
 
 struct hw_FnState {
     hw_Var          *vars;
+    hw_byte         *tids;
     hw_uint         var_count;
     hw_code const   *pc;
-    hw_uint         id;
-    hw_uint         mod;
+    hw_uint         id;         // What Function
+    hw_uint         mod;        // Of Which Module
 };
 
 struct hw_FnSave {
-    hw_uint     var_start;
-    hw_uint     var_count;
+    hw_uint     v_start;
     hw_uint     id;
     hw_uint     mod;
     hw_uint     pc;
