@@ -257,6 +257,8 @@ enum hw_Inst {
   /* Gets */
   , INST(get_type)     // R(Ax) = @typeof(R(Bx))
   , INST(get_routine)  // R(Ax) = Thread(R(Bx))
+  , INST(get_native)   // R(Ax) = x32 -> nativefn
+  , INST(get_vt)
 
   /* Call */
   , INST(call)      // call R(Ax) with R(Bx) args, save return val to R(Cx)
@@ -266,28 +268,40 @@ enum hw_Inst {
   , INST(callc)     // Call any c function through ffi
 
   /* Variable Manupulation */
-  , INST(dup)
+  , INST(dup)  // R(Ax) = R(Bx)
   , INST(dups) // [R(Ax):R(Cx)] = [R(Bx):R(Cx)]
-  , INST(type)
-  , INST(nil)
-  , INST(a32_0)
-  , INST(a32_1)
-  , INST(list)
-  , INST(string)
+  , INST(type) // R(Ax).type = Bx
+  , INST(nil)  // R(Ax) = nil
+
+  , INST(a32_0)  // Set the first 32bits of R(Ax)
+  , INST(a32_1)  // Set the last 32bits of R(Ax)
+
+  , INST(list) // Make list R(Ax) with R(Bx)..R(Cx)
+  , INST(string) // Make string R(Ax) with data R(Bx)
 
   /* Jump */
   , INST(jmp) // pc += R(Ax)
-  , INST(jmp0) // pc += Ax
+  , INST(jmps32) // pc += s32
   , INST(jmpif) // if(R(Ax)) pc += R(Bx)
+  , INST(jmpifs32) // if(R(Ax)) pc += s32
   
-  /* Comaparism */
-  , INST(cmp) // R(Cx) = R(Ax).compare_bin(R(Bx))
-  , INST(typeq) // if(typeof(Ax) == typeof(Bx)) pc++
-  , INST(tideq) // if(typeof(Ax) == Bx) pc++
-  , INST(veq) // if(Ax == Bx) pc++
-  , INST(vle) // if(Ax <= Bx) pc++
-  , INST(vlt) // if(Ax < Bx) pc++
+  /* Type Comaparism */
+  , INST(typeq) // R(Ax) = (T(Bx) == T(Cx))
+  , INST(tideq) // R(Ax) = (T(Bx) == Cx)
+  , INST(iseq)
 
+  /* Maths (number) */
+  , INST(addn)
+  , INST(muln)
+  , INST(ltn)
+  , INST(lten)
+
+  /* Maths (floats) */
+  , INST(addf)
+  , INST(mulf)
+  , INST(ltf)
+
+  /* For testing, ignore */
   , INST(TOTAL)
 };
 
