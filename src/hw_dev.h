@@ -235,6 +235,9 @@ INTERFACE_EXPORT(hw_String)
     DEFN(hw_String, append_str);
 
 INTERFACE_EXPORT(hw_VarList)
+    DEFN(hw_VarList, reserve);
+    DEFN(hw_VarList, push_shallow);
+
 INTERFACE_EXPORT(hw_VarArr)
     DEFN(hw_VarArr, push);
 

@@ -74,9 +74,9 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
         HW_ASSERT(!memcmp((hw_byte[]){__VA_ARGS__}, tid, count));\
     } while(0)
 
-/**
- * Var List
- */
+/*************************************************************************
+ *                          PRIVATE
+ *************************************************************************/
 
 static void *_loadfile(
     hw_TypeSys *ts, char const path[], hw_uint unitsize, hw_uint *len)
@@ -100,7 +100,7 @@ static void *_loadfile(
     return data;
 }
 
-DEFN(hw_unreachable_func) {
+static DEFN(hw_unreachable_func) {
     (void)ts;
     (void)args;
     (void)tid;
@@ -108,6 +108,10 @@ DEFN(hw_unreachable_func) {
     HW_ASSERT(0);
     return HW_VARP_NIL();
 }
+
+/**
+ * Var List
+ */
 
 DEFN(hw_VarList_new) {
     (void)args;
@@ -132,6 +136,50 @@ DEFN(hw_VarList_new) {
     self->lenUsed = 0;
 
     _SELF_ASSIGN(as_list);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_expand) {
+    (void)count;
+    (void)tid;
+
+    _SELF_BIND(hw_VarList *, as_list);
+    hw_uint size = _GET_ARG(0, as_uint);
+    self = _REALLOC(self, ( (sizeof(*self->data) * (self->len + size))
+                          + (sizeof(*self->tid) * (self->len + size))
+                        ));
+
+    HW_DEBUG(HW_ASSERT(self));
+    self->len += size;
+
+    _SELF_ASSIGN(as_list);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_push_shallow) {
+    (void)count;
+    (void)tid;
+
+    _SELF_BIND(hw_VarList *, as_list);
+    if(self->len <= self->lenUsed) {
+        hw_Var expand_args[] = { _GET_SELF(), (hw_Var){.as_uint = self->len * 2} };
+        hw_byte expand_args_tids[] = { hw_TypeID_list, hw_TypeID_uint };
+        hw_VarList_expand(ts, expand_args, expand_args_tids, 2);
+        _GET_SELF() = expand_args[0];
+        self = _GET_SELF().as_list;
+    }
+    
+    self->data[self->lenUsed] = _GET_ARG_RAW(0);
+    self->lenUsed += 1;
+    
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_reserve) {
+    _SELF_BIND(hw_VarList *, as_list);
+    hw_uint size = _GET_ARG(0, as_uint);
+    hw_uint avail = self->len - self->lenUsed;
+    if(avail < size) { hw_VarList_expand(ts, args, tid, count); }
     return HW_VARP_NIL();
 }
 
