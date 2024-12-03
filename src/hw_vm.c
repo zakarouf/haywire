@@ -6,13 +6,6 @@
 #include "hw.h"
 #include "hw_dev.h"
 
-struct hw_InstData {
-    char const      *name;
-    hw_byte const   name_size;
-    enum hw_InstType const   inst_type;
-    hw_byte const   does_return;
-};
-
 #define INST(x) hw_Inst_##x
 #define ID(_name, dret, it)             \
     [INST(_name)] = {                   \
@@ -51,15 +44,25 @@ struct hw_InstData const HW_INST_DATA[] = {
   
   /* Comaparism And Jump*/
   , ID(jmp,     HW_FALSE, a)
-  , ID(jmp0,    HW_FALSE, x32)
+  , ID(jmps32,  HW_FALSE, x32)
   , ID(jmpif,   HW_FALSE, ax32)
+  , ID(jmpifs32, HW_FALSE, ax32)
   
-  , ID(cmp,     HW_FALSE, abc) 
   , ID(typeq,   HW_FALSE, abc) 
   , ID(tideq,   HW_FALSE, abc) 
-  , ID(veq,     HW_FALSE, abc) 
-  , ID(vle,     HW_FALSE, abc)
-  , ID(vlt,     HW_FALSE, abc)
+  , ID(iseq,    HW_FALSE, abc)
+
+  /* Maths (number) */
+  , ID(addn,  HW_FALSE, abc)
+  , ID(muln,  HW_FALSE, abc)
+  , ID(ltn,   HW_FALSE, abc)
+  , ID(lten,  HW_FALSE, abc)
+
+  /* Maths (floats) */
+  , ID(addf,  HW_FALSE, abc)
+  , ID(mulf,  HW_FALSE, abc)
+  , ID(ltf,   HW_FALSE, abc)
+
 
   , ID(TOTAL, HW_FALSE, nop)
 };
@@ -147,7 +150,11 @@ hw_State *hw_new(void)
     memset(self, 0, sizeof(*self));
 
     self->tsys = ts;
+    self->insts = HW_INST_DATA;
+    self->insts_count = hw_Inst_TOTAL;
     
+    HW_DEBUG(HW_LOG("Loading VM with %u Instructions", hw_Inst_TOTAL));
+
     hw_Thread_init(&self->main_thread, self, 0, "main", 4);  
 
     return self;
@@ -161,6 +168,7 @@ void hw_delete(hw_State *self)
 
     HW_TYPESYS_FREE(ts, self);
     hw_TypeSys_delete(ts);
+    HW_DEBUG(HW_LOG("VM Exit %s", ""));
 }
 
 void hw_code_disasm_default(
@@ -185,7 +193,11 @@ void hw_code_disasm_default(
                    , code.getx.x32, code.gets.s32);
        break; case hw_InstType_x32:
            fprintf(out, "x=%u|s=%i", code.getx.x32, code.gets.s32);
-            break;
+       break; case hw_InstType_as32:
+           fprintf(out, "a=%hu x=%u|s=%i", code.get.A
+                   , code.gets.s32, code.gets.s32);
+       break; case hw_InstType_s32:
+           fprintf(out, "x=%u|s=%i", code.getx.x32, code.gets.s32);
     }    
 }
 
@@ -198,14 +210,81 @@ void hw_Module_disasm(hw_Module *m)
     }
 }
 
-void hw_vm(hw_Thread *th)
+void hw_vm(hw_State *hw, hw_Thread *th)
 {
+    hw_FnState f = th->f;
+    register hw_code const *pc = f.pc;
 
-    #define ON_INST(x) break; case hw_Inst_##x:
+    #define r(_r) (f.vars[pc->get._r])
+    #define t(_r) (f.tids[pc->get._r])
+    #define a(_r) (pc->get._r)
+    #define x(_r) (pc->getx._r)
+    #define s(_r) (pc->gets._r)
+
+    #define HOOK_r(_r) (r##_r##x = r(_r))
+    #define HOOK_x32() (x32 = f.vars[pc->get.r])
+
+    #ifdef HW_VM_USE_COMPUTED_GOTO
+    #else
+        #define ON_INST(x) break; case hw_Inst_##x:
+        #define NON_INST(x)\
+            ON_INST(x) HW_ASSERT(0 && " INSTRUCTION :"#x" NOT IMPLEMENTED YET");
+        #define START() while(1) { switch (pc->get.opcode) {
+        #define END() } pc++; }
+    #endif
     
-    while(1) {
-        
-    }
+    START()
+       ON_INST(nop);
+       ON_INST(defn);
+      NON_INST(return);
+      NON_INST(tailret);
+      NON_INST(reserve);
+      NON_INST(release);
+      
+       ON_INST(get_type)       r(A).as_uint = t(B);
+      NON_INST(get_routine);
+
+      NON_INST(call);
+      NON_INST(calln);
+      NON_INST(callc);
+          
+       ON_INST(dup)       r(A) = r(B);
+      NON_INST(dups)    { memmove(&r(A), &r(B), a(C) * sizeof(r(A)));
+                          memmove(&t(A), &t(B), a(C) * sizeof(t(A))); }
+      NON_INST(type)      t(A) = r(B).as_byte;
+       ON_INST(nil)       t(A) = hw_TypeID_nil;
+       ON_INST(a32_0)     r(A).as_uint = x(x32);
+      NON_INST(a32_1)     ;
+      NON_INST(list)      ;
+      NON_INST(string)    ;
+
+       ON_INST(jmp)       pc += r(A).as_int;
+       ON_INST(jmps32)    pc += s(s32);
+       ON_INST(jmpif)     if(r(A).as_uint) { pc += r(B).as_int; };
+       ON_INST(jmpifs32)  if(r(A).as_uint) { pc += s(s32); };
+
+       ON_INST(typeq) r(A).as_uint = t(B) == t(C);
+       ON_INST(tideq) r(A).as_uint = t(B) == a(C);
+       ON_INST(iseq)  r(A).as_uint = r(B).as_uint == r(C).as_uint;
+
+      /* Maths */
+       ON_INST(addn) r(A).as_uint = r(B).as_uint + r(C).as_uint;
+       ON_INST(muln) r(A).as_uint = r(B).as_uint * r(C).as_uint;
+       ON_INST(ltn)  r(A).as_uint = r(B).as_uint < r(C).as_uint;
+       ON_INST(lten) r(A).as_uint = r(B).as_uint <= r(C).as_uint;
+
+      /* Maths (floats) */
+       ON_INST(addf) r(A).as_float = r(B).as_float + r(C).as_float;
+       ON_INST(mulf) r(A).as_float = r(B).as_float * r(C).as_float;
+       ON_INST(ltf)  r(A).as_uint =  r(B).as_float < r(B).as_float;
+
+      NON_INST(TOTAL);
+    END()
+}
+
+void test_main(hw_State *hw, hw_VarArr *args)
+{
+    
 }
 
 int main(int argc, char *argv[])
@@ -215,6 +294,7 @@ int main(int argc, char *argv[])
     _check_vm_inst();
 
     hw_VarArr *c_args = _wrap_args(s->tsys, argc, argv);
+    test_main(s, c_args);
     HW_DEBUG( 
         for (size_t i = 0; i < c_args->lenUsed; i++) {
             fwrite(
@@ -226,8 +306,6 @@ int main(int argc, char *argv[])
     );
 
     hw_logp("All Ok\n");
-    hw_Var args = {.as_arr = c_args};
-    hw_byte tid = hw_TypeID_arr;
     hw_delete(s);
     return EXIT_SUCCESS;
 }
