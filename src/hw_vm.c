@@ -210,8 +210,36 @@ void hw_Module_disasm(hw_Module *m)
     }
 }
 
+hw_Module const *hw_get_module(hw_State const *hw, hw_uint id)
+{
+    
+}
+
+static int hw_Thread_popfn(hw_Thread *th)
+{
+    if(!th->fstack.lenUsed) return HW_FALSE;
+
+    th->fstack.lenUsed -= 1;
+    hw_FnSave fns = th->fstack.data[th->fstack.lenUsed];
+
+    th->f.id = fns.id;
+    th->f.mod = fns.mod;
+
+    hw_Module const *mod = hw_get_module(th->global, th->f.mod);
+
+    th->f.pc = mod->code + fns.pc;
+    th->f.vars_at = fns.v_start;
+    th->f.vars = th->vstack->data + fns.v_start;
+    th->f.tids = th->vstack->tid + fns.v_start;
+    th->f.var_count = th->vstack->lenUsed - fns.v_start;
+
+    return HW_TRUE;
+}
+
 void hw_vm(hw_State *hw, hw_Thread *th)
 {
+    _L_again: {}
+
     hw_FnState f = th->f;
     register hw_code const *pc = f.pc;
 

@@ -22,6 +22,7 @@ typedef union   hw_Var      hw_Var;
 typedef struct  hw_VarP     hw_VarP;
 
 
+typedef struct  hw_VarTable hw_VarTable;
 typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarArr   hw_VarArr;
 typedef struct  hw_String   hw_String;
@@ -47,8 +48,7 @@ typedef union   hw_code     hw_code;
 typedef struct  hw_codeArr  hw_codeArr;
 
 typedef struct  hw_FnState      hw_FnState;
-typedef struct  hw_FnSave       hw_FnSave;
-typedef struct  hw_FnSaveArr    hw_FnSaveArr;
+typedef struct  hw_FnStateArr    hw_FnStateArr;
 
 typedef struct  hw_Module       hw_Module;
 typedef struct  hw_ModuleArr    hw_ModuleArr;
@@ -209,7 +209,7 @@ struct hw_VarArr {
     hw_byte         tid;
 };
 
-struct hw_VarHash {
+struct hw_VarTable {
     hw_Var *key;
     hw_Var *val;
 
@@ -402,23 +402,14 @@ struct hw_FuncInfo {
 };
 
 struct hw_FnState {
-    hw_Var          *vars;
-    hw_byte         *tids;
-    hw_uint         var_count;
-    hw_code const   *pc;
-    hw_uint         id;         // What Function
-    hw_uint         mod;        // Of Which Module
-};
-
-struct hw_FnSave {
     hw_uint     v_start;
     hw_uint     id;
     hw_uint     mod;
     hw_uint     pc;
 };
 
-struct hw_FnSaveArr {
-    hw_FnSave   *data;
+struct hw_FnStateArr {
+    hw_FnState  *data;
     hw_uint     len;
     hw_uint     lenUsed;
 };
@@ -470,7 +461,7 @@ struct hw_Module {
 };
 
 struct hw_ModuleArr {
-    hw_Module *data;
+    hw_Module **data;
     hw_uint len;
     hw_uint lenUsed;
 };
@@ -490,9 +481,8 @@ struct hw_Thread {
     hw_byte                 name[128];
 
     hw_VarList              *vstack;
-    hw_FnSaveArr            fstack;
+    hw_FnStateArr            fstack;
 
-    hw_FnState              f;
     hw_State const          *global;
 
     hw_byte                 name_size;
@@ -505,11 +495,20 @@ struct hw_ThreadArr {
     hw_uint         lenUsed;
 };
 
+typedef struct hw_ModulePack hw_ModulePack;
+struct hw_ModulePack {
+    hw_ModuleArr    *loaded;
+    hw_VarTable     *table;
+};
+
 struct hw_State {
     hw_CStr         name;
+
     hw_uint         pid;
     hw_Thread       main_thread;
     hw_ThreadArr    *threads;
+    hw_ModulePack   modules;
+
     hw_TypeSys      *tsys;
     hw_InstData     const *insts;
     hw_byte         insts_count;

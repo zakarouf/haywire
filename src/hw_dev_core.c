@@ -94,8 +94,6 @@ hw_VarP hw_Thread_init(
     hw_VarList_new(global->tsys, &vstack, (hw_byte[]){0}, 1);
     t->vstack = vstack.as_list;
     
-    memset(&t->fn, 0, sizeof(t->fn));
-    
     t->global = global;
     return HW_VARP_NIL();
 }
@@ -114,3 +112,7 @@ hw_VarP hw_Thread_deinit(hw_Thread *t)
     return HW_VARP_NIL();
 }
 
+hw_VarP hw_Thread_reserve(hw_Thread *t, hw_uint n)
+{
+    
+}
