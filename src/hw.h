@@ -22,9 +22,12 @@ typedef union   hw_Var      hw_Var;
 typedef struct  hw_VarP     hw_VarP;
 
 
-typedef struct  hw_VarTable hw_VarTable;
 typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarArr   hw_VarArr;
+typedef struct  hw_VarTable hw_VarTable;
+typedef struct  hw_SVTable  hw_SVTable;
+typedef struct  hw_SITable  hw_SITable;
+
 typedef struct  hw_String   hw_String;
 typedef struct  hw_CStr     hw_CStr;
 typedef struct  hw_uintArr  hw_uintArr;
