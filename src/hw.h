@@ -450,14 +450,18 @@ struct hw_FnStateArr {
  */
 struct hw_Module {
     //TODO: Match the specifications above
+    hw_uint magic;
+    hw_uint name_size;
+    hw_uint name_hash;
+
+    hw_uint func;
+    hw_uint constant;
+    
+    hw_uint pubfunc;
+    hw_uint pubconst;
+
     hw_uint data_size;
     hw_uint code_len;
-    
-    hw_uint func;
-    hw_uint pubfunc;
-
-    hw_uint constant;
-    hw_uint pubconst;
 
     hw_byte *data;
     hw_code *code;
