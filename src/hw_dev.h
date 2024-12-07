@@ -202,21 +202,6 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
       , hw_byte     *tid      \
       , hw_uint const count)
 
-#define INTERFACE_EXPORT(T)\
-    DEFN(T, new);               \
-    DEFN(T, newFrom_data);      \
-    DEFN(T, newFrom_conf);      \
-    DEFN(T, newFrom_string);    \
-    DEFN(T, newFrom_copy);      \
-    DEFN(T, reset);             \
-    DEFN(T, reset_copy);        \
-    DEFN(T, delete);            \
-    DEFN(T, compare_bin);       \
-    DEFN(T, compare_all);       \
-    DEFN(T, to_string);         \
-    DEFN(T, to_data);           \
-    DEFN(T, to_hash);           \
-
 #define HW_ARR_FOREACH(T, iterator, arr, from, upto, step)\
     for(T iterator = (arr).data + from  \
        ;iterator < (arr).data + upto    \
@@ -225,27 +210,28 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
 /**
  * DECLARATION
  */
-INTERFACE_EXPORT(hw_uintArr)
-INTERFACE_EXPORT(hw_byteArr)
+/**/
+DEFN(hw_VarFn, UNREACHABLE); // Raise an error;
 
-INTERFACE_EXPORT(hw_uint)
-INTERFACE_EXPORT(hw_int)
-INTERFACE_EXPORT(hw_ptr)
+/* String */
+DEFN(hw_String, new);
+DEFN(hw_String, delete);
+DEFN(hw_String, newFrom_cstr);
+DEFN(hw_String, newFrom_file);
+DEFN(hw_String, append_str);
 
-INTERFACE_EXPORT(hw_String)
-    DEFN(hw_String, newFrom_cstr);
-    DEFN(hw_String, newFrom_file);
-    DEFN(hw_String, append_str);
+/* List */
+DEFN(hw_VarList, new);
+DEFN(hw_VarList, delete);
+DEFN(hw_VarList, reserve);
+DEFN(hw_VarList, push_shallow);
 
-INTERFACE_EXPORT(hw_VarList)
-    DEFN(hw_VarList, reserve);
-    DEFN(hw_VarList, push_shallow);
-
-INTERFACE_EXPORT(hw_VarArr)
-    DEFN(hw_VarArr, push);
+/* Array */
+DEFN(hw_VarArr, newFrom_conf);
+DEFN(hw_VarArr, delete);
+DEFN(hw_VarArr, push);
 
 #undef DEFN
-#undef INTERFACE_EXPORT
 
 /**
  * INSTS
