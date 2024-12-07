@@ -250,10 +250,12 @@ enum hw_Inst {
   , INST(get_type)     // R(Ax) = @typeof(R(Bx))
   , INST(get_routine)  // R(Ax) = Thread(R(Bx))
   , INST(get_native)   // R(Ax) = x32 -> nativefn
-  , INST(get_vt)
+  , INST(get_vt)       // R(Ax) = typeof(R(Bx))->hw_VarFn
 
   /* Call */
-  , INST(call)      // call R(Ax) with R(Bx) args, save return val to R(Cx)
+  , INST(call)      // call function R(Ax) defined inside the module
+                    //      with R(Bx)... args, save return to R(Cx)
+  , INST(callm)     // call R(Ax) with R(Bx) args, save return val to R(Cx)
   , INST(calln)     // Call native functions implemented for haywire
                     // call R(Ax) with R(Bx) args, save return val to R(Cx)
 
