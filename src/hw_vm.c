@@ -26,9 +26,12 @@ struct hw_InstData const HW_INST_DATA[] = {
   /* Gets */
   , ID(get_type, HW_FALSE, ab)     // R(Ax) = @typeof(R(Bx))
   , ID(get_routine, HW_FALSE, ab)  // R(Ax) = Thread(R(Bx))
+  , ID(get_native, HW_FALSE, ab)
+  , ID(get_vt, HW_FALSE, ab)
 
   /* Call */
-  , ID(call,      HW_TRUE, abc)
+  , ID(call,       HW_TRUE, abc)
+  , ID(callm,      HW_TRUE, abc)
   , ID(calln,      HW_TRUE, abc)
   , ID(callc,      HW_TRUE, abc)
 
@@ -37,8 +40,10 @@ struct hw_InstData const HW_INST_DATA[] = {
   , ID(dups,     HW_FALSE, abc)
   , ID(type,    HW_FALSE, ab)
   , ID(nil,     HW_FALSE, a)
+
   , ID(a32_0,     HW_FALSE, ax32)
   , ID(a32_1,     HW_FALSE, ax32)
+
   , ID(list,    HW_FALSE, ax32)
   , ID(string,  HW_FALSE, ax32)
   
@@ -215,42 +220,31 @@ hw_Module const *hw_get_module(hw_State const *hw, hw_uint id)
     
 }
 
-static int hw_Thread_popfn(hw_Thread *th)
+static hw_uint hw_Thread_popfn(hw_Thread *th)
 {
     if(!th->fstack.lenUsed) return HW_FALSE;
 
     th->fstack.lenUsed -= 1;
-    hw_FnSave fns = th->fstack.data[th->fstack.lenUsed];
-
-    th->f.id = fns.id;
-    th->f.mod = fns.mod;
-
-    hw_Module const *mod = hw_get_module(th->global, th->f.mod);
-
-    th->f.pc = mod->code + fns.pc;
-    th->f.vars_at = fns.v_start;
-    th->f.vars = th->vstack->data + fns.v_start;
-    th->f.tids = th->vstack->tid + fns.v_start;
-    th->f.var_count = th->vstack->lenUsed - fns.v_start;
-
     return HW_TRUE;
 }
 
 void hw_vm(hw_State *hw, hw_Thread *th)
 {
     _L_again: {}
+    hw_FnState f = th->fstack.data[th->fstack.lenUsed-1];
+    hw_Module const *mod = hw_get_module(hw, f.mod);
+    register hw_code const *pc = mod->code;
+    register hw_Var* vars = th->vstack->data;
+    register hw_byte* tids = th->vstack->tid;
 
-    hw_FnState f = th->f;
-    register hw_code const *pc = f.pc;
-
-    #define r(_r) (f.vars[pc->get._r])
-    #define t(_r) (f.tids[pc->get._r])
+    #define r(_r) (vars[pc->get._r])
+    #define t(_r) (tids[pc->get._r])
     #define a(_r) (pc->get._r)
     #define x(_r) (pc->getx._r)
     #define s(_r) (pc->gets._r)
 
     #define HOOK_r(_r) (r##_r##x = r(_r))
-    #define HOOK_x32() (x32 = f.vars[pc->get.r])
+    #define HOOK_x32() (x32 = vars[pc->get.r])
 
     #ifdef HW_VM_USE_COMPUTED_GOTO
     #else
