@@ -41,8 +41,7 @@ typedef struct  hw_Allocator    hw_Allocator;
 
 typedef struct  hw_Type         hw_Type;
 typedef struct  hw_TypeSys      hw_TypeSys;
-
-typedef struct  hw_Var_VTCore   hw_Var_VTCore;
+typedef struct  hw_FnInfo       hw_FnInfo;
 typedef struct  hw_VarFnArr     hw_VarFnArr;
 
 /************************************************************/
@@ -105,8 +104,9 @@ union hw_Var {
     hw_Error const  *as_error;
 
     /* Objects */
-    hw_VarList      *as_list,   **as_list_p;
     hw_VarArr       *as_arr,    **as_arr_p;
+    hw_VarList      *as_list,   **as_list_p;
+    hw_VarTable     *as_table,  **as_table_p;
 
     hw_byteArr      *as_barr,   **as_barr_p;
     hw_String       *as_string, **as_string_p;
@@ -130,7 +130,10 @@ struct hw_VarP {
 };
 
 enum hw_TypeID {
-      hw_TypeID_nil = 0
+    //NOTE: Any is not a internal type.
+      hw_TypeID_any = 0
+
+    , hw_TypeID_nil
     , hw_TypeID_ptr
     , hw_TypeID_reff
  
@@ -141,8 +144,9 @@ enum hw_TypeID {
     , hw_TypeID_float
 
     , hw_TypeID_error
-    , hw_TypeID_list
     , hw_TypeID_arr
+    , hw_TypeID_list
+    , hw_TypeID_table
 
     , hw_TypeID_barr
     , hw_TypeID_string
@@ -225,94 +229,19 @@ struct hw_VarTable {
 /****************************************************/
 
 
-struct hw_VarFnInfo {
-    char const *name;
-    hw_uint name_size;
+/**
+ * Function Signature;
+ * fn name(a, b, c, d, e)
+ *    ~~~~ ~~~~~~~~|~~~~ < mut_count
+ *  *name^ ^arg_count^
+ *  const_count = arg_count - mut_count
+ */
+struct hw_FnInfo {
+    hw_byte const *name;
     hw_byte const *argT;
-    hw_byte const *retT;
-};
-
-
-struct hw_Var_VTCore {
-    /**
-     * Default initialization
-     * args: none
-     **/
-    hw_VarFn    new;
-
-    /**
-     * Init from Serialized data
-     * args: (hw_ptr ptr, hw_uint size)
-     **/
-    hw_VarFn    newFrom_data;
-
-    /**
-     * Init from passed config as hw_Vars
-     * args: (...) <- dependent on each type
-     */
-    hw_VarFn    newFrom_conf;
-
-    /**
-     * Init from Serialized String
-     * args: (hw_String *string)
-     **/
-    hw_VarFn    newFrom_string;
-
-    /**
-     * Init from Serialized String
-     * args: (typeof(self))
-     **/
-    hw_VarFn    newFrom_copy;
- 
-    /**
-     * args: NONE
-     **/
-    hw_VarFn    delete;
-
-    /**
-     * args: NONE
-     **/
-    hw_VarFn    reset;
-
-    /**
-     * args: (typeof(self))
-     **/
-    hw_VarFn    reset_copy;
-
-    /**
-     * args: (typeof(self))
-     * ret: hw_int(-MAX, 0, +MAX)
-     **/
-    hw_VarFn    compare_bin;
-
-    /**
-     * args: (list(any))
-     **/
-    hw_VarFn    compare_all;
-
-    /**
-     * args: NONE
-     * ret: hw_String *
-     **/
-    hw_VarFn    to_string;
-
-    /**
-     * args: NONE
-     * ret: hw_String *
-     **/
-    hw_VarFn    to_info;
- 
-    /**
-     * args: none
-     * ret: hw_byteArr *
-     **/
-    hw_VarFn    to_data;
-
-    /**
-     * args: none
-     * ret: hw_uint 
-     **/
-    hw_VarFn    to_hash;
+    hw_uint name_size;
+    hw_uint arg_count;
+    hw_uint mut_count;
 };
 
 struct hw_VarFnArr {
@@ -324,10 +253,12 @@ struct hw_VarFnArr {
 struct hw_Type {
     hw_uint             id;
     hw_uint             unitsize;
-    hw_Var_VTCore       vtcore;
-    hw_VarFn            vt[8];
-    hw_byte             name[256];
 
+    hw_uint             vt_count;
+    hw_VarFn            vt[16];
+    hw_FnInfo           vtinfo[16];
+    
+    hw_byte             name[256];
     hw_byte             is_obj;
     hw_byte             name_size;
 };
@@ -393,15 +324,6 @@ struct hw_codeArr {
     hw_code *data;
     hw_uint len;
     hw_uint lenUsed;
-};
-
-struct hw_FuncInfo {
-    
-    hw_byte *name;
-    hw_uint name_size;
-
-    hw_uint ret_count;
-    hw_byte *retT;
 };
 
 struct hw_FnState {
