@@ -217,12 +217,15 @@ struct hw_VarArr {
 };
 
 struct hw_VarTable {
-    hw_Var *key;
-    hw_Var *val;
+    hw_Var      *key;
+    hw_Var      *val;
+    hw_byte     *is_used;
 
-    hw_byte *keyT;
-    hw_byte *valT;
-    hw_byte *is_used;
+    hw_uint     len;
+    hw_uint     lenUsed;
+
+    hw_byte     keyT;
+    hw_byte     valT;
 };
 
 /****************************************************/
