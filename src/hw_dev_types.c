@@ -77,6 +77,7 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
 
 #define _GET_ARG_RAW(n) (args[n+1])
 #define _GET_ARG(n, as) (_GET_ARG_RAW(n).as)
+#define _GET_ARG_TID(n) (tid[1 + n])
 #define _MAKE_VAR(value, as) ((hw_Var){.as = value})
 
 #define _CHECK_ARGS(_c, ...)\
@@ -112,7 +113,7 @@ static void *_loadfile(
     return data;
 }
 
-DEFN(hw_VarFn_PANIC) {
+DEFN(hw_VarFn_UNREACHABLE) {
     (void)ts;
     (void)args;
     (void)tid;
@@ -131,7 +132,7 @@ DEFN(hw_VarList_new) {
     (void)count;
     
     HW_DEBUG(
-            _CHECK_ARGS(1, hw_TypeID_nil)
+        _CHECK_ARGS(1, hw_TypeID_nil)
     );
 
     _SELF(hw_VarList *);
@@ -540,8 +541,8 @@ struct {
     },
 
     [hw_TypeID_table] = {
-        FNINFO(hw_VarTable, new, 0, 0, hw_TypeID_table),
-        FNINFO(hw_VarTable, delete, 0, 0, hw_TypeID_table),
+        FNINFO(hw_VarTable, newFrom_conf, 0, 0, hw_TypeID_table),
+        FNINFO(hw_VarTable, delete_detatch, 0, 0, hw_TypeID_table),
         FNINFO(hw_VarTable, get, 2, 0
                 , hw_TypeID_table, hw_TypeID_any, hw_TypeID_any),
         FNINFO(hw_VarTable, set, 2, 0
