@@ -15,6 +15,13 @@
 #define HW_DEBUG(...)
 #endif
 
+
+#if defined (HW_DEBUG_CODE_ENABLE) || defined (HW_SAFE_GAURD_CODE_ENABLE)
+#define HW_SAFE_GAURD(...) __VA_ARGS__
+#else
+#define HW_SAFE_GAURD(...)
+#endif
+
 /**
  */
 #define HW_STR(s) (void *)s, (sizeof(s)-1)
