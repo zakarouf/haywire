@@ -219,13 +219,14 @@ struct hw_VarArr {
 struct hw_VarTable {
     hw_Var      *key;
     hw_Var      *val;
-    hw_byte     *is_used;
+    hw_byte     *valTs;
 
     hw_uint     len;
     hw_uint     lenUsed;
 
+    hw_VarFn    hashfn;
+    hw_VarFn    eqfn;
     hw_byte     keyT;
-    hw_byte     valT;
 };
 
 /****************************************************/
