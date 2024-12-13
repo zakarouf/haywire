@@ -21,12 +21,9 @@ typedef double              hw_float;
 typedef union   hw_Var      hw_Var;
 typedef struct  hw_VarP     hw_VarP;
 
-
-typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarArr   hw_VarArr;
+typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarTable hw_VarTable;
-typedef struct  hw_SVTable  hw_SVTable;
-typedef struct  hw_SITable  hw_SITable;
 
 typedef struct  hw_String   hw_String;
 typedef struct  hw_CStr     hw_CStr;
@@ -104,13 +101,13 @@ union hw_Var {
     hw_Error const  *as_error;
 
     /* Objects */
-    hw_VarArr       *as_arr,    **as_arr_p;
-    hw_VarList      *as_list,   **as_list_p;
-    hw_VarTable     *as_table,  **as_table_p;
-
     hw_byteArr      *as_barr,   **as_barr_p;
     hw_String       *as_string, **as_string_p;
     hw_CStr         *as_cstr,   **as_cstr_p;
+
+    hw_VarArr       *as_arr,    **as_arr_p;
+    hw_VarList      *as_list,   **as_list_p;
+    hw_VarTable     *as_table,  **as_table_p;
 
     /* Type System */
     hw_Type    const    *as_type,     **as_type_p;
@@ -227,6 +224,15 @@ struct hw_VarTable {
     hw_VarFn    hashfn;
     hw_VarFn    eqfn;
     hw_byte     keyT;
+};
+
+struct hw_SVTable {
+    hw_String   **key;
+    hw_Var      *val;
+    hw_byte     *valTs;
+
+    hw_uint     len;
+    hw_uint     lenUsed;
 };
 
 /****************************************************/
@@ -486,6 +492,9 @@ struct hw_ObjCompiler {
     ((void)(char[(exp)? 1:-1]){0})
 
 #define hw_CStr_makelit(s)     ((hw_CStr){.data = #s, .len = sizeof(#s) - 1})
+
+#define HW_VAR(_value, _as_)\
+    ((hw_Var){._as_ = _value})
 
 #define HW_VARP(_value, _as_)\
     ((hw_VarP){.value.as_##_as_ = _value, .type = hw_TypeID_##_as_})
