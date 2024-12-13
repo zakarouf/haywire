@@ -60,9 +60,9 @@ void hw_logstr(const char *msg, size_t const);
         } while(0)
 
 #define HW_ASSERT(exp) HW_ASSERTEX(exp, "%s", ":=")
-#define HW_ASSERT_EQ(x, y) HW_ASSERT(x == y)
+#define HW_ASSERT_EQ(x, y) HW_ASSERTEX(x == y, "LHS != RHS, %s", ":=")
 #define HW_ASSERT_NOT_EQ(x, y) HW_ASSERT(x != y)
-#define HW_ASSERT_NOTNULL(exp) HW_ASSERT_NOTNULL(exp, NULL)
+#define HW_ASSERT_NOTNULL(exp) HW_ASSERT_NOT_EQ(exp, NULL)
 
 /**
  * Section: Tokens
