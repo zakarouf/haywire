@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 #include <assert.h>
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator allocator)
@@ -51,6 +52,11 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
             }
         }
     }
+
+    HW_DEBUG(
+        HW_LOG("No VT %.*s for type: %.*s"
+            , (int)name_size, name, (int)T->name_size, T->name);
+    );
     return hw_VarFn_UNREACHABLE;
 }
 
@@ -62,29 +68,37 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
     hw_VarP NAME (              \
         hw_TypeSys   *ts        \
       , hw_Var       *args      \
-      , hw_byte      *tid       \
-      , hw_uint const count)
+      , hw_byte      *tids      \
+      , hw_uint const argc)
 
 #define _ALLOC(SIZE)            HW_TYPESYS_ALLOC(ts, SIZE)
 #define _REALLOC(PTR, SIZE)     HW_TYPESYS_REALLOC(ts, PTR, SIZE)
 #define _FREE(PTR)              HW_TYPESYS_FREE(ts, PTR)
 
 #define _GET_SELF() (args[0])
-#define _GET_SELF_TID() (tid[0])
+#define _GET_SELF_TID() (tids[0])
 #define _SELF(T) T self
 #define _SELF_ASSIGN(as) (_GET_SELF()).as = self;
 #define _SELF_BIND(T, as) T self = _GET_SELF().as
 
 #define _GET_ARG_RAW(n) (args[n+1])
 #define _GET_ARG(n, as) (_GET_ARG_RAW(n).as)
-#define _GET_ARG_TID(n) (tid[1 + n])
+#define _GET_ARG_TID(n) (tids[1 + n])
 #define _MAKE_VAR(value, as) ((hw_Var){.as = value})
 
 #define _CHECK_ARGS(_c, ...)\
     do {\
-        hw_uint c = _c;\
-        HW_ASSERT(c == count);\
-        HW_ASSERT(!memcmp((hw_byte[]){__VA_ARGS__}, tid, count));\
+        hw_uint c = _c + 1;\
+        HW_ASSERT(c == argc);\
+        hw_byte type_ids[] = {__VA_ARGS__};\
+        for (size_t i = 0; i < c; i++) {\
+            if(type_ids[i] != hw_TypeID_nil) {\
+                HW_ASSERTEX(type_ids[i] == tids[i]\
+                , "Mis-match argument type:%.*s at position '%" PRIu64 "'"\
+                , ts->types[tids[i]].name_size, ts->types[tids[i]].name\
+                , i);\
+            }\
+        }\
     } while(0)
 
 /*************************************************************************
@@ -116,145 +130,19 @@ static void *_loadfile(
 DEFN(hw_VarFn_UNREACHABLE) {
     (void)ts;
     (void)args;
-    (void)tid;
-    (void)count;
-    HW_ASSERT(0);
+    (void)tids;
+    (void)argc;
+    HW_ASSERT(0 && "Reached Unreachable");
     return HW_VARP_NIL();
 }
-
-/*******************
- *    Var List
- *******************/
-
-DEFN(hw_VarList_new) {
-    (void)args;
-    (void)tid;
-    (void)count;
-    
-    HW_DEBUG(
-        _CHECK_ARGS(1, hw_TypeID_nil)
-    );
-
-    _SELF(hw_VarList *);
-    const hw_uint default_len = 8;
-    
-    self = _ALLOC(sizeof(hw_VarList)
-                            + (sizeof(hw_Var) * default_len)
-                            + (sizeof(hw_byte) * default_len));
-
-    self->data = HW_CAST(void *, self + 1);
-    self->tid  = HW_CAST(void *, self->data + default_len);
-
-    self->len = default_len;
-    self->lenUsed = 0;
-
-    _SELF_ASSIGN(as_list);
-    return HW_VARP_NIL();
-}
-
-DEFN(hw_VarList_expand) {
-    (void)count;
-    (void)tid;
-
-    _SELF_BIND(hw_VarList *, as_list);
-    hw_uint size = _GET_ARG(0, as_uint);
-    self = _REALLOC(self, ( (sizeof(*self->data) * (self->len + size))
-                          + (sizeof(*self->tid) * (self->len + size))
-                        ));
-
-    HW_DEBUG(HW_ASSERT(self));
-    self->len += size;
-
-    _SELF_ASSIGN(as_list);
-    return HW_VARP_NIL();
-}
-
-DEFN(hw_VarList_push_shallow) {
-    (void)count;
-    (void)tid;
-
-    _SELF_BIND(hw_VarList *, as_list);
-    if(self->len <= self->lenUsed) {
-        hw_Var expand_args[] = { _GET_SELF(), (hw_Var){.as_uint = self->len * 2} };
-        hw_byte expand_args_tids[] = { hw_TypeID_list, hw_TypeID_uint };
-        hw_VarList_expand(ts, expand_args, expand_args_tids, 2);
-        _GET_SELF() = expand_args[0];
-        self = _GET_SELF().as_list;
-    }
-    
-    self->data[self->lenUsed] = _GET_ARG_RAW(0);
-    self->lenUsed += 1;
-    
-    return HW_VARP_NIL();
-}
-
-
-DEFN(hw_VarList_push) {
-    (void)count;
-    (void)tid;
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
-
-    _SELF_BIND(hw_VarList *, as_list);
-    if(self->len <= self->lenUsed) {
-        hw_Var expand_args[] = { _GET_SELF(), (hw_Var){.as_uint = self->len * 2} };
-        hw_byte expand_args_tids[] = { hw_TypeID_list, hw_TypeID_uint };
-        hw_VarList_expand(ts, expand_args, expand_args_tids, 2);
-        _GET_SELF() = expand_args[0];
-        self = _GET_SELF().as_list;
-    }
-    
-    self->data[self->lenUsed] = _GET_ARG_RAW(0);
-    self->lenUsed += 1;
-    
-    return HW_VARP_NIL();
-}
-
-
-DEFN(hw_VarList_pop) {
-    _SELF_BIND(hw_VarList *, as_list);
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
-    return HW_VARP_NIL();
-}
-
-DEFN(hw_VarList_popStream) {
-    _SELF_BIND(hw_VarList *, as_list);
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
-    return HW_VARP_NIL();
-}
-
-DEFN(hw_VarList_reserve) {
-    _SELF_BIND(hw_VarList *, as_list);
-    hw_uint size = _GET_ARG(0, as_uint);
-    hw_uint avail = self->len - self->lenUsed;
-    if(avail < size) { hw_VarList_expand(ts, args, tid, count); }
-    return HW_VARP_NIL(); // expand will set list proper, so we dont.
-}
-
-DEFN(hw_VarList_delete) {
-    (void)args;
-    (void)tid;
-    (void)count;
-
-    _SELF_BIND(hw_VarList *, as_list);
-    for (hw_uint i = 0; i < self->lenUsed; i++) {
-        hw_byte const T = self->tid[i];
-        if(ts->types[T].is_obj) {
-            HW_DEBUG(HW_LOG("USING vt[2] here %s", ""););
-            HW_VAR_CALL_CORE(T, ts, vt[2], self->data + i, self->tid + i, 1);
-        }
-    }
-    _FREE(self);
-    return HW_VARP_NIL();
-}
-
 
 /*******************
 // STRINGS
  *******************/
 DEFN(hw_String_new) {
     (void)args;
-    (void)tid;
-    (void)count;
+    (void)tids;
+    (void)argc;
 
     const hw_uint default_size = 8;
     _SELF(hw_String *) = _ALLOC(sizeof(hw_String)
@@ -269,8 +157,8 @@ DEFN(hw_String_new) {
 
 DEFN(hw_String_delete) {
     (void)args;
-    (void)tid;
-    (void)count;
+    (void)tids;
+    (void)argc;
 
     _SELF_BIND(hw_String *, as_string);
     _FREE(self);
@@ -278,8 +166,8 @@ DEFN(hw_String_delete) {
 }
 
 DEFN(hw_String_newFrom_cstr) {
-    (void)tid;
-    (void)count;
+    (void)tids;
+    (void)argc;
 
     _SELF(hw_String *);
     
@@ -301,8 +189,8 @@ DEFN(hw_String_newFrom_cstr) {
 
 DEFN(hw_String_newFrom_copy) {
     (void)args;
-    (void)tid;
-    (void)count;
+    (void)tids;
+    (void)argc;
 
     hw_String const *string = _GET_ARG(0, as_string);
 
@@ -318,8 +206,8 @@ DEFN(hw_String_newFrom_copy) {
 }
 
 DEFN(hw_String_append_cstr) {
-    (void)tid;
-    (void)count;
+    (void)tids;
+    (void)argc;
 
     _SELF_BIND(hw_String *, as_string);
     hw_byte *data = _GET_ARG(0, as_byte_p);
@@ -368,8 +256,8 @@ DEFN(hw_String_newFrom_file) {
  *******************/
 DEFN(hw_VarArr_newFrom_conf) {
     (void)args;
-    (void)tid;
-    (void)count;
+    (void)tids;
+    (void)argc;
 
     hw_uint const default_len = 8;
     _SELF(hw_VarArr *);
@@ -389,16 +277,15 @@ DEFN(hw_VarArr_newFrom_conf) {
 
 DEFN(hw_VarArr_delete) {
     (void)args;
-    (void)tid;
-    (void)count;
+    (void)tids;
+    (void)argc;
 
     _SELF_BIND(hw_VarArr *, as_arr);
-
+    hw_byte tid = self->tid;
+    hw_VarFn deletefn = hw_Type_getvt(self->tid + ts->types, "delete", 6);
     if (ts->types[self->tid].is_obj) {
         for (hw_uint i = 0; i < self->lenUsed; i++) {
-            HW_DEBUG(HW_LOG("USING vt[2] here %s", ""););
-            HW_VAR_CALL_CORE(
-                self->tid, ts, vt[2], self->data + i, &self->tid, 1);
+                deletefn(ts, self->data + i, &tid, 1);
         }
     }
 
@@ -407,15 +294,13 @@ DEFN(hw_VarArr_delete) {
     return HW_VARP_NIL();
 }
 
-
-
 DEFN(hw_VarArr_push) {
     _SELF_BIND(hw_VarArr *, as_arr);
 
     HW_DEBUG(
-            HW_ASSERT(count == 2);
-            HW_ASSERT(tid[0] == hw_TypeID_arr);
-            HW_ASSERT(tid[1] == self->tid);
+            HW_ASSERT(argc == 2);
+            HW_ASSERT(tids[0] == hw_TypeID_arr);
+            HW_ASSERT(tids[1] == self->tid);
     );
     
     
@@ -443,38 +328,279 @@ DEFN(hw_VarArr_pushStream) {
 }
 
 DEFN(hw_VarArr_pop) {
+    HW_DEBUG((void)ts;(void)argc;(void)args;(void)tids;);
+    HW_DEBUG(HW_LOG("NOT IMPLEMENTED REALLOC%s", ""));
+
     _SELF_BIND(hw_VarArr *, as_arr);
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
+    self->lenUsed -= 1;
     return HW_VARP_NIL();
 }
 
 DEFN(hw_VarArr_popStream) {
+    HW_DEBUG((void)ts;(void)argc;(void)args;(void)tids;);
+    HW_DEBUG(HW_LOG("NOT IMPLEMENTED REALLOC%s", ""));
+
     _SELF_BIND(hw_VarArr *, as_arr);
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
+    self->lenUsed -= _GET_ARG(0, as_uint);
     return HW_VARP_NIL();
 }
+
+
+/*******************
+ *    Var List
+ *******************/
+
+DEFN(hw_VarList_new) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+    
+    HW_DEBUG(
+        _CHECK_ARGS(0, hw_TypeID_nil)
+    );
+
+    _SELF(hw_VarList *);
+    const hw_uint default_len = 8;
+    
+    self = _ALLOC(sizeof(hw_VarList)
+                            + (sizeof(hw_Var) * default_len)
+                            + (sizeof(hw_byte) * default_len));
+
+    self->data = HW_CAST(void *, self + 1);
+    self->tid  = HW_CAST(void *, self->data + default_len);
+
+    self->len = default_len;
+    self->lenUsed = 0;
+
+    _SELF_ASSIGN(as_list);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_expand) {
+    (void)tids;
+    (void)argc;
+
+    _SELF_BIND(hw_VarList *, as_list);
+    hw_uint size = _GET_ARG(0, as_uint);
+    self = _REALLOC(self, ( (sizeof(*self->data) * (self->len + size))
+                          + (sizeof(*self->tid) * (self->len + size))
+                        ));
+
+    HW_DEBUG(HW_ASSERT(self));
+    self->len += size;
+
+    _SELF_ASSIGN(as_list);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_push) {
+    (void)tids;
+    (void)argc;
+
+    _SELF_BIND(hw_VarList *, as_list);
+    if(self->len <= self->lenUsed) {
+        hw_Var expand_args[] = { _GET_SELF(), (hw_Var){.as_uint = self->len * 2} };
+        hw_byte expand_args_tids[] = { hw_TypeID_list, hw_TypeID_uint };
+        hw_VarList_expand(ts, expand_args, expand_args_tids, 2);
+        _GET_SELF() = expand_args[0];
+        self = _GET_SELF().as_list;
+    }
+    
+    self->data[self->lenUsed] = _GET_ARG_RAW(0);
+    self->lenUsed += 1;
+    
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_pop) {
+    HW_DEBUG((void)ts;(void)argc;(void)args;(void)tids;);
+    _SELF_BIND(hw_VarList *, as_list);
+    HW_ASSERT(0 && "NOT IMPLEMENTED");
+
+    HW_DEBUG(HW_ASSERT(self->lenUsed != 0));
+    self->lenUsed -= 1;
+    hw_byte tid = self->tid[self->lenUsed];
+    
+    HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL));
+    hw_Type *T = ts->types + tid;
+    if(T->is_obj) {
+        hw_Var *top = self->data + self->lenUsed;
+        
+        HW_DEBUG(
+            HW_ASSERT(T->vt[1] == hw_Type_getvt(T, "delete", 6));
+        );
+
+        T->vt[1](ts, top, &tid, 1);
+    }
+
+
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_reserve) {
+    _SELF_BIND(hw_VarList *, as_list);
+    hw_uint size = _GET_ARG(0, as_uint);
+    hw_uint avail = self->len - self->lenUsed;
+    if(avail < size) { hw_VarList_expand(ts, args, tids, argc); }
+    return HW_VARP_NIL(); // expand will set list proper, so we dont.
+}
+
+DEFN(hw_VarList_delete) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+
+    _SELF_BIND(hw_VarList *, as_list);
+    for (hw_uint i = 0; i < self->lenUsed; i++) {
+        hw_byte const T = self->tid[i];
+        if(ts->types[T].is_obj) {
+            HW_DEBUG(HW_LOG("USING vt[1] here %s", ""););
+            HW_VAR_CALL_CORE(T, ts, vt[1], self->data + i, self->tid + i, 1);
+        }
+    }
+    _FREE(self);
+    return HW_VARP_NIL();
+}
+
+
+
+
 
 /**************************
  * Section: hw_VarTable
  **************************/
+hw_VarTable *_VarTable_new(
+    hw_TypeSys *ts
+  , enum hw_TypeID tid
+  , hw_VarFn eqfn
+  , hw_VarFn hashfn
+  , hw_uint len)
+{
+    hw_VarTable *self = _ALLOC( (sizeof(hw_VarTable))
+            + (sizeof(*self->key) * len)
+            + (sizeof(*self->val) * len)
+            + (sizeof(*self->valTs) * len)
+        );
+    self->key = HW_CAST(hw_Var *, self + 1);
+    self->val = HW_CAST(hw_Var *, (self->key + len));
+   
+    self->keyT = tid;
+    memset(self->valTs, hw_TypeID_nil, len);
 
-DEFN(hw_VarTable_new) {
-    _SELF_BIND(hw_VarTable *, as_table);
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
+    self->eqfn = eqfn;
+    self->hashfn = hashfn;
+    self->len = len;
+    self->lenUsed = 0;
+
+    return self;
+}
+
+DEFN(hw_VarTable_newFrom_conf) {
+    _SELF(hw_VarTable *);
+    hw_byte key_tid = _GET_ARG(0, as_uint);
+    self = _VarTable_new(ts, key_tid
+                , hw_Type_getvt(ts->types + key_tid, "eq", 2)
+                , hw_Type_getvt(ts->types + key_tid, "to_hash", 7)
+                    // (5:32) (4:16) (3:8) (2:4) (1:2) (0:1)
+                , 1 << 4);
+
+    HW_DEBUG(HW_ASSERT_NOT_EQ(self->hashfn, hw_VarFn_UNREACHABLE));
+    HW_DEBUG(HW_ASSERT_NOT_EQ(self->eqfn, hw_VarFn_UNREACHABLE));
+
+    _SELF_ASSIGN(as_table);
     return HW_VARP_NIL();
 }
 
-DEFN(hw_VarTable_delete) {
+DEFN(hw_VarTable_delete_detatch) {
     _SELF_BIND(hw_VarTable *, as_table);
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
+    _FREE(self);
     return HW_VARP_NIL();
 }
+
+DEFN(hw_VarTable_set_entry) {
+    _SELF_BIND(hw_VarTable *, as_table);
+
+    hw_Var key = _GET_ARG_RAW(0);
+    hw_Var val = _GET_ARG_RAW(1);
+
+    HW_DEBUG(HW_ASSERT(self->keyT == _GET_ARG_TID(0)));
+    hw_Var hashv = (hw_Var){.as_uint = 0};
+    hw_Var hash_arg[] = { key,  hashv};
+    self->hashfn(ts, hash_arg, (hw_byte[]){self->keyT, hw_TypeID_uint}, 2);
+    hw_uint hash = hashv.as_uint;
+
+    hw_uint idx = (hw_uint)(hash & ((hw_uint)(self->len - 1)));
+    
+    hw_VarFn eqfn = self->eqfn;
+    HW_DEBUG(
+        hw_uint _debug_loopback = 0;
+    );
+    while(self->valTs[idx] > hw_TypeID_nil) {
+        hw_Var _args_[3] = { self->key[idx], key, (hw_Var){.as_uint = 0}};
+        eqfn(ts, _args_, (hw_byte[]){self->keyT, self->keyT, hw_TypeID_uint}, 3);
+        if(_args_[2].as_uint == 0) {
+            hw_byte _tid_ = self->keyT;
+            hw_VarFn delete = hw_Type_getvt(ts->types + self->keyT, "delete", 6);
+            delete(ts, self->key + idx, &_tid_, 1);
+            goto _L_set;
+        }
+        idx += 1;
+        if(idx >= self->len) {
+            idx = 0;
+            HW_DEBUG(
+                HW_ASSERTEX(_debug_loopback < 2,
+                    "Var Table Cant Find Empty Space (%p)", (void *)self);
+                _debug_loopback += 1;
+            )
+        }
+    }
+
+    _L_set:
+    self->key[idx] = key;
+    self->val[idx] = val;
+    self->valTs[idx] = _GET_ARG_TID(1);
+    self->lenUsed += 1;
+
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarTable_expand) {
+    _SELF_BIND(hw_VarTable *, as_table);
+    HW_ASSERT(0 && "NOT IMPLEMENTED");
+
+    const hw_uint new_len = self->len << 1;
+    HW_SAFE_GAURD(HW_ASSERT(new_len < UINT16_MAX));
+    
+    hw_VarTable *old = _GET_SELF().as_table;
+    self = _VarTable_new(ts
+            , self->keyT, self->eqfn
+            , self->hashfn, self->len << 1);
+
+    for (size_t i = 0; i < old->len; i++) {
+        if(old->valTs[i] > hw_TypeID_nil) {
+            hw_Var new_table = HW_VAR(self, as_table);
+            hw_Var _args[3] = { new_table, old->key[i], old->val[i] };
+            hw_byte _tids[3] = { hw_TypeID_table, old->keyT, old->valTs[i] };
+            hw_VarTable_set_entry(ts, _args, _tids, 3);
+        }
+    }
+
+    _SELF_ASSIGN(as_table);
+    return HW_VARP_NIL();
+}
+
 DEFN(hw_VarTable_set) {
     _SELF_BIND(hw_VarTable *, as_table);
-    HW_ASSERT(0 && "NOT IMPLEMENTED");
+    if(self->lenUsed > (self->len >> 1)) {
+        hw_VarTable_expand(ts, args, tids, argc);
+    }
+    hw_VarTable_set_entry(ts, args, tids, argc);
+
+    _SELF_ASSIGN(as_table);
     return HW_VARP_NIL();
 }
-DEFN(hw_VarTable_set_copy) {
+
+DEFN(hw_VarTable_newFrom_copy) {
     _SELF_BIND(hw_VarTable *, as_table);
     HW_ASSERT(0 && "NOT IMPLEMENTED");
     return HW_VARP_NIL();
@@ -496,7 +622,6 @@ DEFN(hw_VarTable_set_index) {
     return HW_VARP_NIL();
 }
 
-
 /*
  * Default TypeSys
  */
@@ -513,7 +638,7 @@ DEFN(hw_VarTable_set_index) {
 struct {
     hw_FnInfo info;
     hw_VarFn  fn;
-} static TYPEVT[][_TYPEVT_MAX]= {
+} static TYPEVT[hw_TypeID_TOTAL][_TYPEVT_MAX]= {
 
     [hw_TypeID_string] = {
         FNINFO(hw_String, new, 0, 0, hw_TypeID_string),
@@ -528,16 +653,14 @@ struct {
         FNINFO(hw_VarArr, push, 1, 0, hw_TypeID_arr, hw_TypeID_any),
         FNINFO(hw_VarArr, pushStream, 2, 0, hw_TypeID_arr, hw_TypeID_uint, hw_TypeID_ptr),
         FNINFO(hw_VarArr, pop, 0, 0, hw_TypeID_arr),
-        FNINFO(hw_VarArr, popStream, 1, 0, hw_TypeID_arr, hw_TypeID_uint),
+        //FNINFO(hw_VarArr, popStream, 1, 0, hw_TypeID_arr, hw_TypeID_uint),
     },
 
     [hw_TypeID_list] = {
         FNINFO(hw_VarList, new, 0, 0, hw_TypeID_list),
         FNINFO(hw_VarList, delete, 0, 0, hw_TypeID_list),
-        FNINFO(hw_VarList, push_shallow, 1, 0, hw_TypeID_list, hw_TypeID_any),
         FNINFO(hw_VarList, push, 1, 0, hw_TypeID_list, hw_TypeID_any),
         FNINFO(hw_VarList, pop, 0, 0, hw_TypeID_list),
-        FNINFO(hw_VarList, popStream, 1, 0, hw_TypeID_list, hw_TypeID_uint),
     },
 
     [hw_TypeID_table] = {
@@ -549,7 +672,7 @@ struct {
                 , hw_TypeID_table, hw_TypeID_any, hw_TypeID_any),
         FNINFO(hw_VarTable, get_index, 2, 1
                 , hw_TypeID_table, hw_TypeID_any, hw_TypeID_uint),
-        FNINFO(hw_VarTable, set_index, 2, 1
+        FNINFO(hw_VarTable, set_index, 3, 1
                 , hw_TypeID_table, hw_TypeID_any, hw_TypeID_uint)
     },
 };
