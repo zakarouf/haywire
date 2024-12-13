@@ -109,6 +109,7 @@ static hw_VarArr *_wrap_args(hw_TypeSys *ts, int argc, char *argv[])
             hw_TypeID_nil, 
             hw_TypeID_ptr, 
             hw_TypeID_uint}, 3);
+
         string = args[0];
       
         args[0] = arr;
@@ -119,9 +120,10 @@ static hw_VarArr *_wrap_args(hw_TypeSys *ts, int argc, char *argv[])
         HW_LOG("vm = %p", (void *)arr.as_arr->data[i].as_string);
         arr = args[0];
     }
-
+    
     return arr.as_arr;
 }
+
 
 static void _static_checks(void)
 {
@@ -306,7 +308,9 @@ void hw_vm(hw_State *hw, hw_Thread *th)
 
 void test_main(hw_State *hw, hw_VarArr *args)
 {
-    
+    hw_Var _vt_args[] = { (hw_Var){.as_arr = args} };
+    hw_byte tid = hw_TypeID_arr;
+    hw_VarArr_delete(hw->tsys, _vt_args, &tid, 1);
 }
 
 int main(int argc, char *argv[])
@@ -316,7 +320,6 @@ int main(int argc, char *argv[])
     _check_vm_inst();
 
     hw_VarArr *c_args = _wrap_args(s->tsys, argc, argv);
-    test_main(s, c_args);
     HW_DEBUG( 
         for (size_t i = 0; i < c_args->lenUsed; i++) {
             fwrite(
@@ -326,6 +329,7 @@ int main(int argc, char *argv[])
             printf(" ");
         }
     );
+    test_main(s, c_args);
 
     hw_logp("All Ok\n");
     hw_delete(s);
