@@ -96,7 +96,7 @@ static hw_VarArr *_wrap_args(hw_TypeSys *ts, int argc, char *argv[])
               , (hw_Var){.as_uint = hw_TypeID_string} };
 
     hw_VarArr_newFrom_conf( ts, args 
-      , (hw_byte[]){hw_TypeID_list, hw_TypeID_uint}, 2);
+      , (hw_byte[]){hw_TypeID_arr, hw_TypeID_uint}, 2);
     arr = args[0];
 
     for (int i = 0; i < argc; i++) {
