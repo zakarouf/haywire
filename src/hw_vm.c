@@ -219,7 +219,7 @@ void hw_Module_disasm(hw_Module *m)
 
 hw_Module const *hw_get_module(hw_State const *hw, hw_uint id)
 {
-    
+    return NULL;
 }
 
 static hw_uint hw_Thread_popfn(hw_Thread *th)
@@ -268,7 +268,7 @@ void hw_vm(hw_State *hw, hw_Thread *th)
        ON_INST(get_type)       r(A).as_uint = t(B);
       NON_INST(get_routine);
 
-      NON_INST(call);
+      NON_INST(call) goto _L_again;
       NON_INST(calln);
       NON_INST(callc);
           
@@ -302,7 +302,6 @@ void hw_vm(hw_State *hw, hw_Thread *th)
        ON_INST(mulf) r(A).as_float = r(B).as_float * r(C).as_float;
        ON_INST(ltf)  r(A).as_uint =  r(B).as_float < r(B).as_float;
 
-      NON_INST(TOTAL);
     END()
 }
 
@@ -310,7 +309,21 @@ void test_main(hw_State *hw, hw_VarArr *args)
 {
     hw_Var _vt_args[] = { (hw_Var){.as_arr = args} };
     hw_byte tid = hw_TypeID_arr;
+
+
+
     hw_VarArr_delete(hw->tsys, _vt_args, &tid, 1);
+}
+
+void print_args(hw_VarArr *c_args)
+{
+     for (size_t i = 0; i < c_args->lenUsed; i++) {
+        fwrite(
+            c_args->data.as_var[i].as_string->data
+          , c_args->data.as_var[i].as_string->lenUsed
+          , 1, stdout);
+        printf(" ");
+    }
 }
 
 int main(int argc, char *argv[])
@@ -320,15 +333,7 @@ int main(int argc, char *argv[])
     _check_vm_inst();
 
     hw_VarArr *c_args = _wrap_args(s->tsys, argc, argv);
-    HW_DEBUG( 
-        for (size_t i = 0; i < c_args->lenUsed; i++) {
-            fwrite(
-                c_args->data[i].as_string->data
-              , c_args->data[i].as_string->lenUsed
-              , 1, stdout);
-            printf(" ");
-        }
-    );
+    print_args(c_args);
     test_main(s, c_args);
 
     hw_logp("All Ok\n");
