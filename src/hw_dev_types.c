@@ -45,6 +45,9 @@ hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
 
 hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
 {
+    HW_LOG("Requested VT:%.*s for TYPE:%.*s"
+            , (int)name_size, name, (int)T->name_size, T->name);
+    
     for (size_t i = 0; i < T->vt_count; i++) {
         if(T->vtinfo[i].name_size == name_size) {
             if(!memcmp(T->vtinfo[i].name, name, name_size)) {
@@ -54,7 +57,7 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
     }
 
     HW_DEBUG(
-        HW_LOG("No VT %.*s for type: %.*s"
+        HW_LOG("No function exist '%.*s' for type: '%.*s'"
             , (int)name_size, name, (int)T->name_size, T->name);
     );
     return hw_VarFn_UNREACHABLE;
@@ -319,6 +322,10 @@ DEFN(hw_VarArr_push) {
 }
  
 DEFN(hw_VarArr_pushStream) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+    (void)ts;
     _SELF_BIND(hw_VarArr *, as_arr);
     
     HW_ASSERT(0 && "NOT IMPLEMENTED");
@@ -496,6 +503,10 @@ hw_VarTable *_VarTable_new(
 }
 
 DEFN(hw_VarTable_newFrom_conf) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+
     _SELF(hw_VarTable *);
     hw_byte key_tid = _GET_ARG(0, as_uint);
     self = _VarTable_new(ts, key_tid
@@ -512,12 +523,20 @@ DEFN(hw_VarTable_newFrom_conf) {
 }
 
 DEFN(hw_VarTable_delete_detatch) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+
     _SELF_BIND(hw_VarTable *, as_table);
     _FREE(self);
     return HW_VARP_NIL();
 }
 
 DEFN(hw_VarTable_set_entry) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+
     _SELF_BIND(hw_VarTable *, as_table);
 
     hw_Var key = _GET_ARG_RAW(0);
@@ -565,6 +584,10 @@ DEFN(hw_VarTable_set_entry) {
 }
 
 DEFN(hw_VarTable_expand) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+
     _SELF_BIND(hw_VarTable *, as_table);
     HW_ASSERT(0 && "NOT IMPLEMENTED");
 
@@ -601,23 +624,44 @@ DEFN(hw_VarTable_set) {
 }
 
 DEFN(hw_VarTable_newFrom_copy) {
-    _SELF_BIND(hw_VarTable *, as_table);
+    (void)args;
+    (void)tids;
+    (void)argc;
+    (void)ts;
+
+//    _SELF_BIND(hw_VarTable *, as_table);
     HW_ASSERT(0 && "NOT IMPLEMENTED");
     return HW_VARP_NIL();
 }
 DEFN(hw_VarTable_get) {
-    _SELF_BIND(hw_VarTable *, as_table);
+    (void)args;
+    (void)tids;
+    (void)argc;
+    (void)ts;
+
+ //   _SELF_BIND(hw_VarTable *, as_table);
     HW_ASSERT(0 && "NOT IMPLEMENTED");
     return HW_VARP_NIL();
 }
+
 DEFN(hw_VarTable_get_index) {
-    _SELF_BIND(hw_VarTable *, as_table);
+    (void)args;
+    (void)tids;
+    (void)argc;
+    (void)ts;
+
+    //_SELF_BIND(hw_VarTable *, as_table);
     HW_ASSERT(0 && "NOT IMPLEMENTED");
     return HW_VARP_NIL();
 }
 
 DEFN(hw_VarTable_set_index) {
-    _SELF_BIND(hw_VarTable *, as_table);
+    (void)args;
+    (void)tids;
+    (void)argc;
+    (void)ts;
+
+//    _SELF_BIND(hw_VarTable *, as_table);
     HW_ASSERT(0 && "NOT IMPLEMENTED");
     return HW_VARP_NIL();
 }
@@ -768,13 +812,58 @@ static void _default_vt_binds(hw_TypeSys *ts)
         hw_Type *T = ts->types + tid;
         size_t vt_id = 0;
         for (; vt_id < _TYPEVT_MAX; vt_id++) {
-            T->vt[tid] = TYPEVT[tid][vt_id].fn;
-            T->vtinfo[tid] = TYPEVT[tid][vt_id].info;
-            if (!TYPEVT[tid][vt_id].info.name_size) {
+            hw_FnInfo finfo = TYPEVT[tid][vt_id].info;
+            hw_VarFn fn = TYPEVT[tid][vt_id].fn;
+
+            T->vt[vt_id] = fn;
+            T->vtinfo[vt_id]= finfo;
+            if (!finfo.name_size && !fn) {
                 T->vt[vt_id] = hw_VarFn_UNREACHABLE;
             }
         }
         T->vt_count = vt_id;
+    }
+}
+
+static void _show_types(hw_TypeSys const *ts)
+{
+    HW_LOG("Showing all the Loaded Types, Total:%d", (int)ts->types_total);
+    for (size_t i = 0; i < ts->types_total; i++) {
+        hw_Type *T = ts->types + i;
+        if(!T->name_size) { hw_loglnp("\t(%d) = nil", (int)i); goto _L_skip; }
+        hw_loglnp("\t(%d)\n"
+                  "\tName: %.*s\n"
+                  "\tID: %d\n"
+                  "\tUnitsize: %d\n"
+                  "\tFunctions: %d\n"
+                , (int)i
+                , (int)T->name_size, T->name
+                , (int)T->id
+                , (int)T->unitsize
+                , (int)T->vt_count);
+        for (size_t vt_i = 0; vt_i < T->vt_count; vt_i++) {
+            hw_VarFn fn = T->vt[vt_i];
+            hw_FnInfo finfo = T->vtinfo[vt_i];
+            hw_loglnp("\t ID: %d\n"
+                      "\t\tName: %.*s\n"
+                      "\t\tLocation: %p\n"
+                      "\t\tArguments: %d\n"
+                      "\t\tMutables: %d"
+                , (int)vt_i 
+                , (int)finfo.name_size, finfo.name
+                , (void*)fn
+                , (int)finfo.arg_count
+                , (int)finfo.mut_count);
+            hw_logp("\t\tArgs: ");
+            for (size_t arg_i = 0; arg_i < finfo.arg_count; arg_i++) {
+                HW_ASSERT(finfo.argT[arg_i] < hw_TypeID_TOTAL);
+                char *name = (char *)ts->types[finfo.argT[arg_i]].name;
+                hw_uint name_size = ts->types[finfo.argT[arg_i]].name_size;
+                hw_logp(" %.*s |", (int)name_size, name);
+            }
+            hw_logp("\n");
+        }
+        _L_skip:;
     }
 }
 
@@ -786,6 +875,9 @@ hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator)
     _default_setall_atoms(ts);
     _default_setall_objects(ts);
     _default_vt_binds(ts);
+    HW_DEBUG(
+        _show_types(ts);
+    );
     return ts;
 }
 
