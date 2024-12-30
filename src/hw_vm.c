@@ -319,8 +319,8 @@ void print_args(hw_VarArr *c_args)
 {
      for (size_t i = 0; i < c_args->lenUsed; i++) {
         fwrite(
-            c_args->data.as_var[i].as_string->data
-          , c_args->data.as_var[i].as_string->lenUsed
+            c_args->data[i].as_string->data
+          , c_args->data[i].as_string->lenUsed
           , 1, stdout);
         printf(" ");
     }
