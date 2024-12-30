@@ -10,7 +10,13 @@ typedef uint8_t             hw_byte;
 
 typedef int64_t             hw_int;
 typedef uint64_t            hw_uint;
+
 typedef double              hw_float;
+
+typedef int32_t             hw_i32;
+typedef uint32_t            hw_u32;
+typedef int16_t             hw_i16;
+typedef uint16_t            hw_u16;
 
 #define HW_WORD_SIZE        (sizeof(hw_uint))
 
@@ -22,6 +28,7 @@ typedef union   hw_Var      hw_Var;
 typedef struct  hw_VarP     hw_VarP;
 
 typedef struct  hw_VarArr   hw_VarArr;
+typedef struct  hw_SArr     hw_SArr;
 typedef struct  hw_VarList  hw_VarList;
 typedef struct  hw_VarTable hw_VarTable;
 
@@ -74,7 +81,7 @@ typedef hw_VarP (*hw_VarFn)
 /************************************************************/
 
 typedef struct hw_ModuleObj hw_ModuleObj;
-typedef struct hw_ObjCompiler hw_ObjCompiler;
+typedef struct hw_CompilerBC hw_CompilerBC;
 
 /************************************************************/
 /************************************************************/
@@ -84,7 +91,7 @@ union hw_Var {
     hw_byte         as_nil;
     hw_ptr          as_ptr,     *as_ptr_p;
     hw_int          as_reff,    *as_reff_p;
-    hw_Var          *as_vptr;
+    hw_Var          *as_var;
 
     hw_int          as_bool;
     hw_byte         as_byte,    *as_byte_p,  **as_byte_pp;
@@ -106,6 +113,7 @@ union hw_Var {
     hw_CStr         *as_cstr,   **as_cstr_p;
 
     hw_VarArr       *as_arr,    **as_arr_p;
+    hw_SArr         *as_sarr,   **as_sarr_p;
     hw_VarList      *as_list,   **as_list_p;
     hw_VarTable     *as_table,  **as_table_p;
 
@@ -113,7 +121,7 @@ union hw_Var {
     hw_Type    const    *as_type,     **as_type_p;
     hw_TypeSys const    *as_typesys,  **as_typesys_p;
 
-    hw_Type         *as_type_mut, **as_type_mut_p;
+    hw_Type             *as_type_mut, **as_type_mut_p;
 
     /* VM */
     hw_Module       *as_module, **as_module_p;
@@ -142,6 +150,7 @@ enum hw_TypeID {
 
     , hw_TypeID_error
     , hw_TypeID_arr
+    , hw_TypeID_sarr
     , hw_TypeID_list
     , hw_TypeID_table
 
@@ -211,6 +220,15 @@ struct hw_VarArr {
     hw_uint         len;
     hw_uint         lenUsed;
     hw_byte         tid;
+};
+
+struct hw_SArr {
+    hw_byte         *data;
+    hw_uint         unitsize;
+    hw_uint         len;
+    hw_uint         lenUsed;
+    hw_byte         *type_inf;
+    hw_uint         type_count;
 };
 
 struct hw_VarTable {
@@ -386,11 +404,11 @@ struct hw_Module {
     hw_uint name_size;
     hw_uint name_hash;
 
-    hw_uint func;
-    hw_uint constant;
+    hw_uint fn_count;
+    hw_uint k_count;
     
-    hw_uint pubfunc;
-    hw_uint pubconst;
+    hw_uint pubfn_count;
+    hw_uint pubk_count;
 
     hw_uint data_size;
     hw_uint code_len;
@@ -478,7 +496,7 @@ struct hw_ModuleObj {
     hw_VarList *constants;
 };
 
-struct hw_ObjCompiler {
+struct hw_CompilerBC {
     hw_State *const vm_parent;
     hw_State vm_child;
     

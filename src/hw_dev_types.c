@@ -352,6 +352,72 @@ DEFN(hw_VarArr_popStream) {
     return HW_VARP_NIL();
 }
 
+/*******************
+ *    Structured Array (SArr)
+ *******************/
+
+hw_SArr* hw_SArr_new(hw_TypeSys *ts, hw_uint unitsize, hw_byte *types, hw_uint type_count);
+hw_ptr hw_SArr_push(hw_TypeSys *ts, hw_SArr **_self, hw_ptr value);
+hw_ptr hw_SArr_get(hw_SArr *self, hw_uint index);
+void hw_SArr_delete(hw_TypeSys *ts, hw_SArr *self);
+
+hw_SArr* hw_SArr_new(hw_TypeSys *ts, hw_uint unitsize, hw_byte *types, hw_uint type_count)
+{
+    hw_uint const default_len = 8;
+    hw_SArr *self = HW_TYPESYS_ALLOC(ts
+                        , sizeof(*self)
+                          + (type_count * sizeof(*self->type_inf))
+                          + (unitsize * default_len));
+
+    HW_DEBUG(HW_ASSERT(sizeof(*self->type_inf) == sizeof(*types)));
+    self->type_inf = HW_CAST(void *, self + 1);
+    self->data = HW_CAST(void *, self->type_inf + type_count);
+    
+    self->unitsize = unitsize;
+    self->len = 8;
+    self->lenUsed = 0;
+
+    if(type_count) {
+        memcpy(self->type_inf, types, type_count * sizeof(*self->type_inf));
+    } else {
+        self->type_inf = NULL;
+    }
+
+    return self;
+}
+
+hw_ptr hw_SArr_push(hw_TypeSys *ts, hw_SArr **_self, hw_ptr value)
+{
+    hw_SArr *self = *_self;
+    if(self->lenUsed >= self->len) {
+        hw_uint new_len = self->len << 1;
+        self = HW_TYPESYS_REALLOC(ts, self, sizeof(*self)
+                          + (self->type_count * sizeof(*self->type_inf))
+                          + (self->unitsize * new_len));
+        self->len = new_len;
+    }
+
+    hw_byte *top = self->data + (self->unitsize * self->lenUsed);
+    memcpy(top, value, self->unitsize);
+    self->lenUsed += 1;
+    
+    return top;
+}
+
+hw_ptr hw_SArr_get(hw_SArr *self, hw_uint index)
+{
+    return self->data + (self->unitsize * index);
+}
+
+void hw_SArr_delete(hw_TypeSys *ts, hw_SArr *self)
+{
+    HW_TYPESYS_FREE(ts, self);
+}
+
+DEFN(hw_SArr_fn_new);
+{
+
+}
 
 /*******************
  *    Var List
@@ -776,6 +842,13 @@ static void _default_setall_objects(hw_TypeSys *ts)
                     }));
     HW_ASSERT(T);
 
+    T = (hw_TypeSys_set(ts, &(hw_Type){
+                        .id = hw_TypeID_sarr
+                    ,   .is_obj = 1
+                    ,   .name = "sarr"
+                    ,   .name_size = 4
+                    ,   .unitsize = sizeof(hw_SArr)
+            }));
 
     T = (hw_TypeSys_set(ts, &(hw_Type){
                         .id = hw_TypeID_list

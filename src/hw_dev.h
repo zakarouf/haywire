@@ -44,6 +44,7 @@
 void hw_exit(hw_int code, const char *msg, size_t const size);
 void hw_logp(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void hw_logstr(const char *msg, size_t const);
+#define hw_loglnp(fmt, ...) hw_logp(fmt "\n", __VA_ARGS__)
 
 #define HW_LOG(fmt, ...)\
     hw_logp("[HWLOG]: " __FILE__ ":%d:" fmt "\n", __LINE__, __VA_ARGS__)
@@ -237,6 +238,7 @@ DEFN(hw_VarList, push_shallow);
 DEFN(hw_VarArr, newFrom_conf);
 DEFN(hw_VarArr, delete);
 DEFN(hw_VarArr, push);
+DEFN(hw_VarArr, get);
 
 #undef DEFN
 
