@@ -1009,3 +1009,4 @@ hw_Var hw_SymTable_get__wrap(hw_State *hw, hw_SymTable *s, hw_CStr key)
     hw_SymTable_get(hw, args, tid, 3);
     return args[2];
 }
+
