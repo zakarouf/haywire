@@ -1,5 +1,8 @@
 -std=c99
 -Wall
 -Wextra
--pedantic
+-Wpedantic
+-Winline
+-Wswitch
+-Warith-conversion
 -DHW_DEBUG_CODE_ENABLE

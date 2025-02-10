@@ -1,0 +1,23 @@
+; filetype: HayWire Assmembly (.hws)
+; progen: haywire version 0.0.1
+; author: zakarouf
+; description: testing
+; END
+
+@defn main {} 0
+@defvar i: uint
+@defvar step: uint
+@defvar limit: uint
+@defvar cmp: uint
+
+loada32 step 1
+loada32 limit 100000000
+loada32 cmp 0
+
+:lable_6
+i_add i i step
+i_lt cmp i limit
+jtk cmp &lable_6
+prnt_int i
+@endfn
+
