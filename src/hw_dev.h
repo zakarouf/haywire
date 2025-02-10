@@ -34,6 +34,11 @@
 #define HW_REALLOC(X, NEW_SZ)      realloc(X, NEW_SZ)
 
 /**
+ */
+#define HW_MIN(x, y) (x > y? y : x)
+#define HW_MAX(x, y) (x > y? x : y)
+
+/**
  * Section: Cast
  */
 #define HW_CAST(T, ...) ((T)(__VA_ARGS__))
@@ -47,7 +52,7 @@ void hw_logstr(const char *msg, size_t const);
 #define hw_loglnp(fmt, ...) hw_logp(fmt "\n", __VA_ARGS__)
 
 #define HW_LOG(fmt, ...)\
-    hw_logp("[HWLOG]: " __FILE__ ":%d:" fmt "\n", __LINE__, __VA_ARGS__)
+    hw_logp("[HWLOG]: " __FILE__ ":%d: " fmt "\n", __LINE__, __VA_ARGS__)
 
 /**
  * Assert
@@ -65,6 +70,9 @@ void hw_logstr(const char *msg, size_t const);
 #define HW_ASSERT_NOT_EQ(x, y) HW_ASSERT(x != y)
 #define HW_ASSERT_NOTNULL(exp) HW_ASSERT_NOT_EQ(exp, NULL)
 
+#define HW_ASSERT_OP(x, op, y, fmt_x, fmt_y)\
+            HW_ASSERTEX(x op y\
+                    , "%"fmt_x" "#op" %"fmt_y, x, y) ;
 /**
  * Section: Tokens
  */
@@ -88,7 +96,7 @@ enum hw_LexTokenType {
                                               
     , TOKEN(COMMA), TOKEN(DOT), TOKEN(COLON), TOKEN(SEMI_COLON), TOKEN(AT)
     , TOKEN(QUOTE), TOKEN(DOUBLE_QUOTE), TOKEN(DOLLAR), TOKEN(HASH)
-    , TOKEN(BACK_SLASH)
+    , TOKEN(PERCENT), TOKEN(AND), TOKEN(BACK_SLASH)
                                               
     /* Single or Multi Character Tokens */    
     , TOKEN(PLUS), TOKEN(MINUS), TOKEN(SLASH), TOKEN(ASTER)
@@ -127,27 +135,8 @@ enum hw_LexTokenType {
     /* Total number of defined tokens */                
     , TOKEN(TOTAL)
 };
+
 #undef TOKEN
-
-typedef struct hw_LexToken hw_LexToken;
-struct hw_LexToken {
-    hw_byte const   *start;
-    hw_uint         size;
-    hw_uint         line;
-    hw_byte         type;
-};
-
-/**
- * Section: Lexer
- */
-
-typedef struct hw_Lexer hw_Lexer;
-struct hw_Lexer {
-    hw_byte const   *at;
-    hw_byte const   *end;
-    hw_LexToken     token;
-};
-
 
 #define hw_LexToken_is(t, s) ((t).type == s)
 #define hw_LexToken_is_not(t, s) (!hw_LexToken_is(t, s))
@@ -165,47 +154,45 @@ void hw_Lexer_start(hw_Lexer *lex, hw_byte const *data, hw_uint size);
 void hw_Lexer_next(hw_Lexer *lex);
 void hw_Lexer_next_skipws(hw_Lexer *lex);
 void hw_Lexer_next_until(hw_Lexer *lex, enum hw_LexTokenType type);
-
+hw_bool hw_Lexer_next_expect(hw_Lexer *lex, enum hw_LexTokenType type);
+hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size);
 
 /**
  * Section: Type Impl
  */
 void hw_Allocator_default(hw_Allocator *self);
+void hw_Allocator_default_delete(hw_Allocator *allocator);
 
-hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator allocator);
-hw_TypeSys* hw_TypeSys_default_with_allocator(hw_Allocator allocator);
-void hw_TypeSys_delete(hw_TypeSys *t);
+hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator);
+hw_TypeSys* hw_TypeSys_new_default(hw_Allocator *allocator);
+void hw_TypeSys_delete(hw_TypeSys *t, hw_Allocator *allocator);
 hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type);
+hw_Type *hw_TypeSys_get(hw_TypeSys const *ts, char const *key, hw_uint key_size);
+hw_Type *hw_TypeSys_get_via_id(hw_TypeSys const *ts, hw_uint typeid);
+hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size);
 
-#define HW_TYPESYS_ALLOC(TS, SIZE)\
-            (TS)->allocator.alloc(&(TS)->allocator.state, SIZE)
-
-#define HW_TYPESYS_REALLOC(TS, PTR, SIZE)\
-            (TS)->allocator.realloc(&(TS)->allocator.state, PTR, SIZE)
-
-#define HW_TYPESYS_FREE(TS, PTR)\
-            (TS)->allocator.free(&(TS)->allocator.state, PTR)
-
+/**
+ * Utils
+ */
+hw_uint hw_hash_string_fnv(hw_byte const *str, hw_uint len);
+void *hw_loadfile(
+    hw_State *state, char const path[], hw_uint unitsize, hw_uint *len);
+hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size
+        , void const* rhs, hw_uint rhs_size);
 
 /**
  * Section: Var Interface Call
  */
-#define HW_VAR_CALL_CORE(tid, ts, interface, ...)               \
+#define HW_VAR_CALL(tid, thread, interface, ...)               \
         { HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)          \
-        (ts)->types[tid].interface(ts, __VA_ARGS__); }
-
-#define HW_VAR_CALL(tid, ts, interface, ...)\
-    {                                                           \
-        HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)             \
-        (ts)->types[tid].vt[interface](ts, __VA_ARGS__);        \
-    }
+        (thread)->ts->types[tid].interface(thread, __VA_ARGS__); }
 
 /**
  * Section ARR_EXPORT
  */
 #define DEFN(T, NAME)\
     hw_VarP CAT2(T, NAME) (     \
-        hw_TypeSys  *ts          \
+        hw_State   *th          \
       , hw_Var      *args     \
       , hw_byte     *tid      \
       , hw_uint const count)
@@ -224,7 +211,7 @@ DEFN(hw_VarFn, UNREACHABLE); // Raise an error;
 /* String */
 DEFN(hw_String, new);
 DEFN(hw_String, delete);
-DEFN(hw_String, newFrom_cstr);
+DEFN(hw_String, newFrom_data);
 DEFN(hw_String, newFrom_file);
 DEFN(hw_String, append_str);
 
@@ -232,6 +219,7 @@ DEFN(hw_String, append_str);
 DEFN(hw_VarList, new);
 DEFN(hw_VarList, delete);
 DEFN(hw_VarList, reserve);
+DEFN(hw_VarList, expand);
 DEFN(hw_VarList, push_shallow);
 
 /* Array */
@@ -240,7 +228,33 @@ DEFN(hw_VarArr, delete);
 DEFN(hw_VarArr, push);
 DEFN(hw_VarArr, get);
 
+/* SArr */
+DEFN(hw_SArr, newFrom_conf);
+DEFN(hw_SArr, delete);
+DEFN(hw_SArr, push);
+DEFN(hw_SArr, pop);
+DEFN(hw_SArr, get);
+
+/* Symtable */
+DEFN(hw_SymTable, new);
+DEFN(hw_SymTable, delete);
+DEFN(hw_SymTable, set);
+DEFN(hw_SymTable, get);
+DEFN(hw_SymTable, reset);
+
 #undef DEFN
+
+/**
+ * Wrappers
+ */
+void hw_SymTable_set__wrap(
+    hw_State *hw, hw_SymTable **t
+  , hw_byte const *key, hw_uint key_size
+  , hw_Var value, hw_byte value_t);
+hw_Var hw_SymTable_get__wrap(hw_State *hw, hw_SymTable *s, hw_CStr key);
+
+hw_uint hw_SymTable_index(
+    hw_SymTable *sym, hw_byte const *key, hw_uint key_size);
 
 /**
  * INSTS
@@ -252,57 +266,85 @@ enum hw_Inst {
   , INST(defn)    // Point to FuncInfo
   , INST(return)  // ret with val R(Ax)
   , INST(tailret) // ret with function call
-  , INST(reserve) // reserve variables in stack
-  , INST(release) // release variables in stack with (optional) delete
+  , INST(push)    // copy push `R(Ax)` variable to top
+                  // , B = deep_copy_flag(default = 0)
+  , INST(pushex)  // push A variables in stack, with opetional flags,
+                  // B :=  0= no_copy: nil, 1= shallow_copy, 2= deep_copy
+  , INST(pop)     // pop  `A` variables in stack with
+                  // (optional) delete_flag in 'B'
 
   /* Gets */
   , INST(get_type)     // R(Ax) = @typeof(R(Bx))
-  , INST(get_routine)  // R(Ax) = Thread(R(Bx))
+  , INST(get_routine)  // R(Ax) = Thread(R(Bx) as uint)
   , INST(get_native)   // R(Ax) = x32 -> nativefn
-  , INST(get_vt)       // R(Ax) = typeof(R(Bx))->hw_VarFn
+  , INST(get_vt)       // R(Ax) = typeof(R(Bx))->R(Cx)
 
   /* Call */
-  , INST(call)      // call function R(Ax) defined inside the module
-                    //      with R(Bx)... args, save return to R(Cx)
-  , INST(callm)     // call R(Ax) with R(Bx) args, save return val to R(Cx)
-  , INST(calln)     // Call native functions implemented for haywire
-                    // call R(Ax) with R(Bx) args, save return val to R(Cx)
+  , INST(call)      // call function `x32` defined inside the module
+  , INST(callm)     // call R(Ax)
+  , INST(calln)     // call native functions implemented for haywire
+                    // call R(Ax)
 
-  , INST(callc)     // Call any c function through ffi
+  , INST(callc)     // call any c function through ffi
 
   /* Variable Manupulation */
   , INST(dup)  // R(Ax) = R(Bx)
   , INST(dups) // [R(Ax):R(Cx)] = [R(Bx):R(Cx)]
-  , INST(type) // R(Ax).type = Bx
-  , INST(nil)  // R(Ax) = nil
+  , INST(type) // R(Ax).type ... R(Bx).type = Cx
 
-  , INST(a32_0)  // Set the first 32bits of R(Ax)
-  , INST(a32_1)  // Set the last 32bits of R(Ax)
+  , INST(reff)      // R(Ax) = index(R(Bx))
+  , INST(dreff)     // R(Ax) = stack(R(Bx))
 
-  , INST(list) // Make list R(Ax) with R(Bx)..R(Cx)
-  , INST(string) // Make string R(Ax) with data R(Bx)
+  , INST(loada32)   // R(Ax).as.u32[0] = 0;
+                    //  ...     u32[0] |= x32;
+  , INST(loadb32)   // R(Ax).as.u32[1] = 0;
+                    // R(Ax).as.u32[1] |= x32;
+
+  , INST(load)      // R(Ax) = data(x32)
+  , INST(loadobj)   // R(Ax).type = data(x32).type
+                    // R(Ax).@call load, (data(x32)+1)
+
+  , INST(list)      // Make list R(Ax) with R(Bx)..R(Cx)
+  , INST(unlist)    // Unroll list R(Ax) to R(Bx)..R(Cx)
 
   /* Jump */
   , INST(jmp) // pc += R(Ax)
-  , INST(jmps32) // pc += s32
-  , INST(jmpif) // if(R(Ax)) pc += R(Bx)
-  , INST(jmpifs32) // if(R(Ax)) pc += s32
+  , INST(jk) // pc += s48
+  , INST(jt) // if(R(Ax)) pc += R(Bx)
+  , INST(jtk) // if(R(Ax)) pc += s32
   
   /* Type Comaparism */
   , INST(typeq) // R(Ax) = (T(Bx) == T(Cx))
   , INST(tideq) // R(Ax) = (T(Bx) == Cx)
-  , INST(iseq)
 
-  /* Maths (number) */
-  , INST(addn)
-  , INST(muln)
-  , INST(ltn)
-  , INST(lten)
+  /* Maths (int) */
+  , INST(i_add)  // R(Ax) = R(Bx) + R(Cx)
+  , INST(i_sub)  // R(Ax) = R(Bx) - R(Cx)
+  , INST(i_mul)  // R(Ax) = R(Bx) * R(Cx)
+  , INST(i_div)  // R(Ax) = R(Bx) / R(Cx)
+  , INST(i_mod)  // R(Ax) = R(Bx) % R(Cx)
+  , INST(i_eq)  // R(Ax) = R(Bx) == R(Cx)
+  , INST(i_lt)  // R(Ax) = R(Bx) <  R(Cx)
+  , INST(i_le)  // R(Ax) = R(Bx) <= R(Cx)
 
+  /*
+  , INST(i_kadd)  // R(Ax) = R(Bx) + Cx
+  , INST(i_ksub)  // R(Ax) = R(Bx) - Cx
+  , INST(i_kmul)  // R(Ax) = R(Bx) * Cx
+  , INST(i_kdiv)  // R(Ax) = R(Bx) / Cx
+  , INST(i_kmod)  // R(Ax) = R(Bx) % Cx
+  , INST(i_keq)  // R(Ax) = R(Bx) == Cx
+  , INST(i_klt)  // R(Ax) = R(Bx) <  Cx
+  , INST(i_kle)  // R(Ax) = R(Bx) <= Cx
+  */
   /* Maths (floats) */
-  , INST(addf)
-  , INST(mulf)
-  , INST(ltf)
+  , INST(f_add)
+  , INST(f_mul)
+  , INST(f_lt)
+
+  , INST(prnt_int)
+  , INST(prnt_chk)
+  , INST(prnt_chv)
 
   /* For testing, ignore */
   , INST(TOTAL)
@@ -311,12 +353,202 @@ enum hw_Inst {
 #undef INST
 
 /**
- * Threads;
+ *  Section: Bit Field
+ *  Taken form https://github.com/zakarouf/z_
  */
-hw_VarP hw_Thread_init(
-    hw_Thread *t, hw_State const *global, hw_uint id, const char *name
-  , hw_byte name_size);
-hw_VarP hw_Thread_deinit(hw_Thread *t);
+
+/**
+ * Set the corresponding bit as 1 or True.
+ * If the bit was already set as 1 or True, nothing happens.
+ */
+#define HW_BIT_SET(b, offset)       b |= 1 << (offset)
+
+/**
+ * Set the corresponding bit as 0 or False.
+ * If the bit was already set as 0 or False, nothing happens.
+ */
+#define HW_BIT_CLEAR(b, offset)     b &= ~(1 << (offset))
+
+/**
+ * Toggle the corresponding bit value;
+ * If the value is True, set it to False and vice versa.
+ */
+#define HW_BIT_TOGGLE(b, offset)    b ^= 1 << (offset)
+
+/**
+ * Get the value of the number as a whole with only the offset bit set to 1,
+ * if the corresponding bit is set to True.
+ */
+#define HW_BIT_IS(b, offset)        b & (1 << (offset))
+
+/**
+ * Check if the corresponding bit is set to True.
+ */
+#define HW_BIT_HAS(b, offset)       (((b) >> (offset)) & 1)
+
+/**
+ * Check if value of bit in a given offset is that of the offset itself.
+ */
+#define HW_BIT_ISEQ(b, offset)      ((b)&(offset) == offset)
+
+
+/** Bitf Interface **/
+
+
+/**
+ * Set the corresponding bit as 1 or True.
+ * If the bit was already set as 1 or True, nothing happens.
+ */
+#define HW_BITF_SET(x, bit_num)\
+    HW_BIT_SET(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+
+/**
+ * Toggle the corresponding bit value;
+ * If the value is True, set it to False and vice versa.
+ */
+#define HW_BITF_TOGGLE(x, bit_num)\
+    HW_BIT_TOGGLE(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+/**
+ * Set the corresponding bit as 0 or False.
+ * If the bit was already set as 0 or False, nothing happens.
+ */
+#define HW_BITF_CLEAR(x, bit_num)\
+    HW_BIT_clear(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+#define HW_BITF_UNSET(x, bit_num) HW_BITF_CLEAR(x, bit_num)
+
+/**
+ * Check if the corresponding bit is set to True.
+ */
+#define HW_BITF_HAS(x, bit_num)\
+    HW_BIT_HAS(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+
+#define hw_PRIV__BITMAKE_U8IDX(x, bit_num)\
+    *(HW_CAST(hw_byte *, x) + (bit_num >> 3))
+
+
+//
+void hw_Module_get_FnInfo(hw_Module const *mod
+        , hw_uint fn_id, hw_FnInfo *info);
+hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id);
+
+/**
+ * VM;
+ */
+hw_Global *hw_Global_new(hw_State *parent);
+void hw_Global_delete(hw_Global *g, hw_State *parent);
+
+hw_uint hw_Global_add_module(hw_Global *g, hw_Module *mod);
+hw_Module* hw_Global_get_module_from_name(
+    hw_Global const *g, hw_byte const *name, hw_uint const name_size);
+hw_Module* hw_Global_get_module(hw_Global const *g, hw_uint mod_id);
+
+hw_State *hw_State_new_default(hw_State *parent);
+void hw_State_delete(hw_State *s);
+
+void hw_State_fstack_push(
+    hw_State *s, hw_uint const mod_id, hw_uint const fn_id);
+void hw_State_fstack_pop(hw_State *hw);
+hw_FnState* hw_State_fstack_top(hw_State *hw);
+void hw_State_fstack_save(hw_State *hw, hw_code const *pc, hw_Var *var);
+
+void hw_State_vstack_reserve(hw_State *hw, hw_uint const by);
+void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by);
+hw_uint hw_State_vstack_push_mult(hw_State *hw, const hw_uint by);
+hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
+
+
+#define HW_THREAD_ALLOC(TH, SIZE)\
+            (TH)->allocator.alloc(&(TH)->allocator, SIZE)
+
+#define HW_THREAD_REALLOC(TH, PTR, SIZE)\
+            (TH)->allocator.realloc(&(TH)->allocator, PTR, SIZE)
+
+#define HW_THREAD_FREE(TH, PTR)\
+            (TH)->allocator.free(&(TH)->allocator, PTR)
+
+
+
+/**
+ * Generic Array
+ */
+#define HW_ARR(T) struct { T *data; hw_u32 lenUsed; hw_u32 len; }
+#define HW_ARR_NEW(s, a, _len)\
+    {                                                       \
+        (a) = HW_THREAD_ALLOC(s,                            \
+                sizeof(*a) + (sizeof(*(a)->data) * _len));  \
+        (a)->data = HW_CAST(void*, a + 1);                  \
+        (a)->len = _len;                                    \
+        (a)->lenUsed = 0;                                   \
+    }
+
+#define HW_ARR_DELETE(s, a)\
+    {\
+        HW_THREAD_FREE(s, a);\
+    }
+
+#define HW_ARR_PUSH(s, a, dat)\
+    {\
+        if((a)->lenUsed >= (a)->len ) {                         \
+            (a)->len *= 2;                                      \
+            a = HW_THREAD_REALLOC(s, a                          \
+                , sizeof(*a) + (sizeof(*(a)->data) * (a)->len));\
+            (a)->data = HW_CAST(void*, a + 1);                  \
+        }                                                       \
+        (a)->data[(a)->lenUsed] = dat;                          \
+        (a)->lenUsed += 1;                                      \
+    }                                                           \
+
+#define HW_ARR_PUSHSTREAM(s, a, dats, dats_len)\
+    {                                                           \
+        if(((a)->lenUsed+dats_len) >= (a)->len ) {              \
+            (a)->len += dats_len +1;                            \
+            a = HW_THREAD_REALLOC(s, a                          \
+                , sizeof(*a) + (sizeof(*(a)->data) * (a)->len));\
+        }                                                       \
+        memcpy((a)->data + (a)->lenUsed, dats                   \
+                , dats_len * sizeof(*(a)->data));               \
+        (a)->lenUsed += dats_len;                               \
+    }                                                           \
+
+
+/**
+ */
+void hw_vm(hw_State *hw);
+void hw_vm_prepare_ret(hw_State *hw);
+void hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
+
+/***
+ * Byte Code Compiler
+ **/
+hw_CompilerBC *hw_compbc_new(hw_State *parent
+        , char const *source_name, hw_uint source_name_size
+        , char const *source, hw_uint source_size);
+
+void hw_compbc_delete(hw_CompilerBC *comp);
+hw_uint hw_compbc_inst(hw_CompilerBC *comp, hw_code inst);
+hw_uint hw_compbc_knst(hw_CompilerBC *comp
+        , hw_Var const value, hw_byte const tid);
+hw_Module* hw_compbc_convert(hw_CompilerBC *comp);
+
+
+hw_uint hw_compbc_w_defn(hw_CompilerBC *comp
+        , hw_byte const *name,      hw_uint const name_size
+        , hw_uint const total_arg,  hw_uint const mut_count
+        , hw_byte const *tids,      hw_CStr const *arg_names);
+void hw_compbc_w_endfn(hw_CompilerBC *comp);
+
+void hw_compbc_compile_from_source(hw_CompilerBC *comp);
+
+/**
+ * Debug
+ */
+void hw_debug_Module_disasm(hw_State *hw, hw_Module const *m);
+void hw_debug_code_disasm(hw_State const *hw, hw_code code);
+void hw_debug_State_trace(hw_State *hw);
+
+void hw_debug_vm_step(
+    hw_State *hw, hw_Module const *m, hw_code const *pc, hw_Var const *v);
+
 
 /**
  * Section: Undef

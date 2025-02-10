@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <float.h>
-
+#include <pthread.h>
 
 typedef void*               hw_ptr;
 typedef uint8_t             hw_byte;
@@ -18,11 +18,12 @@ typedef uint32_t            hw_u32;
 typedef int16_t             hw_i16;
 typedef uint16_t            hw_u16;
 
-#define HW_WORD_SIZE        (sizeof(hw_uint))
+typedef _Bool               hw_bool;
 
 #define HW_UINT_MAX         UINT64_MAX
 #define HW_INT_MAX          INT64_MAX
 #define HW_TYPEID_MAX       UINT8_MAX
+#define HW_WORD_SIZE        (sizeof(hw_uint))
 
 typedef union   hw_Var      hw_Var;
 typedef struct  hw_VarP     hw_VarP;
@@ -30,7 +31,11 @@ typedef struct  hw_VarP     hw_VarP;
 typedef struct  hw_VarArr   hw_VarArr;
 typedef struct  hw_SArr     hw_SArr;
 typedef struct  hw_VarList  hw_VarList;
-typedef struct  hw_VarTable hw_VarTable;
+
+typedef struct  hw_VarTable hw_VarTable; // (ANY:ANY)
+typedef struct  hw_SymTable hw_SymTable; // (STRING:ANY)
+typedef struct  hw_KaTable  hw_KaTable;  // (K:ANY)
+typedef struct  hw_KvTable  hw_KvTable;  // (K:V)
 
 typedef struct  hw_String   hw_String;
 typedef struct  hw_CStr     hw_CStr;
@@ -46,21 +51,21 @@ typedef struct  hw_Allocator    hw_Allocator;
 typedef struct  hw_Type         hw_Type;
 typedef struct  hw_TypeSys      hw_TypeSys;
 typedef struct  hw_FnInfo       hw_FnInfo;
+typedef struct  hw_FnInfoArr    hw_FnInfoArr;
 typedef struct  hw_VarFnArr     hw_VarFnArr;
 
 /************************************************************/
 
-typedef union   hw_code     hw_code;
-typedef struct  hw_codeArr  hw_codeArr;
+typedef union   hw_code         hw_code;
+typedef struct  hw_codeArr      hw_codeArr;
 
 typedef struct  hw_FnState      hw_FnState;
-typedef struct  hw_FnStateArr    hw_FnStateArr;
+typedef struct  hw_FnStateArr   hw_FnStateArr;
 
 typedef struct  hw_Module       hw_Module;
 typedef struct  hw_ModuleArr    hw_ModuleArr;
-typedef struct  hw_Thread       hw_Thread;
-typedef struct  hw_ThreadArr    hw_ThreadArr;
 typedef struct  hw_State        hw_State;
+typedef struct  hw_Global       hw_Global;
 
 /************************************************************/
 /*
@@ -76,7 +81,7 @@ typedef struct  hw_State        hw_State;
  *      assigning ptr to var; results in memory leak
  */
 typedef hw_VarP (*hw_VarFn)
-        (hw_TypeSys *T_sys, hw_Var *args, hw_byte *tid, hw_uint const count);
+        (hw_State *state, hw_Var *args, hw_byte *tid, hw_uint const count);
 
 /************************************************************/
 
@@ -116,6 +121,7 @@ union hw_Var {
     hw_SArr         *as_sarr,   **as_sarr_p;
     hw_VarList      *as_list,   **as_list_p;
     hw_VarTable     *as_table,  **as_table_p;
+    hw_SymTable     *as_symtable,  **as_symtable_p;
 
     /* Type System */
     hw_Type    const    *as_type,     **as_type_p;
@@ -125,8 +131,8 @@ union hw_Var {
 
     /* VM */
     hw_Module       *as_module, **as_module_p;
-    hw_Thread       *as_thread, **as_thread_p;
-    hw_State        *as_vm,  **as_vm_p;
+    hw_State        *as_state,  **as_state_p;
+    hw_Global       *as_global, **as_global_p;
 };
 
 struct hw_VarP {
@@ -153,6 +159,9 @@ enum hw_TypeID {
     , hw_TypeID_sarr
     , hw_TypeID_list
     , hw_TypeID_table
+    , hw_TypeID_symtable
+    , hw_TypeID_katable
+    , hw_TypeID_kvtable
 
     , hw_TypeID_barr
     , hw_TypeID_string
@@ -176,9 +185,9 @@ struct hw_Error {
 
 struct hw_Allocator {
     hw_ptr  state;
-    hw_ptr  (*alloc)    (hw_ptr *state, size_t size);
-    void    (*free)     (hw_ptr *state, hw_ptr pointer);
-    hw_ptr  (*realloc)   (hw_ptr *state, hw_ptr, size_t size);
+    hw_ptr  (*alloc)    (hw_Allocator *self, size_t size);
+    void    (*free)     (hw_Allocator *self, hw_ptr pointer);
+    hw_ptr  (*realloc)  (hw_Allocator *self, hw_ptr, size_t size);
 };
 
 /*************************************************************/
@@ -203,7 +212,7 @@ struct hw_String {
 };
 
 struct hw_CStr {
-    hw_byte const   *data;
+    hw_byte         *data;
     hw_uint         len;
 };
 
@@ -224,14 +233,32 @@ struct hw_VarArr {
 
 struct hw_SArr {
     hw_byte         *data;
-    hw_uint         unitsize;
     hw_uint         len;
     hw_uint         lenUsed;
-    hw_byte         *type_inf;
-    hw_uint         type_count;
+    hw_uint         unitsize;
 };
 
 struct hw_VarTable {
+    hw_Var *key;
+    hw_Var *val;
+
+    hw_byte *valTs;
+    hw_byte *keyTs;
+
+    hw_uint len;
+    hw_uint lenUsed;
+};
+
+struct hw_SymTable {
+    hw_CStr     **key;
+    hw_Var      *val;
+    hw_byte     *valTs;
+
+    hw_uint     len;
+    hw_uint     lenUsed;
+};
+
+struct hw_KaTable {
     hw_Var      *key;
     hw_Var      *val;
     hw_byte     *valTs;
@@ -244,14 +271,20 @@ struct hw_VarTable {
     hw_byte     keyT;
 };
 
-struct hw_SVTable {
-    hw_String   **key;
+struct hw_KvTable {
+    hw_Var      *key;
     hw_Var      *val;
-    hw_byte     *valTs;
 
     hw_uint     len;
     hw_uint     lenUsed;
+
+    hw_VarFn    hashfn;
+    hw_VarFn    eqfn;
+
+    hw_byte     keyT;
+    hw_byte     valT;
 };
+
 
 /****************************************************/
 /****************************************************/
@@ -260,16 +293,24 @@ struct hw_SVTable {
 /**
  * Function Signature;
  * fn name(a, b, c, d, e)
- *    ~~~~ ~~~~~~~~|~~~~ < mut_count
- *  *name^ ^arg_count^
- *  const_count = arg_count - mut_count
+ *    ~~~~ |~~~~|~~~~~~~~ <args
+ *  *name^   ^mut_arg
+ *  passed_count = arg_count - mut_count
+ *  mut args are values passed to and then return from a function;
  */
 struct hw_FnInfo {
     hw_byte const *name;
-    hw_byte const *argT;
+    hw_byte const *types;
     hw_uint name_size;
     hw_uint arg_count;
     hw_uint mut_count;
+    hw_uint stack_sz;
+};
+
+struct hw_FnInfoArr {
+    hw_FnInfo   *data;
+    hw_u32      len;
+    hw_u32      lenUsed;
 };
 
 struct hw_VarFnArr {
@@ -295,9 +336,6 @@ struct hw_TypeSys {
     hw_Type     *types;
     hw_uint     types_used;
     hw_uint     types_total;
-
-    hw_State    **state;
-    hw_Allocator allocator;
 };
 
 /****************************************************/
@@ -313,7 +351,7 @@ struct hw_CodeStructS {
     uint8_t opcode;
     uint8_t attr;
     uint16_t A;
-     int32_t s32;
+    int32_t s32;
 };
 
 struct hw_CodeStruct {
@@ -324,7 +362,7 @@ struct hw_CodeStruct {
 
 union hw_code {
     uint64_t                raw;
-    struct hw_CodeStruct    get;
+struct hw_CodeStruct    get;
     struct hw_CodeStructX   getx;
     struct hw_CodeStructS   gets;
 };
@@ -345,7 +383,8 @@ struct hw_InstData {
     char const       name[16];
     hw_byte          name_size;
     enum hw_InstType inst_type;
-    hw_byte          does_return;
+    hw_byte          inst_code;    
+    hw_byte          no_direct;
 };
 
 struct hw_codeArr {
@@ -355,10 +394,10 @@ struct hw_codeArr {
 };
 
 struct hw_FnState {
-    hw_uint     v_start;
-    hw_uint     id;
+    hw_uint     fn;
     hw_uint     mod;
     hw_uint     pc;
+    hw_uint     var;
 };
 
 struct hw_FnStateArr {
@@ -391,9 +430,8 @@ struct hw_FnStateArr {
  *      .data := 
  *          module_name:    [ sizeof(byte) * module_namesize ]
  *          fn_points:      [ sizeof(u64) * func_count ]
- *          const_points:   [ sizeof(u64) * cnst_count ]
+ *          knst:           [ hw_Var * k_count]
  *          pub_fnInfo:     [ hw_FuncInfo * pub_fn_count ]
- *          pub_const:      [ hw_Var * pub_const_count ]
  *
  *      .code := [sizeof(code) * code_len]
  *-------------------------------------------------------------------
@@ -405,14 +443,16 @@ struct hw_Module {
     hw_uint name_hash;
 
     hw_uint fn_count;
-    hw_uint k_count;
-    
     hw_uint pubfn_count;
     hw_uint pubk_count;
 
     hw_uint data_size;
     hw_uint code_len;
+    hw_uint k_count;
 
+    hw_uint *fnpt;
+    hw_Var  *knst;
+    hw_byte *knst_t;
     hw_byte *data;
     hw_code *code;
 };
@@ -433,24 +473,24 @@ enum hw_ThreadStatus {
   , hw_ThreadStatus_TOTAL
 };
 
-struct hw_Thread {
+struct hw_State {
     hw_uint                 id;
     hw_byte                 name[128];
 
     hw_VarList              *vstack;
-    hw_FnStateArr            fstack;
+    hw_FnStateArr           *fstack;
 
-    hw_State const          *global;
+    hw_TypeSys const        *ts;
+    hw_Global const         *global;
+    hw_Allocator            allocator;
+
+    void                    *stdout;
+    void                    *stdin;
 
     hw_byte                 name_size;
     enum hw_ThreadStatus    status;
 };
 
-struct hw_ThreadArr {
-    hw_Thread       *data;
-    hw_uint         len;
-    hw_uint         lenUsed;
-};
 
 typedef struct hw_ModulePack hw_ModulePack;
 struct hw_ModulePack {
@@ -458,13 +498,15 @@ struct hw_ModulePack {
     hw_VarTable     *table;
 };
 
-struct hw_State {
+struct hw_Global {
     hw_CStr         name;
-
     hw_uint         pid;
-    hw_Thread       main_thread;
-    hw_ThreadArr    *threads;
+
+    pthread_mutex_t mutex;
+
     hw_ModulePack   modules;
+    hw_State        *parent;
+    hw_VarList      *constants;
 
     hw_TypeSys      *tsys;
     hw_InstData     const *insts;
@@ -490,26 +532,96 @@ struct hw_State {
  *  to_c: Convert .hwasm -> .c
  */
 
+typedef struct hw_VarInfo hw_VarInfo;
+typedef struct hw_FnObj hw_FnObj;
+
 struct hw_ModuleObj {
-    hw_codeArr *code;
-    hw_byteArr *data;
-    hw_VarList *constants;
+    hw_byte *name;
+    hw_uint name_size;
+    hw_uint name_hash;
+
+    hw_uintArr      *fnpt;
+    hw_FnInfoArr    *fn_sigs;
+    hw_uintArr      *pubfn_pt;
+    hw_SymTable     *fntable;
+    
+    hw_codeArr      *code;
+    hw_byteArr      *data;
+    hw_VarArr       *knst;
+    hw_byteArr      *knst_t;
+};
+
+struct hw_VarInfo {
+    hw_byte type;
+    hw_Var  value;
+    hw_byte is_mut:1
+          , is_unique:1
+          , is_val_tracked:1;
+    hw_uint unique_reff;
+};
+
+struct hw_VarInfoArr {
+    struct hw_VarInfo *data;
+    hw_u32 len;
+    hw_u32 lenUsed;
+};
+
+struct hw_FnObj {
+    hw_uint name_size;
+    hw_uint name_sizeUsed;
+    hw_uint name_hash;
+    hw_uint current_fn;
+    hw_uint args_passed;
+    hw_uint mut_count;
+    hw_uint defn_pc;
+
+    hw_byte *name;
+    hw_SymTable *lables;
+    hw_SymTable *vartable;
+    struct hw_VarInfoArr *var_infos;
+
+    hw_byte lock;
+};
+
+
+
+/**
+ * Section: Lexer
+ */
+
+typedef struct hw_LexToken hw_LexToken;
+struct hw_LexToken {
+    hw_byte const   *start;
+    hw_byte const   *line_start;
+    hw_uint         size;
+    hw_uint         line;
+    hw_uint         column;
+    hw_byte         type;
+};
+
+typedef struct hw_Lexer hw_Lexer;
+struct hw_Lexer {
+    hw_byte const   *at;
+    hw_byte const   *end;
+    hw_LexToken     token;
 };
 
 struct hw_CompilerBC {
-    hw_State *const vm_parent;
-    hw_State vm_child;
+    hw_State        *vm_parent;
+    hw_State        *vm_child;
+
+    hw_FnObj        *fnobj;
+    hw_ModuleObj    *obj;
     
-    hw_ModuleObj *obj;
-    
-    hw_String *in;
-    hw_Module *out;
+    hw_Lexer        lexer;   
+    hw_CStr         source_file;
+    hw_CStr         source;
 };
 
 #define HW_STATIC_ASSERT(exp)\
     ((void)(char[(exp)? 1:-1]){0})
 
-#define hw_CStr_makelit(s)     ((hw_CStr){.data = #s, .len = sizeof(#s) - 1})
+#define hw_CStr_LIT(s)     ((hw_CStr){.data = (void*) #s, .len = sizeof(#s) - 1})
 
 #define HW_VAR(_value, _as_)\
     ((hw_Var){._as_ = _value})
@@ -517,8 +629,15 @@ struct hw_CompilerBC {
 #define HW_VARP(_value, _as_)\
     ((hw_VarP){.value.as_##_as_ = _value, .type = hw_TypeID_##_as_})
 
-#define hw_code_x32(code, ins, a, _32)\
-    ((hw_code){.opcode = ins, .getx.A = a, .getx.x32 = _32})
+#define hw_code_abc(ins, a, b, c)\
+    ((hw_code){ .get.opcode = ins, .get.A = a, .get.B = b, .get.C = c})
+
+#define hw_code_as32(ins, a, _32)\
+    ((hw_code){ .gets.opcode = ins, .gets.A = a, .gets.s32 = _32})
+
+#define hw_code_ax32(ins, a, _32)\
+    ((hw_code){ .getx.opcode = ins, .getx.A = a, .getx.x32 = _32})
+
 
 #define HW_FALSE 0
 #define HW_TRUE (!HW_FALSE)
