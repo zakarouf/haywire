@@ -1,6 +1,7 @@
 #include "hw.h"
 #include "hw_dev.h"
 
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,9 +30,10 @@ struct hw_InstData const HW_INST_DATA[] = {
   , ID(defn,    HW_TRUE, ax32) // a = mut, [x32] = data(finfo)
   , ID(return,  HW_FALSE, a)
   , ID(tailret, HW_FALSE, abc) // ret with function call
-  , ID(push, HW_FALSE, ab)
+  , ID(push, HW_FALSE, a)
   , ID(pushex, HW_FALSE, abc)
-  , ID(pop, HW_FALSE, a) // release variables in stack with (optional) delete
+  , ID(pop, HW_FALSE, ab) // release top variables in stack, copy to stack variable a, if b is true
+  , ID(popex, HW_FALSE, abc)
 
   /* Gets */
   , ID(get_type, HW_FALSE, ab)     // R(Ax) = @typeof(R(Bx))
@@ -40,12 +42,13 @@ struct hw_InstData const HW_INST_DATA[] = {
   , ID(get_vt, HW_FALSE, ab)
 
   /* Call */
-  , ID(call,       HW_TRUE, abc)
+  , ID(call,       HW_FALSE, x32)
   , ID(callm,      HW_TRUE, abc)
   , ID(calln,      HW_TRUE, abc)
   , ID(callc,      HW_TRUE, abc)
 
   // ------
+  , ID(top,     HW_FALSE, ax32)
   , ID(dup,     HW_FALSE, ab)
   , ID(dups,     HW_FALSE, abc)
   , ID(type,    HW_FALSE, ab)
@@ -253,6 +256,8 @@ void hw_Module_delete(hw_State *hw, hw_Module *m)
 
 hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id)
 {
+    HW_DEBUG(HW_ASSERT_OP(fn_id, <, m->fn_count, PRIu64, PRIu64));
+    HW_DEBUG(HW_ASSERT_OP(m->fnpt[fn_id], <, m->code_len, PRIu64, PRIu64));
     return (m->code + m->fnpt[fn_id]);
 }
 
@@ -261,19 +266,48 @@ void hw_Module_get_FnInfo(hw_Module const *mod, hw_uint fn_id, hw_FnInfo *info)
     hw_code pc = *hw_Module_get_fnpc(mod, fn_id);
     hw_byte *data = mod->data + pc.getx.x32;
 
+    HW_DEBUG(
+        hw_byte *data_end = mod->data + mod->data_size;
+    );
+
+    #define check() HW_DEBUG(HW_ASSERT_OP(data, <, data_end, "p", "p"));
+
     info->name_size = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
                       data += sizeof(hw_uint);
+                      check()
+
     info->mut_count = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data)); 
                       data += sizeof(hw_uint);
+                      check()
+
     info->arg_count = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
                       data += sizeof(hw_uint);
+                      check()
+
     info->stack_sz  = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
                       data += sizeof(hw_uint);
+                      check()
+
 
     info->name = data; 
                       data += info->name_size;
 
     info->types = data;
+}
+
+hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, hw_uint *fn_id)
+{
+    for (size_t i = 0; i < m->fn_count; i++) {
+        hw_FnInfo info;
+        hw_Module_get_FnInfo(m, i, &info);
+        if(name_size == info.name_size) {
+            if(!memcmp(name, info.name, name_size)) {
+                *fn_id = i;
+                return 1;
+            }
+        }
+    }
+    return 0;
 }
 
 hw_Global *hw_Global_new(hw_State *parent)
@@ -409,17 +443,25 @@ hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid)
 
 void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by)
 {
-    hw_Var *var = hw->vstack->data + hw->vstack->lenUsed - 1 - by;
-    hw_byte *tid = hw->vstack->tid + hw->vstack->lenUsed - 1 - by;
+    HW_DEBUG(HW_ASSERT_OP(by, <=, hw->vstack->lenUsed, PRIu64, PRIu32));
+    hw->vstack->lenUsed -= by;
+
+    hw_Var *vars = hw->vstack->data + hw->vstack->lenUsed;
+    hw_byte *tid = hw->vstack->tid  + hw->vstack->lenUsed;
     for (size_t i = 0; i < by; i++) {
         hw_Type *T = hw->ts->types + tid[i];
+        HW_DEBUG(HW_ASSERTEX(tid[i] < hw_TypeID_TOTAL
+              , "var %"PRIu64 "\n"
+                "iteration %"PRIu64 "\n"
+                "by %"PRIu64 "\n"
+                "tid %"PRIu8
+              , hw->vstack->lenUsed - by + i
+              , i, by, tid[i]));
         if(T->is_obj) {
             hw_VarFn f = hw_Type_getvt(T, "delete", 6);
-            f(hw, var + i, tid + i, 1);
+            f(hw, vars + i, tid + i, 1);
         }
     }
-    
-    hw->vstack->lenUsed -= by;
 }
 
 void hw_State_fstack_push(
@@ -444,11 +486,11 @@ hw_FnState* hw_State_fstack_top(hw_State *hw)
     return hw->fstack->data +(hw->fstack->lenUsed-1);
 }
 
-void hw_State_fstack_save(hw_State *hw, hw_code const *pc, hw_Var *var)
+void hw_State_fstack_top_save(hw_State *hw, hw_code const *pc, hw_Var const *var)
 {
     hw_FnState *f = hw_State_fstack_top(hw);
     hw_Module const *m = hw_Global_get_module(hw->global, f->mod);
-    f->pc = pc - hw_Module_get_fnpc(m, f->fn);
+    f->pc = pc - m->code;
     f->var = var - hw->vstack->data;
 }
 

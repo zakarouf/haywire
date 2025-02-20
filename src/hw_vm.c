@@ -8,6 +8,21 @@
  *                            Public
  **********************************************************************/
 
+void static _fnState_print(hw_FnState *f)
+{
+    hw_loglnp(
+        "FnState: "
+        "\n     fn  -> %"PRIu64
+        "\n     mod -> %"PRIu64
+        "\n     pc  -> %"PRIu64
+        "\n     var ->%"PRIu64
+      , f->fn
+      , f->mod
+      , f->pc
+      , f->var
+    );
+}
+
 void hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id)
 {
     hw_State_fstack_push(hw, mod_id, fn_id);
@@ -15,9 +30,16 @@ void hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id)
     hw_FnInfo info;
     hw_Module const *mod = hw_Global_get_module(hw->global, f->mod);
     hw_Module_get_FnInfo(mod, f->fn, &info);
+    f->pc = mod->fnpt[f->fn];
 
     HW_DEBUG(HW_ASSERTEX((hw_int)(f->var - info.arg_count) >= 0
         , "Stack Underflow: %"PRIi64, (f->var - info.arg_count)));
+    
+    hw_State_vstack_push_mult(hw, info.stack_sz - info.arg_count);
+    memcpy(hw->vstack->tid + f->var
+            , info.types + info.arg_count
+            , info.stack_sz - info.arg_count);
+
     f->var -= info.arg_count;
 }
 
@@ -28,21 +50,10 @@ void hw_vm_prepare_ret(hw_State *hw)
     hw_Module const *mod = hw_Global_get_module(hw->global, f->mod);
     hw_Module_get_FnInfo(mod, f->fn, &info);
     f->var += info.mut_count;
-    hw_Var *var = hw->vstack->data + f->var;
-    hw_byte *tid = hw->vstack->tid + f->var;
-
     hw_uint const count = hw->vstack->lenUsed - f->var;
-    for (size_t i = 0; i < count; i++) {
-        HW_DEBUG(HW_ASSERT_OP(tid[i] ,< , hw_TypeID_TOTAL, PRIu8, PRIu8));
-        hw_Type const *T = hw->ts->types + tid[i];
-        if(T->is_obj) {
-            hw_VarFn deletefn = hw_Type_getvt(T, "delete", 6);
-            deletefn(hw, var + i, tid + i, 1);
-        }
-    }
-    
+
+    hw_State_vstack_pop_mult_dtor(hw, count);
     hw_State_fstack_pop(hw);
-    hw->vstack->lenUsed -= count;
 }
 
 static void _illegal_inst(hw_State *hw, hw_code const *pc)
@@ -56,6 +67,7 @@ static void _illegal_inst(hw_State *hw, hw_code const *pc)
     } 
     hw_loglnp("error: illegal instruction %"PRIu8, inst);
 }
+
 
 void hw_vm(hw_State *hw)
 {
@@ -80,7 +92,7 @@ void hw_vm(hw_State *hw)
     #define HOOK_r(_r) (r##_r##x = r(_r))
     #define HOOK_x32() (x32 = vars[pc->get.r])
 
-    #define HW_DEBUG_VM_STEP 0
+    //#define HW_DEBUG_VM_STEP 1
     #if defined (HW_DEBUG_VM_STEP) && HW_DEBUG_VM_STEP == 1
         #define vm_debug(hw, m, pc, v)\
                     hw_debug_code_disasm(hw, *pc); \
@@ -100,35 +112,51 @@ void hw_vm(hw_State *hw)
                       vm_debug(hw, mod, pc, vars);    \
                       switch (pc->get.opcode) {
 
+    #define top(x) hw->vstack->data[hw->vstack->lenUsed-(x)-1]
+    #define topt(x) hw->vstack->tid[hw->vstack->lenUsed-(x)-1]
+
     #define END() break; default: _illegal_inst(hw, pc); } pc++; }
   
+    pc++;
     START()
-       ON_INST(nop);
-       ON_INST(defn);
-       ON_INST(return) { hw_vm_prepare_ret(hw); goto _L_again; };
-      NON_INST(tailret);
-      NON_INST(push) { hw_State_vstack_push_mult(hw, a(A)); 
-                        goto _L_reset_var; }
-      NON_INST(pop)  { hw_State_vstack_pop_mult_dtor(hw, a(A));
-                        goto _L_reset_var; }
-      
-       ON_INST(get_type)       r(A).as_uint = t(B);
-      NON_INST(get_routine);
+        ON_INST(nop);
+        ON_INST(defn);
+        ON_INST(return) { hw_vm_prepare_ret(hw); goto _L_again; };
+        
+        // 
+        ON_INST(push) { 
+            hw_State_vstack_push(hw, r(A), t(A));
+            goto _L_reset_var; 
+        }
+        ON_INST(pop); {
+                r(A); // dup
+                r(B); // count
+                hw_State_vstack_pop_mult_dtor(hw, 1);
+        }
 
-      NON_INST(call) { hw_vm_prepare_call(hw, f->mod, a(A)); goto _L_again; }
-      NON_INST(calln);
-      NON_INST(callc);
-          
-       ON_INST(dup)     { r(A) = r(B); t(A) = t(B); }
-       ON_INST(dups)    { memmove(&r(A), &r(B), a(C) * sizeof(r(A)));
+        //
+        ON_INST(get_type)       r(A).as_uint = t(B);
+
+        //
+        ON_INST(call) { 
+            hw_State_fstack_top_save(hw, pc, vars);
+            hw_vm_prepare_call(hw, f->mod, a(A)); 
+            goto _L_again; 
+        }
+       
+        //
+        ON_INST(top)     { 
+            r(A) = top(x(x32));
+            t(A) = topt(x(x32));
+        };
+        ON_INST(dup)     { r(A) = r(B); t(A) = t(B); }
+        ON_INST(dups)    { memmove(&r(A), &r(B), a(C) * sizeof(r(A)));
                           memmove(&t(A), &t(B), a(C) * sizeof(t(A))); }
-      NON_INST(type)      memset(&t(A), a(C), a(B));
+
+        ON_INST(type)      memset(&t(A), a(C), a(B));
 
 
        ON_INST(loada32)     r(A).as_uint = x(x32);
-      NON_INST(loadb32)     ;
-      NON_INST(list)        ;
-      NON_INST(unlist)      ;
 
        ON_INST(jmp)       pc += r(A).as_int;
        ON_INST(jk)        pc += s(s32);

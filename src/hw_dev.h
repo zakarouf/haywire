@@ -268,10 +268,12 @@ enum hw_Inst {
   , INST(tailret) // ret with function call
   , INST(push)    // copy push `R(Ax)` variable to top
                   // , B = deep_copy_flag(default = 0)
-  , INST(pushex)  // push A variables in stack, with opetional flags,
+  , INST(pushex)  // push A variables in stack, with optional flags,
                   // B :=  0= no_copy: nil, 1= shallow_copy, 2= deep_copy
-  , INST(pop)     // pop  `A` variables in stack with
-                  // (optional) delete_flag in 'B'
+  , INST(pop)     // pop top in stack
+                  // (optional) dup it to A, if flag 'B' is set
+  , INST(popex)   // pop top `B` variables
+                  // , (optional) dup it to `A` list if C is set
 
   /* Gets */
   , INST(get_type)     // R(Ax) = @typeof(R(Bx))
@@ -288,6 +290,7 @@ enum hw_Inst {
   , INST(callc)     // call any c function through ffi
 
   /* Variable Manupulation */
+  , INST(top)  // R(x32 + A) = stack.get_top()
   , INST(dup)  // R(Ax) = R(Bx)
   , INST(dups) // [R(Ax):R(Cx)] = [R(Bx):R(Cx)]
   , INST(type) // R(Ax).type ... R(Bx).type = Cx
@@ -430,6 +433,7 @@ enum hw_Inst {
 void hw_Module_get_FnInfo(hw_Module const *mod
         , hw_uint fn_id, hw_FnInfo *info);
 hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id);
+hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, hw_uint *fn_id);
 
 /**
  * VM;
@@ -449,7 +453,7 @@ void hw_State_fstack_push(
     hw_State *s, hw_uint const mod_id, hw_uint const fn_id);
 void hw_State_fstack_pop(hw_State *hw);
 hw_FnState* hw_State_fstack_top(hw_State *hw);
-void hw_State_fstack_save(hw_State *hw, hw_code const *pc, hw_Var *var);
+void hw_State_fstack_top_save(hw_State *hw, hw_code const *pc, hw_Var const *var);
 
 void hw_State_vstack_reserve(hw_State *hw, hw_uint const by);
 void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by);
@@ -520,9 +524,11 @@ void hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
 /***
  * Byte Code Compiler
  **/
-hw_CompilerBC *hw_compbc_new(hw_State *parent
-        , char const *source_name, hw_uint source_name_size
-        , char const *source, hw_uint source_size);
+hw_CompilerBC *hw_compbc_new(hw_State *parent);
+void hw_compbc_load_source_fromData(
+        hw_CompilerBC *comp, void const *source, hw_uint size);
+hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp 
+        , char const *source_name, hw_uint source_name_size);
 
 void hw_compbc_delete(hw_CompilerBC *comp);
 hw_uint hw_compbc_inst(hw_CompilerBC *comp, hw_code inst);
@@ -531,6 +537,8 @@ hw_uint hw_compbc_knst(hw_CompilerBC *comp
 hw_Module* hw_compbc_convert(hw_CompilerBC *comp);
 
 
+int hw_compbc_deflocalvar(hw_CompilerBC *comp
+        , hw_byte const *var_name, hw_uint name_size, hw_VarInfo vinf);
 hw_uint hw_compbc_w_defn(hw_CompilerBC *comp
         , hw_byte const *name,      hw_uint const name_size
         , hw_uint const total_arg,  hw_uint const mut_count
@@ -549,6 +557,8 @@ void hw_debug_State_trace(hw_State *hw);
 void hw_debug_vm_step(
     hw_State *hw, hw_Module const *m, hw_code const *pc, hw_Var const *v);
 
+void hw_debug_print_fnobj(hw_CompilerBC const *comp);
+void hw_debug_print_mobj(hw_CompilerBC const *comp);
 
 /**
  * Section: Undef

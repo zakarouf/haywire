@@ -39,8 +39,13 @@ typedef struct  hw_KvTable  hw_KvTable;  // (K:V)
 
 typedef struct  hw_String   hw_String;
 typedef struct  hw_CStr     hw_CStr;
+typedef struct  hw_u32Arr   hw_u32Arr;
 typedef struct  hw_uintArr  hw_uintArr;
 typedef struct  hw_byteArr  hw_byteArr;
+
+typedef struct hw_Lexer hw_Lexer;
+typedef struct hw_LexToken hw_LexToken;
+typedef struct hw_LexTokenArr hw_LexTokenArr;
 
 /************************************************************/
 typedef struct hw_Error         hw_Error;
@@ -192,11 +197,39 @@ struct hw_Allocator {
 
 /*************************************************************/
 /*************************************************************/
+struct hw_LexToken {
+    hw_byte const   *start;
+    hw_byte const   *line_start;
+    hw_uint         size;
+    hw_uint         line;
+    hw_uint         column;
+    hw_byte         type;
+};
+
+struct hw_LexTokenArr {
+    hw_LexToken     *data;
+    hw_u32          len;
+    hw_u32          lenUsed;
+};
+
+struct hw_Lexer {
+    hw_byte const   *at;
+    hw_byte const   *end;
+    hw_LexToken     token;
+};
+
+
+
+struct hw_u32Arr {
+    hw_u32  *data;
+    hw_u32  len;
+    hw_u32  lenUsed;
+};
 
 struct hw_uintArr {
     hw_uint*        data;
-    hw_uint         len;
-    hw_uint         lenUsed;
+    hw_u32         len;
+    hw_u32         lenUsed;
 };
 
 struct hw_byteArr {
@@ -207,8 +240,8 @@ struct hw_byteArr {
 
 struct hw_String {
     hw_byte*        data;
-    hw_uint         len;
-    hw_uint         lenUsed;
+    hw_u32         len;
+    hw_u32         lenUsed;
 };
 
 struct hw_CStr {
@@ -220,22 +253,22 @@ struct hw_CStr {
 struct hw_VarList {
     hw_Var          *data;
     hw_byte         *tid;
-    hw_uint         len;
-    hw_uint         lenUsed;
+    hw_u32         len;
+    hw_u32         lenUsed;
 };
 
 struct hw_VarArr {
     hw_Var          *data;
-    hw_uint         len;
-    hw_uint         lenUsed;
+    hw_u32          len;
+    hw_u32          lenUsed;
     hw_byte         tid;
 };
 
 struct hw_SArr {
-    hw_byte         *data;
-    hw_uint         len;
-    hw_uint         lenUsed;
-    hw_uint         unitsize;
+    hw_byte        *data;
+    hw_u32         len;
+    hw_u32         lenUsed;
+    hw_u32         unitsize;
 };
 
 struct hw_VarTable {
@@ -541,9 +574,10 @@ struct hw_ModuleObj {
     hw_uint name_hash;
 
     hw_uintArr      *fnpt;
-    hw_FnInfoArr    *fn_sigs;
-    hw_uintArr      *pubfn_pt;
     hw_SymTable     *fntable;
+
+    hw_LexTokenArr  *defer_fncall_names;
+    hw_uintArr      *defer_fncall_pc;
     
     hw_codeArr      *code;
     hw_byteArr      *data;
@@ -580,6 +614,9 @@ struct hw_FnObj {
     hw_SymTable *vartable;
     struct hw_VarInfoArr *var_infos;
 
+    hw_LexTokenArr *defer_lable_names;
+    hw_uintArr     *defer_lables;
+
     hw_byte lock;
 };
 
@@ -588,24 +625,6 @@ struct hw_FnObj {
 /**
  * Section: Lexer
  */
-
-typedef struct hw_LexToken hw_LexToken;
-struct hw_LexToken {
-    hw_byte const   *start;
-    hw_byte const   *line_start;
-    hw_uint         size;
-    hw_uint         line;
-    hw_uint         column;
-    hw_byte         type;
-};
-
-typedef struct hw_Lexer hw_Lexer;
-struct hw_Lexer {
-    hw_byte const   *at;
-    hw_byte const   *end;
-    hw_LexToken     token;
-};
-
 struct hw_CompilerBC {
     hw_State        *vm_parent;
     hw_State        *vm_child;
@@ -614,7 +633,7 @@ struct hw_CompilerBC {
     hw_ModuleObj    *obj;
     
     hw_Lexer        lexer;   
-    hw_CStr         source_file;
+    hw_CStr         sname;
     hw_CStr         source;
 };
 

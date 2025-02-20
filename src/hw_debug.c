@@ -4,6 +4,52 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+void hw_debug_print_mobj(hw_CompilerBC const *comp)
+{
+    hw_ModuleObj *mo = comp->obj;
+
+    hw_loglnp(
+        "ModuleObj:\n"
+        "   inst: %"PRIu64"\n"
+        "   code: %"PRIu64"\n"
+      , mo->code->lenUsed
+      , mo->data->lenUsed
+    );
+
+    for (size_t i = 0; i < mo->fnpt->lenUsed; i++) {
+        hw_loglnp("  fn pc %"PRIu64 " -> %"PRIu64, i, mo->fnpt->data[i]);
+    }
+
+    for (size_t i = 0; i < mo->code->lenUsed; i++) {
+        hw_debug_code_disasm(comp->vm_child, mo->code->data[i]);
+        hw_logp("%s", "\n");
+    }
+}
+
+void hw_debug_print_fnobj(hw_CompilerBC const *comp)
+{
+    hw_FnObj *fnobj = comp->fnobj;
+    hw_loglnp(
+        "FnObject: \n"
+        "   %.*s (%"PRIu64")\n"
+
+        "   id:%"PRIu64 "\n"
+        "   pc:%"PRIu64 "\n"
+        "   args:%"PRIu64 "\n"
+
+        "   muts:%"PRIu64 "\n"
+        "   locked:%s\n"
+      , (int)fnobj->name_sizeUsed, fnobj->name, fnobj->name_hash
+
+      , fnobj->current_fn
+      , fnobj->defn_pc
+      , fnobj->args_passed
+
+      , fnobj->mut_count
+      , fnobj->lock? "true": "false"
+    );
+}
+
 void hw_debug_code_disasm(hw_State const *hw, hw_code code)
 {
     FILE *out = hw->stdout;
@@ -12,6 +58,7 @@ void hw_debug_code_disasm(hw_State const *hw, hw_code code)
     HW_DEBUG(HW_ASSERT(opcode < hw->global->insts_count));
     struct hw_InstData const *insdata = hw->global->insts + opcode;
 
+    fwrite("    ", 4, 1, out);
     fwrite(insdata->name, insdata->name_size, 1, out);
     fputc(' ', out);
     
@@ -51,13 +98,15 @@ void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
               ";; muts count: %"PRIu64"\n"
               ";; stack size: %"PRIu64"\n"
               ";; types: (at)%"PRIu64"\n"
+              ";; data : (at)%"PRIu32"\n"
             , (int)info.name_size, info.name
             , info.arg_count
             , info.mut_count
             , info.stack_sz
-            , info.types - m->data);
+            , info.types - m->data
+            , m->code->getx.x32);
 
-    fprintf(hw->stdout, "defn %.*s {\n", (int)info.name_size, info.name);
+    fprintf(hw->stdout, "@defn %.*s {\n", (int)info.name_size, info.name);
     for (size_t i = 0; i < info.arg_count; i++) {
         hw_Type *T = hw_TypeSys_get_via_id(hw->ts, info.types[i]);
         HW_ASSERTEX(T, "%d", info.types[i]);
@@ -76,20 +125,33 @@ void hw_debug_Module_disasm(hw_State *hw, hw_Module const *m)
           "; instructions %"PRIu64"\n"
           "; data %"PRIu64" bytes\n"
           "; functions %"PRIu64"\n"
-          "; constants %"PRIu64"\n"
         , m->code_len
         , m->data_size
-        , m->fn_count
+        , m->fn_count);
+
+    for (size_t i = 0; i < m->fn_count; i++) {
+        fprintf(stdout, ";   defn `%"PRIu64"`  -> %"PRIu64 "\n"
+            , i, m->fnpt[i]);
+    }
+
+    fprintf(stdout
+        , "; constants %"PRIu64"\n"
         , m->k_count);
 
     hw_uint fn = 0;
     for (size_t i = 0; i < m->code_len; i++) {
         if(m->code[i].get.opcode == hw_Inst_defn) {
-            hw_debug_Module_fn_disasm(hw, m, fn);
-            fn += 1;
+            if(m->code[i].getx.x32 < m->data_size) {
+                hw_debug_Module_fn_disasm(hw, m, fn);
+                fn += 1;
+            } else {
+                fprintf(hw->stdout, "defn %"PRIu32" ; more than data%"PRIu64
+                        , m->code[i].getx.x32, m->data_size);
+                fn += 1;
+            }
         } else {
             hw_debug_code_disasm(hw, m->code[i]);
-            printf("; %"PRIu64, i);
+            fprintf(hw->stdout, "; %"PRIu64, i);
         }
         fputc('\n', stdout);
     }

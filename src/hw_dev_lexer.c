@@ -71,7 +71,7 @@ static hw_CStr const hw_TOKEN_NAMES[HW_LEXTOKEN_TOTAL+1] = {
 
 #define hw_Lexer_check(lex, is) ((lex).token.type == is)
 
-hw_CStr get_token_name(hw_uint token_type)
+hw_CStr hw_get_token_name(hw_uint token_type)
 {
     HW_ASSERT(token_type < HW_LEXTOKEN_TOTAL);
     return hw_TOKEN_NAMES[token_type];
@@ -256,7 +256,7 @@ static void _print_token(hw_Lexer *lex)
         printf(" -> NEWLINE\n");
         return;
     }
-    hw_CStr const tokname = get_token_name(lex->token.type);
+    hw_CStr const tokname = hw_get_token_name(lex->token.type);
     printf("%.*s -> %.*s\n | \n", (int)lex->token.size, lex->token.start,
             (int)tokname.len, tokname.data);
     

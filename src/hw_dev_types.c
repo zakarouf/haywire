@@ -550,6 +550,9 @@ DEFN(hw_VarList_delete) {
 
     _SELF_BIND(hw_VarList *, as_list);
     for (hw_uint i = 0; i < self->lenUsed; i++) {
+        HW_DEBUG(
+            printf("{}==== %"PRIu64 "===%" PRIu32 "\n", i, self->lenUsed);
+            HW_ASSERT_OP(self->tid[i], <, hw_TypeID_TOTAL, PRIu8, PRIu8));
         hw_byte const T = self->tid[i];
         if(state->ts->types[T].is_obj) {
             HW_DEBUG(HW_LOG("USING vt[1] here %s", ""););
@@ -693,6 +696,8 @@ DEFN(hw_SymTable_reset) {
                 hw_VarFn deletefn = hw_Type_getvt(T, "delete", 6);
                 deletefn(state, self->val + i, self->valTs + i, 1);
             }
+            self->key[i] = NULL;
+            self->valTs[i] = hw_TypeID_nil;
         }
     }
 
