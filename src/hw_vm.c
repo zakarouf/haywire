@@ -129,8 +129,7 @@ void hw_vm(hw_State *hw)
             goto _L_reset_var; 
         }
         ON_INST(pop); {
-                r(A); // dup
-                r(B); // count
+                r(A) = top(0); // dup
                 hw_State_vstack_pop_mult_dtor(hw, 1);
         }
 
@@ -140,7 +139,7 @@ void hw_vm(hw_State *hw)
         //
         ON_INST(call) { 
             hw_State_fstack_top_save(hw, pc, vars);
-            hw_vm_prepare_call(hw, f->mod, a(A)); 
+            hw_vm_prepare_call(hw, f->mod, x(x32)); 
             goto _L_again; 
         }
        

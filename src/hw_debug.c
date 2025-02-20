@@ -93,13 +93,14 @@ void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
     hw_Module_get_FnInfo(m, fn, &info);
     fprintf(hw->stdout
             , "\n"
-              ";; function: %.*s\n"
+              ";; function: %.*s (%"PRIu64")\n"
               ";; args count: %"PRIu64"\n"
               ";; muts count: %"PRIu64"\n"
               ";; stack size: %"PRIu64"\n"
               ";; types: (at)%"PRIu64"\n"
               ";; data : (at)%"PRIu32"\n"
             , (int)info.name_size, info.name
+            , fn
             , info.arg_count
             , info.mut_count
             , info.stack_sz
