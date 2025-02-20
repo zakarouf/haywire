@@ -219,10 +219,13 @@ hw_Module* hw_compbc_convert(hw_CompilerBC *comp)
     mod->knst_t =   HW_CAST(void *, mod->knst + mod->k_count);
 
     memcpy(mod->data, obj->data->data, obj->data->lenUsed);
+
     memcpy(mod->fnpt, obj->fnpt->data
-            , sizeof(*(mod->fnpt) * mod->fn_count));
+            , mod->fn_count * sizeof(*mod->fnpt));
+
     memcpy(mod->code, obj->code->data
             , obj->code->lenUsed * sizeof(*mod->code));
+
     memcpy(mod->knst_t, obj->knst_t->data
             , obj->knst_t->lenUsed * sizeof(*mod->knst_t));
     
