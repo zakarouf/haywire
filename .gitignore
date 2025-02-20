@@ -60,3 +60,4 @@ hw
 obj/
 bin/
 debug/
+private/
