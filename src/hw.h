@@ -202,7 +202,6 @@ struct hw_LexToken {
     hw_byte const   *line_start;
     hw_uint         size;
     hw_uint         line;
-    hw_uint         column;
     hw_byte         type;
 };
 
@@ -213,11 +212,11 @@ struct hw_LexTokenArr {
 };
 
 struct hw_Lexer {
+    hw_byte const   *begin;
     hw_byte const   *at;
     hw_byte const   *end;
     hw_LexToken     token;
 };
-
 
 
 struct hw_u32Arr {

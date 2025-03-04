@@ -166,7 +166,6 @@ void print_tokens(hw_Lexer lexer)
 }
 
 
-
 int main(int argc, char *argv[])
 {
     HW_ASSERT(argc > 1);
@@ -198,7 +197,7 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-
+/**
 int main_memory(int argc, char *argv[])
 {
     hw_State *hw = hw_State_new_default(NULL);
@@ -226,4 +225,4 @@ int main_memory(int argc, char *argv[])
     
     return EXIT_SUCCESS;
 }
-
+**/

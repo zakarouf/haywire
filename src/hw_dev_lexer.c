@@ -63,8 +63,6 @@ static hw_CStr const hw_TOKEN_NAMES[HW_LEXTOKEN_TOTAL+1] = {
 };
 #undef TOKEN
 
-#define CAT2(x, y) x##y
-#define TOKEN(x) CAT2(HW_LEXTOKEN_, x)
 
 #define _peek(s) (*(s)->at)
 #define _isend(s) ((s)->at >= (s)->end)
@@ -93,7 +91,6 @@ static inline void _make_token_err(hw_Lexer *lex, hw_byte *msg, hw_uint size)
 static inline hw_uint _advance(hw_Lexer *lex)
 {
     lex->at += 1;
-    lex->token.column += 1;
     return lex->at[-1];
 }
 
@@ -142,6 +139,9 @@ static int _check_if_char(hw_Lexer *lex)
 {
     switch (lex->token.start[0]) {
 
+
+    #define CAT2(x, y) x##y
+    #define TOKEN(x) CAT2(HW_LEXTOKEN_, x)
         /* Single Char Case */
         #define _match(ch, Token)\
             break; case ch: {_make_token(lex, TOKEN(Token)); return 1;}
@@ -150,7 +150,6 @@ static int _check_if_char(hw_Lexer *lex)
         _match('\t', TABSPACE);
         case '\n': {
             lex->token.line += 1; 
-            lex->token.column = 0;
             lex->token.line_start = lex->at;
             _make_token(lex, TOKEN(NEWLINE));
             return 1;
@@ -234,11 +233,14 @@ static int _check_if_char(hw_Lexer *lex)
     #undef _match
     #undef _match2
 
+    #undef TOKEN
+    #undef CAT2
     return 0;
 }
 
 void hw_Lexer_start(hw_Lexer* lex, const hw_byte *string_data, hw_uint size)
 {
+    lex->begin = string_data;
     lex->at = string_data;
     lex->end = string_data + size;
     lex->token.start = lex->at;

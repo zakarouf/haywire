@@ -11,8 +11,6 @@
 /**
  * Section: Pre-Processor
  */
-#define CAT2(X, Y) X##_##Y
-#define CAT(X, Y) CAT2(X, Y)
 
 
 #define INST(x) hw_Inst_##x
@@ -266,27 +264,17 @@ void hw_Module_get_FnInfo(hw_Module const *mod, hw_uint fn_id, hw_FnInfo *info)
     hw_code pc = *hw_Module_get_fnpc(mod, fn_id);
     hw_byte *data = mod->data + pc.getx.x32;
 
-    HW_DEBUG(
-        hw_byte *data_end = mod->data + mod->data_size;
-    );
-
-    #define check() HW_DEBUG(HW_ASSERT_OP(data, <, data_end, "p", "p"));
-
     info->name_size = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
                       data += sizeof(hw_uint);
-                      check()
 
     info->mut_count = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data)); 
                       data += sizeof(hw_uint);
-                      check()
 
     info->arg_count = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
                       data += sizeof(hw_uint);
-                      check()
 
     info->stack_sz  = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
                       data += sizeof(hw_uint);
-                      check()
 
 
     info->name = data; 

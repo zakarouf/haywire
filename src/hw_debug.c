@@ -175,7 +175,7 @@ void hw_debug_State_trace(hw_State *hw)
     HW_ASSERT(hw->fstack->lenUsed);
     HW_LOG("===== Stack Trace =====%s", "");
     HW_LOG("Function Depth: %"PRIu64, hw->fstack->lenUsed);
-    HW_LOG("Stack Usage: %"PRIu64, hw->vstack->lenUsed);
+    HW_LOG("Stack Usage: %"PRIu32, hw->vstack->lenUsed);
 
     hw_uint vtrace_count = 10;
     _debug_State_trace_print_last_values(hw, vtrace_count);

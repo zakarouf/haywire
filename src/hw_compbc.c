@@ -8,6 +8,9 @@
 
 hw_CStr hw_get_token_name(hw_uint token_type);
 
+#define _ERROR(fmt, ...)\
+    hw_compbc_ERROR(comp, "%d|" fmt, __LINE__, __VA_ARGS__)
+
 static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
 __attribute__ ((format (printf, 2, 3)));
 
@@ -28,10 +31,12 @@ static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
     
     int line_part2_size = HW_MIN(8, comp->lexer.end - (comp->lexer.token.start + comp->lexer.token.size));
     
+    hw_uint column = line_part1_size;
+
     hw_loglnp("%"PRIu64":%"PRIu64"| "
                 "%.*s ~~%.*s~~ %.*s\n"
 //                "%d''%s ~~%d''%s~~ %d''%s\n"
-            , comp->lexer.token.line, comp->lexer.token.column
+            , comp->lexer.token.line, column
             , line_part1_size, comp->lexer.token.line_start
             , (int)comp->lexer.token.size, comp->lexer.token.start
             , line_part2_size, comp->lexer.token.start + comp->lexer.token.size);
@@ -46,8 +51,6 @@ static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
     exit(-1);
 }
 
-#define _ERROR(fmt, ...)\
-    hw_compbc_ERROR(comp, "%d|" fmt, __LINE__, __VA_ARGS__)
 
 static void hw_FnObj_new(hw_CompilerBC *comp)
 {
@@ -421,8 +424,6 @@ void hw_compbc_lex_next_expect(hw_CompilerBC *comp, enum hw_LexTokenType ttype)
     }
 }
 
-#define HW_COMP_ASSERT(exp) (exp? (void)0: _ERROR(""))
-
 void hw_compbc_lex_next_skipws(hw_CompilerBC *comp)
 {
     hw_Lexer_next_skipws(&comp->lexer);
@@ -669,6 +670,12 @@ static void _compiler_atsym(hw_CompilerBC *comp)
     TOKEN_MATCH(defvar) _compiler_defvar(comp);
 
     TOK_MATCH_END
+
+
+
+    #undef TOK_MATCH_START
+    #undef TOK_MATCH
+    #undef TOK_MATCH_END
 }
 
 static void _compiler_lable(hw_CompilerBC *comp)
@@ -711,6 +718,8 @@ static hw_bool _compiler_top(hw_CompilerBC *comp)
     }
 
     return HW_FALSE;
+
+    #undef TOKEN
 }
 
 void hw_compbc_compile_from_source(hw_CompilerBC *comp)
@@ -729,3 +738,4 @@ void hw_compbc_compile_from_source(hw_CompilerBC *comp)
     }
 }
 
+#undef _ERROR
