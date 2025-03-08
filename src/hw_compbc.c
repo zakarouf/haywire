@@ -1,18 +1,35 @@
-#include "hw.h"
-#include "hw_dev.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <inttypes.h>
 
+#include "hw.h"
+#include "hw_dev.h"
+
 hw_CStr hw_get_token_name(hw_uint token_type);
+
+enum DeferLableOperand {
+    DEFER_LABLE_OPERAND_A = 0,
+    DEFER_LABLE_OPERAND_B,
+    DEFER_LABLE_OPERAND_C,
+    DEFER_LABLE_OPERAND_x32,
+    DEFER_LABLE_OPERAND_s32
+};
 
 #define _ERROR(fmt, ...)\
     hw_compbc_ERROR(comp, "%d|" fmt, __LINE__, __VA_ARGS__)
 
 static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
 __attribute__ ((format (printf, 2, 3)));
+
+static hw_VarP _get_symbol(hw_SymTable *symtable
+        , hw_byte const *sym, hw_u32 size)
+{
+    hw_uint index = hw_SymTable_index(symtable, sym, size);
+    if(!symtable->key[index]) { return (hw_VarP){ .type = hw_TypeID_nil}; }
+    return (hw_VarP){ .type = symtable->valTs[index]
+                    , .value = symtable->val[index]  };
+}
 
 static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
 {
@@ -34,7 +51,7 @@ static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
     hw_uint column = line_part1_size;
 
     hw_loglnp("%"PRIu64":%"PRIu64"| "
-                "%.*s ~~%.*s~~ %.*s\n"
+                "%.*s\x1b[0;31m%.*s\x1b[0m%.*s\n"
 //                "%d''%s ~~%d''%s~~ %d''%s\n"
             , comp->lexer.token.line, column
             , line_part1_size, comp->lexer.token.line_start
@@ -58,7 +75,6 @@ static void hw_FnObj_new(hw_CompilerBC *comp)
 
     memset(fnobj, 0, sizeof(*fnobj));
     HW_ARR_NEW(comp->vm_child, fnobj->var_infos, 8);
-    HW_ARR_NEW(comp->vm_child, fnobj->defer_lable_names, 16);
     HW_ARR_NEW(comp->vm_child, fnobj->defer_lables, 16);
 
     hw_VarP symtable;
@@ -70,6 +86,8 @@ static void hw_FnObj_new(hw_CompilerBC *comp)
     hw_SymTable_new(comp->vm_child, &symtable.value, &symtable.type, 1);
     fnobj->lables = symtable.value.as_symtable;
     HW_DEBUG(HW_LOG("lables %p", (void *)fnobj->lables));
+
+
 
     fnobj->name_size = 32;
     fnobj->name = HW_THREAD_ALLOC(comp->vm_child, fnobj->name_size);
@@ -93,8 +111,6 @@ static void hw_FnObj_delete(hw_CompilerBC *comp)
     symtable.value.as_symtable = fnobj->vartable;
     hw_SymTable_delete(comp->vm_child, &symtable.value, &symtable.type, 1);
 
-
-    HW_ARR_DELETE(comp->vm_child, fnobj->defer_lable_names);
     HW_ARR_DELETE(comp->vm_child, fnobj->defer_lables);
     HW_THREAD_FREE(comp->vm_child, fnobj->name);
     HW_THREAD_FREE(comp->vm_child, fnobj);
@@ -112,6 +128,7 @@ static void hw_FnObj_start(hw_CompilerBC *comp, hw_byte const *name, hw_uint nam
     hw_SymTable_reset(comp->vm_child, &symtable.value, &symtable.type, 1);
 
     fnobj->var_infos->lenUsed = 0;
+    fnobj->defer_lables->lenUsed = 0;
 
     if(name_size > fnobj->name_size) {
         fnobj->name = HW_THREAD_REALLOC(
@@ -128,10 +145,13 @@ static void hw_ModuleObj_new(hw_CompilerBC *comp)
     hw_ModuleObj *obj = HW_THREAD_ALLOC(comp->vm_child, sizeof(*obj));
     memset(obj, 0, sizeof(*obj));
     HW_ARR_NEW(comp->vm_child, obj->fnpt, 16);
-    HW_ARR_NEW(comp->vm_child, obj->knst, 8); 
-    HW_ARR_NEW(comp->vm_child, obj->knst_t, 8);
-    HW_ARR_NEW(comp->vm_child, obj->data, 128);
 
+    hw_Var list = {0};
+    hw_VarList_new(
+        comp->vm_child, &list
+      , (hw_byte[1]){hw_TypeID_nil}, 1); obj->knst = list.as_list;
+
+    HW_ARR_NEW(comp->vm_child, obj->data, 128);
     HW_ARR_NEW(comp->vm_child, obj->code, 80);
     HW_ARR_NEW(comp->vm_child, obj->defer_fncall_pc, 16);
     HW_ARR_NEW(comp->vm_child, obj->defer_fncall_names, 16);
@@ -141,6 +161,9 @@ static void hw_ModuleObj_new(hw_CompilerBC *comp)
     hw_SymTable_new(comp->vm_child, &arg, &tid, 1);
     obj->fntable = arg.as_symtable;
 
+    hw_SymTable_new(comp->vm_child, &arg, &tid, 1);
+    obj->knsttable = arg.as_symtable;
+
     comp->obj = obj;
 }
 
@@ -149,8 +172,10 @@ static void hw_ModuleObj_delete(hw_CompilerBC *comp)
     HW_ARR_DELETE(comp->vm_child, comp->obj->defer_fncall_names);
     HW_ARR_DELETE(comp->vm_child, comp->obj->defer_fncall_pc);
 
-    HW_ARR_DELETE(comp->vm_child, comp->obj->knst_t);
-    HW_ARR_DELETE(comp->vm_child, comp->obj->knst);
+    hw_VarList_delete(
+        comp->vm_child, &(hw_Var){.as_list = comp->obj->knst}
+        , (hw_byte[1]){hw_TypeID_list}, 1);
+
     HW_ARR_DELETE(comp->vm_child, comp->obj->code);
     HW_ARR_DELETE(comp->vm_child, comp->obj->fnpt);
 
@@ -158,6 +183,9 @@ static void hw_ModuleObj_delete(hw_CompilerBC *comp)
 
     hw_Var arg = { .as_symtable = comp->obj->fntable };
     hw_byte tid = hw_TypeID_symtable;
+    hw_SymTable_delete(comp->vm_child, &arg, &tid, 1);
+
+    arg.as_symtable = comp->obj->knsttable;
     hw_SymTable_delete(comp->vm_child, &arg, &tid, 1);
 
     HW_THREAD_FREE(comp->vm_child, comp->obj);
@@ -235,7 +263,7 @@ hw_Module* hw_compbc_convert(hw_CompilerBC *comp)
                 + (sizeof(*(obj->fnpt->data)) * obj->fnpt->lenUsed)
                 + (sizeof(*(obj->code->data)) * obj->code->lenUsed)
                 + (sizeof(*(obj->knst->data)) * obj->knst->lenUsed)
-                + (sizeof(*(obj->knst_t->data)* obj->knst->lenUsed));
+                + (sizeof(*(obj->knst->tid )) * obj->knst->lenUsed);
 
     hw_Module *mod = HW_THREAD_ALLOC(comp->vm_parent, module_size);
     
@@ -258,8 +286,8 @@ hw_Module* hw_compbc_convert(hw_CompilerBC *comp)
     memcpy(mod->code, obj->code->data
             , obj->code->lenUsed * sizeof(*mod->code));
 
-    memcpy(mod->knst_t, obj->knst_t->data
-            , obj->knst_t->lenUsed * sizeof(*mod->knst_t));
+    memcpy(mod->knst_t, obj->knst->tid 
+            , obj->knst->lenUsed * sizeof(*mod->knst_t));
     
     for (size_t i = 0; i < mod->k_count; i++) {
         mod->knst[i] = obj->knst->data[i];
@@ -290,25 +318,34 @@ hw_uint hw_compbc_data(hw_CompilerBC *comp, void const *data, hw_uint const size
     return index;
 }
 
-hw_uint hw_compbc_knst(hw_CompilerBC *comp, hw_Var const value, hw_byte const tid)
+hw_uint hw_compbc_knst(hw_CompilerBC *comp, hw_Var val, hw_byte val_tid)
 {
-    HW_ARR_PUSH(comp->vm_child, comp->obj->knst_t, tid);
-    
-    HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL));
-    hw_Type *T = comp->vm_child->ts->types + tid;
-
-    hw_Var copy_val = value;
-    if(T->is_obj) {
-        hw_VarFn copy = hw_Type_getvt(T, "newFrom_copy", 12);
-        hw_Var args[2] = {value, value};
-        hw_byte tids[2] = {tid, tid};
-        copy(comp->vm_child, args, tids, 2);
-        copy_val = args[0];
-    }
-
-    HW_ARR_PUSH(comp->vm_child, comp->obj->knst, copy_val);
-
+    hw_Var args[2] = { 
+        [0].as_list = comp->obj->knst,
+        [1] = val
+    };
+    hw_byte tid[2] = { hw_TypeID_list, val_tid };
+    hw_VarList_push_shallow(comp->vm_child, args, tid, 2);
+    comp->obj->knst = args[0].as_list;
     return comp->obj->knst->lenUsed-1;
+}
+
+hw_uint hw_compbc_defknst(
+    hw_CompilerBC *comp, hw_byte const *knst_name, hw_uint name_size
+    , hw_Var val, hw_byte tid)
+{
+    hw_ModuleObj *obj = comp->obj;
+    HW_ASSERTEX(obj->knsttable->key[
+        hw_SymTable_index(obj->knsttable, knst_name, name_size)] == NULL,
+        "Constant :%.*s already set", (int)name_size, knst_name);
+    
+    hw_uint id = hw_compbc_knst(comp, val, tid);
+    hw_SymTable_set__wrap(
+               comp->vm_child, &obj->knsttable
+            , knst_name, name_size
+            , (hw_Var){ .as_uint = id }, hw_TypeID_uint);
+
+    return HW_TRUE;
 }
 
 int hw_compbc_deflocalvar(hw_CompilerBC *comp
@@ -361,9 +398,53 @@ hw_uint hw_compbc_w_defn(
     return obj->fnpt->lenUsed - 1;
 }
 
+static void _compbc_resolve_lables(hw_CompilerBC *comp)
+{
+    hw_FnObj *fnobj = comp->fnobj;
+    HW_DEBUG(HW_LOG("Resolving %"PRIu32" Lables for %.*s"
+                , fnobj->defer_lables->lenUsed
+                , (int)comp->fnobj->name_sizeUsed, comp->fnobj->name));
+    while (fnobj->defer_lables->lenUsed) {
+        hw_DeferInst defer = HW_ARR_TOP(fnobj->defer_lables);
+        hw_VarP result = _get_symbol(fnobj->lables, defer.symbol.start, defer.symbol.size);
+        if (result.type == hw_TypeID_nil) {
+            comp->lexer.token = defer.symbol;
+            _ERROR("Lable Does not exist %d", 1);
+        }
+        
+        hw_code *inst = comp->obj->code->data + defer.inst;
+        HW_DEBUG(
+            hw_logp("Instruction: ");
+            hw_debug_code_disasm(comp->vm_child, *inst);
+            hw_logp("%c",'\n'));
+
+        hw_int relative_lable_pos = result.value.as_uint - defer.inst;
+        switch (defer.operand) {
+            #define operand(get, X) \
+                case DEFER_LABLE_OPERAND_##X: \
+                        inst->get.X = relative_lable_pos; break;
+
+                operand(get, A)
+                operand(get, B)
+                operand(get, C)
+                operand(gets, s32)
+                operand(getx, x32)
+            default: _ERROR("Unknown Operand %s", "");
+        }
+        HW_DEBUG(
+            hw_logp("Resolved: ");
+            hw_debug_code_disasm(comp->vm_child, *inst);
+            hw_logp("%c",'\n'));
+
+        fnobj->defer_lables->lenUsed -= 1;
+    }
+}
+
 void hw_compbc_w_endfn(hw_CompilerBC *comp)
 {
     hw_FnObj *fnobj = comp->fnobj;
+    _compbc_resolve_lables(comp);
+
     HW_ASSERT(fnobj->lock);
     comp->fnobj->lock = 0;
     HW_ASSERT(fnobj->var_infos->lenUsed == fnobj->vartable->lenUsed);
@@ -406,8 +487,21 @@ void hw_compbc_defer_fncall(hw_CompilerBC *comp, hw_LexToken name, hw_uint inst)
 }
 
 
+void hw_compbc_defer_lable(hw_CompilerBC *comp, hw_LexToken symbol, hw_byte operand)
+{
+    hw_FnObj *fnobj = comp->fnobj;
+    hw_DeferInst lable = {
+        .inst = comp->obj->code->lenUsed,
+        .symbol = symbol,
+        .operand = operand
+    };
+
+    HW_ARR_PUSH(comp->vm_child, fnobj->defer_lables, lable);
+}
+
+
 /**
- * Compiler
+ * Compiler For HWS
  */
 
 void hw_compbc_lex_next(hw_CompilerBC *comp) {
@@ -473,6 +567,7 @@ static const struct hw_InstData *_get_instruction(
     return NULL;
 }
 
+
 static hw_int _compiler_next_eval_operand(hw_CompilerBC *comp)
 {
     hw_Lexer_next_skipws(&comp->lexer);
@@ -484,46 +579,46 @@ static hw_int _compiler_next_eval_operand(hw_CompilerBC *comp)
     hw_int operand = 0;
     hw_Lexer *lex = &comp->lexer;
    
+    #define assign_operand(table, name, vtype){ \
+            hw_VarP result = _get_symbol(\
+                      comp->table, lex->token.start, lex->token.size);\
+            if(result.type == hw_TypeID_nil) {                  \
+                _ERROR("Undefined "name" '%.*s'"                \
+                    , (int)lex->token.size, lex->token.start);  \
+            }                                                   \
+            operand = result.value.vtype;                       \
+        }
+
     switch (lex->token.type) {
         break; case HW_LEXTOKEN_NUMBER: 
             { hw_int point = hw_compbc_lex_getint(comp);
             memcpy(&operand, &point, sizeof(hw_int)); }
-        break; case HW_LEXTOKEN_SYMBOL:{
-                hw_SymTable *symtable = comp->fnobj->vartable;
-                hw_uint index = hw_SymTable_index(symtable
-                        , lex->token.start, lex->token.size);
-                if(!symtable->key[index]) {
-                    _ERROR("Undefined Variable '%.*s'"
-                            , (int)lex->token.size, lex->token.start);
-                }
-                operand = symtable->val[index].as_uint;
-            }
+        break; case HW_LEXTOKEN_SYMBOL: 
+            assign_operand(fnobj->vartable, "Variable", as_uint);
         break; case HW_LEXTOKEN_AND:{
-                hw_SymTable *symtable = comp->fnobj->lables;
                 hw_compbc_lex_next_expect(comp, HW_LEXTOKEN_SYMBOL);
-                hw_uint index = hw_SymTable_index(symtable
-                    , lex->token.start, lex->token.size);
-                if(!symtable->key[index]) {
-                    _ERROR("Undefined Lable '%.*s'"
-                        , (int)lex->token.size, lex->token.start);
+                hw_VarP result = _get_symbol(
+                        comp->fnobj->lables
+                        , lex->token.start, lex->token.size);
+                if( result.type == hw_TypeID_nil ) {
+                    hw_compbc_defer_lable(
+                        comp, lex->token, comp->fnobj->operand);
+                    operand = -1;
                 }
-                operand = symtable->val[index].as_uint - comp->obj->code->lenUsed;
-                operand -= 1;
+                operand = result.value.as_uint - comp->obj->code->lenUsed ;
         }
         break; case HW_LEXTOKEN_PERCENT:{
-                hw_SymTable *symtable = comp->obj->fntable;
                 hw_compbc_lex_next_expect(comp, HW_LEXTOKEN_SYMBOL);
-                hw_uint index = hw_SymTable_index(symtable
-                    , lex->token.start, lex->token.size);
-                if(!symtable->key[index]) {
-                    _ERROR("Undefined Function '%.*s'"
-                        , (int)lex->token.size, lex->token.start);
-                }
-                operand = symtable->val[index].as_uint;
+                assign_operand(obj->fntable, "Function", as_uint);
+        }
+        break; case HW_LEXTOKEN_HASH: {
+                hw_compbc_lex_next_expect(comp, HW_LEXTOKEN_SYMBOL);
+                assign_operand(obj->knsttable, "Constant", as_uint);
         }
         break; default:
             _ERROR("Unknown Operand%s", "");
     }
+    #undef assign_operand
 
     return operand;
 }
@@ -541,27 +636,28 @@ static void _compiler_inst(hw_CompilerBC *comp)
     HW_ASSERT(instdata->no_direct == 0);
     hw_code instruction = { 0 };
 
+    #define assign_inst(get, X)\
+        { comp->fnobj->operand = DEFER_LABLE_OPERAND_##X;\
+          instruction.get.X = _compiler_next_eval_operand(comp); }
+
     switch (instdata->inst_type) {
-        break; case hw_InstType_a:
-            instruction.get.A = _compiler_next_eval_operand(comp);
-        break; case hw_InstType_ab:
-            instruction.get.A = _compiler_next_eval_operand(comp);
-            instruction.get.B = _compiler_next_eval_operand(comp);
-        break; case hw_InstType_abc:
-            instruction.get.A = _compiler_next_eval_operand(comp);
-            instruction.get.B = _compiler_next_eval_operand(comp);
-            instruction.get.C = _compiler_next_eval_operand(comp);
-        break; case hw_InstType_as32:
-            instruction.gets.A = _compiler_next_eval_operand(comp);
-            instruction.gets.s32 = _compiler_next_eval_operand(comp);
-        break; case hw_InstType_ax32:
-            instruction.getx.A = _compiler_next_eval_operand(comp);
-            instruction.getx.x32 = _compiler_next_eval_operand(comp);
+        break; case hw_InstType_a:      assign_inst(get, A);
+
+        break; case hw_InstType_ab:     assign_inst(get, A);
+                                        assign_inst(get, B);
+
+        break; case hw_InstType_abc:    assign_inst(get, A);
+                                        assign_inst(get, B);
+                                        assign_inst(get, C);
+
+        break; case hw_InstType_as32:   assign_inst(get, A);
+                                        assign_inst(gets, s32);
+
+        break; case hw_InstType_ax32:   assign_inst(get, A);
+                                        assign_inst(getx, x32);
         break; case hw_InstType_nop:
-        break; case hw_InstType_s32:
-            instruction.gets.s32 = _compiler_next_eval_operand(comp);
-        break; case hw_InstType_x32:
-            instruction.getx.x32 = _compiler_next_eval_operand(comp);
+        break; case hw_InstType_s32:    assign_inst(gets, s32);
+        break; case hw_InstType_x32:    assign_inst(getx, x32);
         break;
     }
 
@@ -607,7 +703,6 @@ static void _compiler_atsym_defn(hw_CompilerBC *comp)
             _ERROR("expected 'SYMBOL' or '}'%s", "");
         }
         
-        
         hw_CStr arg_name = { .data = (void *)comp->lexer.token.start
                            , .len = comp->lexer.token.size };
         hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_COLON);
@@ -648,6 +743,16 @@ static void _compiler_atsym_endfn(hw_CompilerBC *comp)
     hw_compbc_w_endfn(comp);
 }
 
+static void _compiler_atsym_const(hw_CompilerBC *comp)
+{
+    hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_SYMBOL);
+    hw_LexToken name = comp->lexer.token;
+    hw_compbc_lex_next_skipws(comp);
+    hw_Var val = {0};
+    hw_uint val_tid = hw_Var_parse(comp->vm_child, &val, &comp->lexer);
+    hw_compbc_defknst(comp, name.start, name.size, val, val_tid);
+}
+
 static void _compiler_atsym(hw_CompilerBC *comp)
 {
     hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_SYMBOL);
@@ -668,6 +773,7 @@ static void _compiler_atsym(hw_CompilerBC *comp)
     TOKEN_MATCH(defn) _compiler_atsym_defn(comp);
     TOKEN_MATCH(endfn) _compiler_atsym_endfn(comp);
     TOKEN_MATCH(defvar) _compiler_defvar(comp);
+    TOKEN_MATCH(const) _compiler_atsym_const(comp);
 
     TOK_MATCH_END
 

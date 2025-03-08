@@ -57,6 +57,7 @@ struct hw_InstData const HW_INST_DATA[] = {
   , ID(loada32,     HW_FALSE, ax32)
   , ID(loadb32,     HW_FALSE, ax32)
   , ID(load,        HW_FALSE, ax32)
+  , ID(loadknst,    HW_FALSE, ax32)
   , ID(loadobj,     HW_FALSE, ax32)
 
   , ID(list,    HW_FALSE, abc)
@@ -81,13 +82,24 @@ struct hw_InstData const HW_INST_DATA[] = {
   , ID(i_le,  HW_FALSE, abc)
   , ID(i_eq,  HW_FALSE, abc)
 
+  , ID(i_kadd,  HW_FALSE, abc)
+  , ID(i_ksub,  HW_FALSE, abc)
+  , ID(i_kmul,  HW_FALSE, abc)
+  , ID(i_kdiv,  HW_FALSE, abc)
+  , ID(i_kmod,  HW_FALSE, abc)
+  , ID(i_klt,  HW_FALSE, abc)
+  , ID(i_kle,  HW_FALSE, abc)
+  , ID(i_keq,  HW_FALSE, abc)
+
   /* Maths (floats) */
   , ID(f_add,  HW_FALSE, abc)
   , ID(f_mul,  HW_FALSE, abc)
   , ID(f_lt,   HW_FALSE, abc)
+
   , ID(prnt_int, HW_FALSE, a)
   , ID(prnt_chk, HW_FALSE, a)
   , ID(prnt_chv, HW_FALSE, a)
+  , ID(prnt_str, HW_FALSE, a)
 
 
   , ID(TOTAL, HW_FALSE, nop)
@@ -167,6 +179,97 @@ hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size, void const* rhs, hw_uint rh
     return memcmp(lhs, rhs, lhs_size);
 }
 
+hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size)
+{
+    hw_int result = 0;
+    hw_int const sign = (*str == '-')? -1:1;
+    hw_byte const *end = str + size;
+
+    while (str < end && hw_char_is_num(*str)) {
+        hw_byte digit = *str - '0';
+        if(result > (HW_INT_MAX - digit)) {
+            *ret = sign * HW_INT_MAX;
+            return end - str;
+        }
+        result = (result * 10) + (digit);
+        str++;
+    }
+
+    *ret = sign * result;
+    return end - str;
+}
+
+hw_i32 hw_strto_uint(hw_uint *ret, hw_byte const *str, hw_u32 size)
+{
+    hw_uint result = 0;
+    hw_byte const *end = str + size;
+
+    while (str < end && hw_char_is_num(*str)) {
+        hw_byte digit = *str - '0';
+        if(result > (HW_UINT_MAX - digit)) {
+            return end - str;
+        }
+        result = (result * 10) + (digit);
+        str++;
+    }
+    
+    *ret = result;
+    return end - str;
+}
+
+hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size)
+{
+    hw_float result = 0.0;
+    hw_int sign = 1;
+    if(*str == '-') { sign = -1; str++; }
+
+    hw_byte const *end = str + size;
+    
+    // Integer Part
+    while( str < end && hw_char_is_num(*str) ) {
+        hw_float digit = *str - '0';
+        if(result > (HW_FLOAT_MAX - digit)) {
+            *ret = sign * HW_FLOAT_MAX;
+            return end - str;
+        }
+        result = (result * 10.0) + (digit);
+        str++;
+    }
+
+    if(*str == '.') {
+        hw_float fraction = 0.0;
+        while( str < end && hw_char_is_num(*str) ) {
+            hw_float digit = *str - '0';
+            fraction = (fraction * 10.0) + (digit);
+            str++;
+        }
+        result += (1.0/fraction);
+    }
+    
+    if(*str == 'e' || *str == 'E') {
+        str++;
+        hw_uint exp = 0;
+        hw_bool exp_sign = 1;
+        if(str < end && *str == '-') {
+            str ++;
+            exp_sign = 0;
+        }
+
+        hw_u32 const left = hw_strto_uint(&exp, str, end - str);
+        str += left;
+        hw_float power = 1.0f;
+        for (size_t i = 0; i < exp; i++) {
+            power *= 10.0;
+        }
+
+        if(exp_sign) { result *= power; }
+        else         { result /= power; }
+
+    }
+
+    *ret = sign * result;
+    return end - str;
+}
 
 /**
  * Section: Array Macro
@@ -312,6 +415,11 @@ hw_Global *hw_Global_new(hw_State *parent)
     g->tsys = hw_TypeSys_new_default(&parent->allocator);
     g->parent = parent;
 
+    HW_ARR_NEW(parent, g->builtin, 8);
+
+//    hw_SymTable_new(parent, &vlist, (hw_byte[]){hw_TypeID_symtable}, 1);
+//    g->builtin_names = vlist.as_symtable;
+
     HW_ARR_NEW(parent, g->modules.loaded, 8);
 
     return g;
@@ -325,6 +433,11 @@ void hw_Global_delete(hw_Global *g, hw_State *parent)
         hw_Module_delete(g->parent, g->modules.loaded->data[i]);
     }
     HW_ARR_DELETE(g->parent, g->modules.loaded);
+    
+    HW_ARR_DELETE(g->parent, g->builtin);
+//    hw_SymTable_delete(g->parent, &(hw_Var){ 
+//        .as_symtable = g->builtin_names}, (hw_byte[]){hw_TypeID_symtable}, 1);
+  
     /** Always delete the type sys at the end **/
     hw_TypeSys_delete(g->tsys, &parent->allocator);
     HW_THREAD_FREE(parent, g);
@@ -355,6 +468,21 @@ hw_Module* hw_Global_get_module_from_name(
         }
     }
     return NULL;
+}
+
+hw_uint hw_Global_set_builtin(hw_Global *g, hw_VarFn fn, hw_CStr const name)
+{
+    hw_SymTable_set__wrap(
+        g->parent, &g->builtin_names, name.data, name.len
+        , (hw_Var){.as_uint = g->builtin->lenUsed}, hw_TypeID_uint); 
+    HW_ARR_PUSH(g->parent, g->builtin, fn);
+    return g->builtin->lenUsed-1;
+}
+
+hw_VarFn hw_Global_get_builtin(hw_Global *g, hw_CStr const name)
+{
+    hw_uint index = hw_SymTable_index(g->builtin_names, name.data, name.len);
+    return g->builtin_names->key[index] == NULL? hw_VarFn_UNREACHABLE: g->builtin->data[index];
 }
 
 hw_State *hw_State_new_default(hw_State *parent)

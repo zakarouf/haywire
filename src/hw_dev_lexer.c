@@ -314,3 +314,21 @@ hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size)
     return 0;
 }
 
+hw_bool hw_Lexer_convert_string(hw_Lexer *lex)
+{
+    if(!hw_LexToken_is(lex->token, HW_LEXTOKEN_DOUBLE_QUOTE)) 
+    { return HW_FALSE; } 
+
+    hw_LexToken start = lex->token;
+    hw_bool done = 0;
+    while(!_isend(lex) && done) {
+        hw_Lexer_next_until(lex, HW_LEXTOKEN_DOUBLE_QUOTE);
+        if(lex->token.start[-1] != '\\') { done = 1; }
+    }
+    if(_isend(lex)) return HW_FALSE;
+    start.start += 1;
+    start.size = lex->token.start - (start.start + 1);
+    
+    return HW_TRUE;
+}
+

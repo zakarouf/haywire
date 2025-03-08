@@ -118,6 +118,7 @@ void hw_vm(hw_State *hw)
     #define END() break; default: _illegal_inst(hw, pc); } pc++; }
   
     pc++;
+    _L_Start:
     START()
         ON_INST(nop);
         ON_INST(defn);
@@ -130,7 +131,8 @@ void hw_vm(hw_State *hw)
         }
         ON_INST(pop); {
                 r(A) = top(0); // dup
-                hw_State_vstack_pop_mult_dtor(hw, 1);
+                t(A) = topt(0);
+                hw->vstack->lenUsed -= 1;
         }
 
         //
@@ -156,11 +158,17 @@ void hw_vm(hw_State *hw)
 
 
        ON_INST(loada32)     r(A).as_uint = x(x32);
+       ON_INST(loadknst)    { r(A) = mod->knst[x(x32)];
+                              t(A) = mod->knst_t[x(x32)]; }
 
-       ON_INST(jmp)       pc += r(A).as_int;
-       ON_INST(jk)        pc += s(s32);
-       ON_INST(jt)        if(r(A).as_uint) { pc += r(B).as_int; };
-       ON_INST(jtk)       if(r(A).as_uint) { pc  = (pc) + s(s32); };
+       ON_INST(jmp)       pc += r(A).as_int; goto _L_Start;
+       ON_INST(jk)        pc += s(s32); goto _L_Start;
+
+       ON_INST(jt)        if(r(A).as_uint) { pc += r(B).as_int; 
+                                             goto _L_Start;};
+
+       ON_INST(jtk)       if(r(A).as_uint) { pc  = (pc) + s(s32);
+                                             goto _L_Start;};
 
        ON_INST(typeq) r(A).as_uint = t(B) == t(C);
        ON_INST(tideq) r(A).as_uint = t(B) == a(C);
@@ -173,6 +181,14 @@ void hw_vm(hw_State *hw)
        ON_INST(i_le)  r(A).as_int = r(B).as_int <= r(C).as_int;
        ON_INST(i_eq)  r(A).as_int = r(B).as_int == r(C).as_int;
 
+       /* Maths Constant */
+       ON_INST(i_kadd) r(A).as_int = r(B).as_int + a(C);
+       ON_INST(i_ksub) r(A).as_int = r(B).as_int - a(C);
+       ON_INST(i_kmul) r(A).as_int = r(B).as_int * a(C);
+       ON_INST(i_klt)  r(A).as_int = r(B).as_int < a(C);
+       ON_INST(i_kle)  r(A).as_int = r(B).as_int <= a(C);
+       ON_INST(i_keq)  r(A).as_int = r(B).as_int == a(C);
+
       /* Maths (floats) */
        ON_INST(f_add) r(A).as_float = r(B).as_float + r(C).as_float;
        ON_INST(f_mul) r(A).as_float = r(B).as_float * r(C).as_float;
@@ -181,6 +197,7 @@ void hw_vm(hw_State *hw)
        ON_INST(prnt_int)  hw_logp("%"PRIi64, r(A).as_int);
        ON_INST(prnt_chk)  hw_logp("%c", a(A));
        ON_INST(prnt_chv)  hw_logp("%C", (wchar_t)r(A).as_uint);
+       ON_INST(prnt_str)  hw_logp("%.*s", r(A).as_string->lenUsed, r(A).as_string->data);
     END()
 }
 

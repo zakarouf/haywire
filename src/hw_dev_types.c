@@ -4,9 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-#include <assert.h>
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator)
 {
@@ -126,6 +126,69 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
         }\
     } while(0)
 
+
+/**
+ * GENERIC
+ */
+hw_uint hw_Var_parse(hw_State *state, hw_Var *result, hw_Lexer *l)
+{
+    hw_uint type = 0;
+    switch (l->token.type) {
+        break; case HW_LEXTOKEN_SYMBOL: {
+            #define symeq(x) hw_Lexer_tiseq(l, x, sizeof(x)-1)
+
+            if(symeq("nil")) {
+                type = hw_TypeID_nil;
+            } else if(symeq("true")) {
+                result->as_bool = HW_TRUE;
+                type = hw_TypeID_bool;
+            }  else if(symeq("false")) {
+                result->as_bool = HW_FALSE;
+                type = hw_TypeID_bool;
+            } 
+            #undef symeq
+        }
+        break; case HW_LEXTOKEN_NUMBER: {
+            hw_strto_int(&result->as_int, l->token.start, l->token.size);
+            type = hw_TypeID_int;
+        }
+        break; case HW_LEXTOKEN_FLOAT: {
+            hw_strto_float(&result->as_float, l->token.start, l->token.size);
+            type = hw_TypeID_float;
+        }
+        break; case HW_LEXTOKEN_SQR_BRACE_LEFT: {
+            hw_Var args[2] = { (hw_Var){.as_list = NULL}
+                             , (hw_Var){.as_lexer = l} };
+            hw_byte tid[2] = { hw_TypeID_nil, hw_TypeID_nil };
+
+            hw_VarList_newFrom_fmt(state, args, tid, 2);
+            *result = args[0];
+            type = tid[0];
+        }
+        break; case HW_LEXTOKEN_BRACE_LEFT: {
+            hw_Var args[2] = { (hw_Var){.as_symtable = NULL}
+                             , (hw_Var){.as_lexer = l} };
+            hw_byte tid[2] = { hw_TypeID_nil, hw_TypeID_nil };
+
+            hw_SymTable_newFrom_fmt(state, args, tid, 2);
+            *result = args[0];
+            type = tid[0];
+        }
+        break; case HW_LEXTOKEN_DOUBLE_QUOTE: {
+            hw_Var args[2] = { (hw_Var){.as_string = NULL}
+                             , (hw_Var){.as_lexer = l} };
+            hw_byte tid[2] = { hw_TypeID_nil, hw_TypeID_nil };
+
+            hw_String_newFrom_fmt(state, args, tid, 2);
+            *result = args[0];
+            type = tid[0];
+        }
+    }    
+    return type;
+}
+
+
+
 /*************************************************************************
  *                          PRIVATE
  *************************************************************************/
@@ -138,22 +201,185 @@ DEFN(hw_VarFn_UNREACHABLE) {
     return HW_VARP_NIL();
 }
 
+/* newFrom_Fmt(self, lexer: hw_Lexer) */
+/*******************
+// INT
+ *******************/
+
+
+/*******************
+// UINT
+ *******************/
+
+
+/*******************
+// FLOAT
+ *******************/
+
 /*******************
 // STRINGS
  *******************/
+
+hw_String *_String_new(hw_State *state, hw_u32 _len)
+{
+    hw_String *self = _ALLOC( sizeof(hw_String)
+                            + (sizeof(*self->data) * _len) );
+
+    self->data = HW_CAST(void *, self + 1);
+    self->len = _len;
+    self->lenUsed = 0;
+    return self;
+}
+
+hw_String *_String_newFrom_data(
+    hw_State *state, hw_byte const *data, hw_u32 _len)
+{
+    hw_String *self = _String_new(state, _len);
+    self->lenUsed = _len;
+    memcpy(self->data, data, _len * sizeof(*self->data));
+    return self;
+}
+
+hw_bool _String_expand(hw_State *state, hw_String **selfp, hw_u32 const by)
+{
+    hw_String *self = *selfp;    
+    self->len += by;
+    self = _REALLOC(*selfp, sizeof(*self) 
+                                    + (sizeof(*self->data) * self->len) );
+    self->data = HW_CAST(void *, self + 1);
+    *selfp = self;
+}
+
+void _String_append_data(
+    hw_State *state, hw_String **selfp, hw_byte const *data, hw_u32 _len)
+{
+    hw_String *self = *selfp;
+    if((self->len - self->lenUsed) < _len) {
+        _String_expand(state, &self, _len + 1);
+        *selfp = self;
+    }
+    memcpy(self->data + self->lenUsed, data, _len);
+    self->lenUsed += _len;
+}
+
+void _String_push(hw_State *state, hw_String **selfp, hw_byte ch)
+{
+    hw_String *self = *selfp;
+    if(self->lenUsed >= self->len) {
+        _String_expand(state, &self, self->len);
+        *selfp = self;
+    }
+    self->data[self->lenUsed] = ch;
+    self->lenUsed += 1;
+}
+
+void _String_push_hexchar(hw_State *state, hw_String **selfp, hw_byte n1, hw_byte n2)
+{
+    if(!hw_char_is_hex(n1)) { _String_push(state, selfp, n1); return; }
+    if(!hw_char_is_hex(n2)) { _String_push(state, selfp, n2); return; }
+    n1 = hw_char_hex_to_num(n1);
+    n2 = hw_char_hex_to_num(n2);
+    hw_byte xh = (n1 << 4) | (n2 & 0xf);
+    _String_push(state, selfp, xh);
+}
+
+hw_String* _String_newFrom_dataRaw(
+    hw_State *state, hw_byte const *data, hw_u32 _len) {
+    hw_byte const *data_end = data + _len;
+    
+    hw_String *self = _String_new(state, _len);
+
+    while(data < data_end) {
+        _len = 0;
+        hw_byte const *start = data;
+        if(*data == '\\') {
+            _String_append_data(state, &self, start, _len);
+            _len = 0;
+            data += 1;
+            
+            #define next(ch)\
+                { _String_push(state, &self, ' '); }
+
+            if(data >= data_end) { return self; }
+            switch (*data) {
+                case 'n':  next('\n'); break; // Newline
+                case 't':  next('\t'); break; // Tab
+                case 'r':  next('\r'); break; // Carriage return
+                case '0':  next('\0'); break; // Null character
+                case 'a':  next('\a'); break; // Alert (bell)
+                case 'b':  next('\b'); break; // Backspace
+                case 'f':  next('\f'); break; // Form feed
+                case 'v':  next('\v'); break; // Vertical tab
+                case '\\': next('\\'); break; // Backslash
+                case '\'': next('\''); break; // Single quote
+                case '\"': next('\"'); break; // Double quote
+
+                #define check_nextx() { \
+                    data++; if(data >= data_end) { return self; }\
+                }
+
+                case 'x': {
+                            check_nextx(); hw_byte n1 = *data;
+                            check_nextx(); hw_byte n2 = *data; 
+                            _String_push_hexchar(state, &self, n1, n2);
+                        } break;
+                default: next(*data);  break;
+            }
+
+            start = data;
+        }
+        _len += 1;
+    }
+    return self;
+}
+
 DEFN(hw_String_new) {
     (void)args;
     (void)tids;
     (void)argc;
 
-    const hw_uint default_size = 8;
-    _SELF(hw_String *) = _ALLOC(sizeof(hw_String)
-                            + (sizeof(*self->data) * default_size));
-
-    self->len = default_size;
-    self->lenUsed = 0;
-
+    const hw_u32 default_size = 8;
+    _SELF(hw_String *) =  _String_new(state, default_size);
     _SELF_ASSIGN(as_string);
+    _GET_SELF_TID() = hw_TypeID_string;
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_String_newFrom_fmt) {
+    (void)argc;
+    hw_Lexer *l = _GET_ARG(0, as_lexer);
+    if(!hw_Lexer_convert_string(l)) { _GET_SELF_TID() = hw_TypeID_nil; };
+    _SELF(hw_String *) = _String_newFrom_dataRaw(state, l->token.start, l->token.size);
+    _SELF_ASSIGN(as_string);
+    _GET_SELF_TID() = hw_TypeID_string;
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_String_newFrom_data) {
+    (void)tids;
+    (void)argc;
+
+    hw_byte *data = _GET_ARG(0, as_byte_p);
+    hw_u32 dsize = _GET_ARG(1, as_uint);
+
+    _SELF(hw_String *) = _String_newFrom_data(state, data, dsize);
+    _SELF_ASSIGN(as_string);
+    _GET_SELF_TID() = hw_TypeID_string;
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_String_newFrom_copy) {
+    (void)args;
+    (void)tids;
+    (void)argc;
+    
+    hw_String *source = _GET_ARG(0, as_string);
+
+    _SELF(hw_String *) = _String_newFrom_data(
+            state, source->data, source->lenUsed);
+    _SELF_ASSIGN(as_string);
+    _GET_SELF_TID() = hw_TypeID_string;
+
     return HW_VARP_NIL();
 }
 
@@ -167,47 +393,6 @@ DEFN(hw_String_delete) {
     return HW_VARP_NIL();
 }
 
-DEFN(hw_String_newFrom_data) {
-    (void)tids;
-    (void)argc;
-
-    _SELF(hw_String *);
-    
-    hw_byte *data = _GET_ARG(0, as_byte_p);
-    hw_uint dsize = _GET_ARG(1, as_uint);
-
-    self = _ALLOC( (sizeof(*self))
-                  +(sizeof(*self->data) * dsize));
-
-    self->data = HW_CAST(void *, self + 1);
-    self->len = dsize;
-    self->lenUsed = dsize;
-
-    memcpy(self->data, data, dsize);
-
-    _SELF_ASSIGN(as_string);
-    return HW_VARP_NIL();
-}
-
-DEFN(hw_String_newFrom_copy) {
-    (void)args;
-    (void)tids;
-    (void)argc;
-
-    hw_String const *string = _GET_ARG(0, as_string);
-
-    hw_Var const data = _MAKE_VAR(string->data, as_ptr);
-    hw_Var const size = _MAKE_VAR(string->lenUsed, as_uint);
-
-    hw_Var ar[] = { _GET_SELF(), data, size };
-    hw_byte ti[] = { _GET_SELF_TID(), hw_TypeID_ptr, hw_TypeID_uint };
-    hw_VarP ret = hw_String_newFrom_data(state, ar, ti, 3);
-    _SET_ARG_RAW(0, ret.value);
-    _SET_ARG_TID(0, hw_TypeID_string);
-
-    return ret;
-}
-
 DEFN(hw_String_append_cstr) {
     (void)tids;
     (void)argc;
@@ -217,12 +402,7 @@ DEFN(hw_String_append_cstr) {
     hw_uint dsize = _GET_ARG(1, as_uint);
 
     hw_uint const availiable_len = self->len - self->lenUsed;
-    if(availiable_len < dsize) {
-        self->len += (1+dsize);
-        self = _REALLOC(self, (sizeof(*self))
-                            +  (sizeof(*self->data) * (self->len)));
-        self->data = HW_CAST(void *, self + 1);
-    }
+    if(availiable_len < dsize) { _String_expand(state, &self, dsize + 1); }
     
     memcpy(self->data + self->lenUsed, data, dsize);
     self->lenUsed += dsize;
@@ -445,23 +625,16 @@ DEFN(hw_VarList_new) {
     (void)tids;
     (void)argc;
     
-    HW_DEBUG(
-        _CHECK_ARGS(0, hw_TypeID_nil)
-    );
-
     _SELF(hw_VarList *);
     const hw_uint default_len = 8;
     
-    self = _ALLOC(sizeof(hw_VarList)
-                            + (sizeof(hw_Var) * default_len)
-                            + (sizeof(hw_byte) * default_len));
+    self = _ALLOC(sizeof(hw_VarList) + (sizeof(hw_Var) * default_len));
 
     self->len = default_len;
     self->lenUsed = 0;
 
     self->data = HW_CAST(void *, self + 1);
-    self->tid  = HW_CAST(void *, self->data + self->len);
-
+    self->tid  = _ALLOC(sizeof(*self->tid) * default_len);
 
     _SELF_ASSIGN(as_list);
     return HW_VARP_NIL();
@@ -472,16 +645,42 @@ DEFN(hw_VarList_expand) {
     (void)argc;
 
     _SELF_BIND(hw_VarList *, as_list);
-    hw_uint size = _GET_ARG(0, as_uint);
+    self->len += _GET_ARG(0, as_uint);
     self = _REALLOC(self, ( (sizeof(*self)) 
-                          + (sizeof(*self->data) * (self->len + size))
-                          + (sizeof(*self->tid) * (self->len + size))
+                          + (sizeof(*self->data) * (self->len))
                         ));
 
     HW_DEBUG(HW_ASSERT(self));
-    self->len += size;
     self->data = HW_CAST(void *, self + 1);
-    self->tid = HW_CAST(void *, self->data + self->len);
+    self->tid = _REALLOC(self->tid, sizeof(*self->tid) * (self->len));
+    HW_DEBUG(HW_ASSERT(self));
+
+    _SELF_ASSIGN(as_list);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_newFrom_fmt) {
+    (void)argc;
+
+    hw_Lexer *l = _GET_ARG(0, as_lexer);
+    if(!hw_LexToken_is(l->token, HW_LEXTOKEN_SQR_BRACE_LEFT)) { 
+        _GET_SELF_TID() = hw_TypeID_nil; 
+        return HW_VARP_NIL();
+    }
+    hw_Lexer_next_skipws(l);
+
+hw_VarList_new(state, args, tids, 1);
+    _SELF_BIND(hw_VarList *, as_list);
+    hw_Var val = {0};
+    hw_byte val_tid = hw_Var_parse(state, &val, l);
+    while (hw_LexToken_is_not(l->token, HW_LEXTOKEN_END_OF_SOURCE)
+        && hw_LexToken_is_not(l->token, HW_LEXTOKEN_SQR_BRACE_RIGHT)) {
+        hw_Var arg[2] = { (hw_Var){.as_list = self }, val };
+        hw_byte tid[2] = { hw_TypeID_list, val_tid };
+        hw_VarList_push_shallow(state, arg, tid, 2);
+        self = arg[0].as_list;
+        hw_Lexer_next_skipws(l);
+    }
 
     _SELF_ASSIGN(as_list);
     return HW_VARP_NIL();
@@ -503,7 +702,6 @@ DEFN(hw_VarList_push_shallow) {
     
     self->data[self->lenUsed] = _GET_ARG_RAW(0);
     self->tid[self->lenUsed] = _GET_ARG_TID(0);
-
 
     self->lenUsed += 1;
     
@@ -617,6 +815,21 @@ DEFN(hw_SymTable_new) {
 
     hw_uint const default_len = 1 << 4;
     _GET_SELF().as_symtable = _new_Symtable(state, default_len);
+    _GET_SELF_TID() = hw_TypeID_symtable;
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_SymTable_newFrom_fmt) {
+    hw_Lexer *l = _GET_ARG(0, as_lexer);
+    if(!hw_LexToken_is(l->token, HW_LEXTOKEN_BRACE_LEFT)) { 
+        _GET_SELF_TID() = hw_TypeID_nil; 
+        return HW_VARP_NIL();
+    }
+    hw_Lexer_next_skipws(l);
+    
+    hw_SymTable_new(state, args, tids, 1);
+    _SELF_BIND(hw_SymTable *, as_symtable);
+
     return HW_VARP_NIL();
 }
 
@@ -883,7 +1096,7 @@ static void _default_setall_objects(hw_TypeSys *ts)
                         .id = hw_TypeID_symtable
                     ,   .is_obj = 1
                     ,   .name = "symtable"
-                    ,   .name_size = 5
+                    ,   .name_size = 8
                     ,   .unitsize = sizeof(hw_SymTable)
                     }));
     HW_ASSERT(T);

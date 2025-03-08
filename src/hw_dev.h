@@ -55,7 +55,7 @@ void hw_logstr(const char *msg, size_t const);
     hw_logp("[HWLOG]: " __FILE__ ":%d: " fmt "\n", __LINE__, __VA_ARGS__)
 
 /**
- * Assert
+ * Section: Assert
  */
 #define HW_ASSERTEX(exp, fmt, ...)\
         do {                \
@@ -73,6 +73,35 @@ void hw_logstr(const char *msg, size_t const);
 #define HW_ASSERT_OP(x, op, y, fmt_x, fmt_y)\
             HW_ASSERTEX(x op y\
                     , "%"fmt_x" "#op" %"fmt_y, x, y) ;
+
+/**
+ * Section: hw_char
+ */
+#define hw_char_is_ws(x) ((x) == ' ' | (x) == '\n' | (x) == '\t')
+#define hw_char_is_num(x) ((x) >= '0' && (x) <= '9')
+#define hw_char_is_lower(x) ((x) >= 'a' && (x) <= 'z')
+#define hw_char_is_upper(x) ((x) >= 'A' && (x) <= 'Z')
+#define hw_char_is_alpha(x) (hw_char_is_lower(x) || hw_char_is_upper(x))
+#define hw_char_is_alnum(x) (hw_char_is_alpha(x) || hw_char_is_num(x))
+
+#define hw_char_is_hex(ch) ( hw_char_is_num(ch) || ( ch >= 'A' && ch <= 'F' ) \
+                                                || ( ch >= 'a' && ch <= 'f' ) )
+
+#define hw_char_hex_to_num(ch)\
+    ( hw_char_is_num(ch)?\
+        (ch - '0'): \
+     ((ch) >= 'a' && (ch) <= 'f')? \
+        (ch - 'a'):\
+     ((ch) >= 'A' && (ch) <= 'F')? (ch - 'A'):0 )
+
+/**
+ * Section: c-string
+ * ASCII string utility
+ */
+hw_i32 hw_strto_uint(hw_uint *ret, hw_byte const *str, hw_u32 size);
+hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size);
+hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size);
+
 /**
  * Section: Tokens
  */
@@ -156,6 +185,7 @@ void hw_Lexer_next_skipws(hw_Lexer *lex);
 void hw_Lexer_next_until(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_next_expect(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size);
+hw_bool hw_Lexer_convert_string(hw_Lexer *lex);
 
 /**
  * Section: Type Impl
@@ -213,10 +243,12 @@ DEFN(hw_String, new);
 DEFN(hw_String, delete);
 DEFN(hw_String, newFrom_data);
 DEFN(hw_String, newFrom_file);
+DEFN(hw_String, newFrom_fmt);
 DEFN(hw_String, append_str);
 
 /* List */
 DEFN(hw_VarList, new);
+DEFN(hw_VarList, newFrom_fmt);
 DEFN(hw_VarList, delete);
 DEFN(hw_VarList, reserve);
 DEFN(hw_VarList, expand);
@@ -237,12 +269,15 @@ DEFN(hw_SArr, get);
 
 /* Symtable */
 DEFN(hw_SymTable, new);
+DEFN(hw_SymTable, newFrom_fmt);
 DEFN(hw_SymTable, delete);
 DEFN(hw_SymTable, set);
 DEFN(hw_SymTable, get);
 DEFN(hw_SymTable, reset);
 
 #undef DEFN
+
+hw_uint hw_Var_parse(hw_State *state, hw_Var *result, hw_Lexer *l);
 
 /**
  * Wrappers
@@ -304,6 +339,7 @@ enum hw_Inst {
                     // R(Ax).as.u32[1] |= x32;
 
   , INST(load)      // R(Ax) = data(x32)
+  , INST(loadknst)  // R(Ax) = knst(x32)
   , INST(loadobj)   // R(Ax).type = data(x32).type
                     // R(Ax).@call load, (data(x32)+1)
 
@@ -330,7 +366,6 @@ enum hw_Inst {
   , INST(i_lt)  // R(Ax) = R(Bx) <  R(Cx)
   , INST(i_le)  // R(Ax) = R(Bx) <= R(Cx)
 
-  /*
   , INST(i_kadd)  // R(Ax) = R(Bx) + Cx
   , INST(i_ksub)  // R(Ax) = R(Bx) - Cx
   , INST(i_kmul)  // R(Ax) = R(Bx) * Cx
@@ -339,7 +374,7 @@ enum hw_Inst {
   , INST(i_keq)  // R(Ax) = R(Bx) == Cx
   , INST(i_klt)  // R(Ax) = R(Bx) <  Cx
   , INST(i_kle)  // R(Ax) = R(Bx) <= Cx
-  */
+                 
   /* Maths (floats) */
   , INST(f_add)
   , INST(f_mul)
@@ -348,6 +383,7 @@ enum hw_Inst {
   , INST(prnt_int)
   , INST(prnt_chk)
   , INST(prnt_chv)
+  , INST(prnt_str)
 
   /* For testing, ignore */
   , INST(TOTAL)
@@ -470,52 +506,8 @@ hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
 #define HW_THREAD_FREE(TH, PTR)\
             (TH)->allocator.free(&(TH)->allocator, PTR)
 
-
-
 /**
- * Generic Array
- */
-#define HW_ARR(T) struct { T *data; hw_u32 lenUsed; hw_u32 len; }
-#define HW_ARR_NEW(s, a, _len)\
-    {                                                       \
-        (a) = HW_THREAD_ALLOC(s,                            \
-                sizeof(*a) + (sizeof(*(a)->data) * _len));  \
-        (a)->data = HW_CAST(void*, a + 1);                  \
-        (a)->len = _len;                                    \
-        (a)->lenUsed = 0;                                   \
-    }
-
-#define HW_ARR_DELETE(s, a)\
-    {\
-        HW_THREAD_FREE(s, a);\
-    }
-
-#define HW_ARR_PUSH(s, a, dat)\
-    {\
-        if((a)->lenUsed >= (a)->len ) {                         \
-            (a)->len *= 2;                                      \
-            a = HW_THREAD_REALLOC(s, a                          \
-                , sizeof(*a) + (sizeof(*(a)->data) * (a)->len));\
-            (a)->data = HW_CAST(void*, a + 1);                  \
-        }                                                       \
-        (a)->data[(a)->lenUsed] = dat;                          \
-        (a)->lenUsed += 1;                                      \
-    }                                                           \
-
-#define HW_ARR_PUSHSTREAM(s, a, dats, dats_len)\
-    {                                                           \
-        if(((a)->lenUsed+dats_len) >= (a)->len ) {              \
-            (a)->len += dats_len +1;                            \
-            a = HW_THREAD_REALLOC(s, a                          \
-                , sizeof(*a) + (sizeof(*(a)->data) * (a)->len));\
-        }                                                       \
-        memcpy((a)->data + (a)->lenUsed, dats                   \
-                , dats_len * sizeof(*(a)->data));               \
-        (a)->lenUsed += dats_len;                               \
-    }                                                           \
-
-
-/**
+ * VM
  */
 void hw_vm(hw_State *hw);
 void hw_vm_prepare_ret(hw_State *hw);

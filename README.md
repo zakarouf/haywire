@@ -14,15 +14,15 @@ A small register based Programmable VM made to be fast and modular.
 
 # Roadmap
 * [ ] VM
-  - [ ] Instructions
+  - [x] Instructions
   - [x] Type System
-  - [ ] Type Interface
-      - [ ] Primitives
-      - [ ] String
-      - [ ] List
+  - [x] Type Interface
+      - [x] Primitives
+      - [x] String
+      - [x] List
       - [ ] Array
-      - [ ] Table
-* [ ] Byte Code Compiler
+      - [x] Table
+* [x] Byte Code Compiler
 * [ ] Haywire Language Compiler
 * [ ] C Transpiler
 * [ ] JIT

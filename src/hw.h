@@ -5,6 +5,62 @@
 #include <float.h>
 #include <pthread.h>
 
+/**
+ * Generic Array
+ */
+#define HW_ARR(T) struct { T *data; hw_u32 lenUsed; hw_u32 len; }
+#define HW_ARR_NEW(s, a, _len)\
+    {                                                       \
+        (a) = HW_THREAD_ALLOC(s,                            \
+                sizeof(*a) + (sizeof(*(a)->data) * _len));  \
+        (a)->data = HW_CAST(void*, a + 1);                  \
+        (a)->len = _len;                                    \
+        (a)->lenUsed = 0;                                   \
+    }
+
+#define HW_ARR_DELETE(s, a)\
+    {\
+        HW_THREAD_FREE(s, a);\
+    }
+
+#define HW_ARR_EXPAND(s, a, by)\
+    {                                                       \
+        (a)->len += by;                                     \
+        a = HW_THREAD_REALLOC(s, a                          \
+            , sizeof(*a) + (sizeof(*(a)->data) * (a)->len));\
+        (a)->data = HW_CAST(void*, a + 1);                  \
+    }
+
+#define HW_ARR_PUSHINC(s, a)\
+    {\
+        if((a)->lenUsed >= (a)->len ) {                         \
+            HW_ARR_EXPAND(s, a, (a)->len);                      \
+        }                                                       \
+        (a)->lenUsed += 1;                                      \
+    }
+
+#define HW_ARR_PUSH(s, a, dat)\
+    {                                                           \
+        HW_ARR_PUSHINC(s, a)                                    \
+        (a)->data[(a)->lenUsed-1] = dat;                        \
+    }                                                           \
+
+#define HW_ARR_PUSHSTREAM(s, a, dats, dats_len)\
+    {                                                           \
+        if(((a)->lenUsed+dats_len) >= (a)->len ) {              \
+            HW_ARR_EXPAND(s, a, dats_len + 1)                   \
+        }                                                       \
+        memcpy((a)->data + (a)->lenUsed, dats                   \
+                , dats_len * sizeof(*(a)->data));               \
+        (a)->lenUsed += dats_len;                               \
+    }                                                           \
+
+#define HW_ARR_TOP(ARR) (ARR)->data[(ARR)->lenUsed-1]
+
+/**
+ * Types
+ */
+
 typedef void*               hw_ptr;
 typedef uint8_t             hw_byte;
 
@@ -22,6 +78,10 @@ typedef _Bool               hw_bool;
 
 #define HW_UINT_MAX         UINT64_MAX
 #define HW_INT_MAX          INT64_MAX
+#define HW_INT_MIN          INT64_MIN
+#define HW_FLOAT_MAX        DBL_MAX
+#define HW_FLOAT_MIN        DBL_MIN
+
 #define HW_TYPEID_MAX       UINT8_MAX
 #define HW_WORD_SIZE        (sizeof(hw_uint))
 
@@ -121,6 +181,7 @@ union hw_Var {
     hw_byteArr      *as_barr,   **as_barr_p;
     hw_String       *as_string, **as_string_p;
     hw_CStr         *as_cstr,   **as_cstr_p;
+    hw_Lexer        *as_lexer;
 
     hw_VarArr       *as_arr,    **as_arr_p;
     hw_SArr         *as_sarr,   **as_sarr_p;
@@ -540,6 +601,9 @@ struct hw_Global {
     hw_State        *parent;
     hw_VarList      *constants;
 
+    hw_VarFnArr     *builtin;
+    hw_SymTable     *builtin_names;
+
     hw_TypeSys      *tsys;
     hw_InstData     const *insts;
     hw_byte         insts_count;
@@ -564,6 +628,9 @@ struct hw_Global {
  *  to_c: Convert .hwasm -> .c
  */
 
+typedef struct hw_DeferInstArr hw_DeferInstArr;
+typedef struct hw_DeferInst hw_DeferInst;
+
 typedef struct hw_VarInfo hw_VarInfo;
 typedef struct hw_FnObj hw_FnObj;
 
@@ -580,8 +647,9 @@ struct hw_ModuleObj {
     
     hw_codeArr      *code;
     hw_byteArr      *data;
-    hw_VarArr       *knst;
-    hw_byteArr      *knst_t;
+
+    hw_VarList      *knst;
+    hw_SymTable     *knsttable;
 };
 
 struct hw_VarInfo {
@@ -599,6 +667,18 @@ struct hw_VarInfoArr {
     hw_u32 lenUsed;
 };
 
+struct hw_DeferInst {
+    hw_LexToken symbol;
+    hw_uint inst;
+    hw_byte operand;
+};
+
+struct hw_DeferInstArr {
+    struct hw_DeferInst *data;
+    hw_u32 len;
+    hw_u32 lenUsed;
+};
+
 struct hw_FnObj {
     hw_uint name_size;
     hw_uint name_sizeUsed;
@@ -612,14 +692,11 @@ struct hw_FnObj {
     hw_SymTable *lables;
     hw_SymTable *vartable;
     struct hw_VarInfoArr *var_infos;
-
-    hw_LexTokenArr *defer_lable_names;
-    hw_uintArr     *defer_lables;
+    struct hw_DeferInstArr *defer_lables;
 
     hw_byte lock;
+    hw_byte operand;
 };
-
-
 
 /**
  * Section: Lexer

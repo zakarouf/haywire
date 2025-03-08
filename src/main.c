@@ -166,9 +166,10 @@ void print_tokens(hw_Lexer lexer)
 }
 
 
+
 int main(int argc, char *argv[])
 {
-    HW_ASSERT(argc > 1);
+    HW_ASSERTEX(argc > 1, "`%s` requires one argument, \nUsage: %s <file>", argv[0], argv[0]);
     hw_State *hw = hw_State_new_default(NULL);
     _static_checks();
     _check_vm_inst(hw);
@@ -179,7 +180,6 @@ int main(int argc, char *argv[])
 
     hw_compbc_compile_from_source(comp);
     hw_Module *mod = hw_compbc_convert(comp);
-    hw_compbc_delete(comp);
 
     if(argc > 2) {
         hw_debug_Module_disasm(hw, mod);
@@ -191,6 +191,7 @@ int main(int argc, char *argv[])
 
     hw_vm_prepare_call(hw, mod_id, fn_id);
     hw_vm(hw);
+    hw_compbc_delete(comp);
 
     hw_logp("All Ok\n");
     hw_State_delete(hw);
