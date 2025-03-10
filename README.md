@@ -6,23 +6,30 @@
 A small register based Programmable VM made to be fast and modular.
 
 ## Source Files Description
-* `hw_comp.c`: Text to Byte Code Compiler.
-* `hw_asmc.c`: Byte Code Compiler.
-* `hw_htoc.c`: HayWire to C Transpiler
+* `hw_compbc.c`: Haywire Byte Code Compiler.
+* `hw_debug.c`: Debug Utilities (i.e. Decompiler, Stack Trace etc.)
 * `hw_vm.c`: HayWire Virtual Machine.
 * `hw_dev_...`: All Utility functions and modules for haywire.
 
 # Roadmap
-* [ ] VM
+* [x] VM
   - [x] Instructions
   - [x] Type System
   - [x] Type Interface
       - [x] Primitives
       - [x] String
       - [x] List
-      - [ ] Array
+      - [x] Array
       - [x] Table
 * [x] Byte Code Compiler
+    - [x] Interlope with VM
+    - [x] Haywire ByteCode IR
+* [ ] Module System
+    - [x] Module Structure 
+    - [ ] Import & Export
+    - [ ] Runtime Linking
+    - [ ] Compile Time Linking
+    - [ ] Module Pack
 * [ ] Haywire Language Compiler
 * [ ] C Transpiler
 * [ ] JIT
@@ -43,19 +50,26 @@ A small language implementation written in C.
 ## Installation
 
 ```
-./ebuild.sh
+make -j
 ```
-> Make sure you have [z_](https://github.com/zakarouf/z_) installed
+This will result in the './bin/hw' binary executable created.
+Optionally you can use the following command below to build a debug executable.
+```
+make debug -j 
+```
+> Haywire Only depends on the C Standard Library & CRT. Removing/Replacing them
+> is a low priority goal.
+
 
 ## Programming Prospectus
-While not yet totally implemented `haywire` will have c-like syntax; akin to javascript.
+While not yet totally implemented `haywire` will have c-like syntax;
 
-```sh
+```zig
 # `//` or `#`` for writting comments
-import std        # Importing modules
-import std.error  # Importing specific symbols or sub-modules from modules.
+const std = @import("std")  // Importing modules
+const error = std.error     // Importing specific symbols or sub-modules from modules.
 
-export main       # export symbols of the current module.
+export main                 // export symbols of the current module.
 
 let main = fn(args: [string]) ?error {
     if(args.len() < 4) return error.any()
@@ -71,18 +85,21 @@ $ haywire ./test 40 23
 Sum of 40 and 23 is 63
 ```
 
+
 ### Meta Programming
 `@` symbol is used for invoking compiler functions.
 Haywire code can be executed compile time using '!' prefixing a normal function or using `@call` compiler invoke
-```python
-import std.error
+```rust
+const std = @import("std")  // Importing modules
+const error = std.error     // Importing specific symbols or sub-modules from modules.
 export main
 
 let makelist = fn(_from: int, _upto: int, _step: int) list {
     let x = []
-    iterate i from _from upto _upto {
+    iter i in _from,_upto: _step {
         x.push(i)
     }
+
     return x
 }
 
