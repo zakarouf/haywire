@@ -96,10 +96,7 @@ struct hw_InstData const HW_INST_DATA[] = {
   , ID(f_mul,  HW_FALSE, abc)
   , ID(f_lt,   HW_FALSE, abc)
 
-  , ID(prnt_int, HW_FALSE, a)
-  , ID(prnt_chk, HW_FALSE, a)
-  , ID(prnt_chv, HW_FALSE, a)
-  , ID(prnt_str, HW_FALSE, a)
+  , ID(prnt, HW_FALSE, a)
 
 
   , ID(TOTAL, HW_FALSE, nop)
@@ -304,6 +301,8 @@ void hw_Allocator_default_delete(hw_Allocator *allocator)
 {
     (void)allocator;
 }
+
+
 
 /**
  * Global
@@ -580,7 +579,12 @@ void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by)
     }
 }
 
-void hw_State_fstack_push(
+inline void hw_State_vstack_pop_mult(hw_State *hw, const hw_uint by)
+{
+    hw->vstack->lenUsed -= by;
+}
+
+inline void hw_State_fstack_push(
     hw_State *s, hw_uint const mod_id, hw_uint const fn_id)
 {
     HW_ARR_PUSH(s, s->fstack, ((hw_FnState){

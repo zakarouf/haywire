@@ -107,15 +107,17 @@ void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
             , info.types - m->data
             , m->code->getx.x32);
 
-    fprintf(hw->stdout, "@defn %.*s {\n", (int)info.name_size, info.name);
+    fprintf(hw->stdout, "@defn %.*s (", (int)info.name_size, info.name);
     for (size_t i = 0; i < info.arg_count; i++) {
         hw_Type *T = hw_TypeSys_get_via_id(hw->ts, info.types[i]);
         HW_ASSERTEX(T, "%d", info.types[i]);
+        if(i == info.mut_count) { fprintf(hw->stdout, "|"); }
 
-        fprintf(hw->stdout, "        _%"PRIu64":%.*s,\n"
+        fprintf(hw->stdout, " _%"PRIu64":%.*s,"
                 , i, (int)T->name_size, T->name);
     }
-    fprintf(hw->stdout, "  } %"PRIu64, info.mut_count);
+    fprintf(hw->stdout, "  ) ; total(%"PRIu64") mut (%"PRIu64")",
+            info.arg_count, info.mut_count);
 }
 
 
@@ -206,6 +208,7 @@ enum {
 void hw_debug_vm_step(
     hw_State *hw, hw_Module const *m, hw_code const *pc, hw_Var const *v)
 {
+    (void)v;
     _L_repeat: {}
     hw_uint input = getchar();
 

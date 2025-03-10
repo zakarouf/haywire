@@ -125,7 +125,7 @@ enum hw_LexTokenType {
                                               
     , TOKEN(COMMA), TOKEN(DOT), TOKEN(COLON), TOKEN(SEMI_COLON), TOKEN(AT)
     , TOKEN(QUOTE), TOKEN(DOUBLE_QUOTE), TOKEN(DOLLAR), TOKEN(HASH)
-    , TOKEN(PERCENT), TOKEN(AND), TOKEN(BACK_SLASH)
+    , TOKEN(PIPE), TOKEN(PERCENT), TOKEN(AND), TOKEN(BACK_SLASH)
                                               
     /* Single or Multi Character Tokens */    
     , TOKEN(PLUS), TOKEN(MINUS), TOKEN(SLASH), TOKEN(ASTER)
@@ -185,7 +185,6 @@ void hw_Lexer_next_skipws(hw_Lexer *lex);
 void hw_Lexer_next_until(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_next_expect(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size);
-hw_bool hw_Lexer_convert_string(hw_Lexer *lex);
 
 /**
  * Section: Type Impl
@@ -380,10 +379,7 @@ enum hw_Inst {
   , INST(f_mul)
   , INST(f_lt)
 
-  , INST(prnt_int)
-  , INST(prnt_chk)
-  , INST(prnt_chv)
-  , INST(prnt_str)
+  , INST(prnt)
 
   /* For testing, ignore */
   , INST(TOTAL)
@@ -492,9 +488,10 @@ hw_FnState* hw_State_fstack_top(hw_State *hw);
 void hw_State_fstack_top_save(hw_State *hw, hw_code const *pc, hw_Var const *var);
 
 void hw_State_vstack_reserve(hw_State *hw, hw_uint const by);
-void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by);
 hw_uint hw_State_vstack_push_mult(hw_State *hw, const hw_uint by);
 hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
+void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by);
+void hw_State_vstack_pop_mult(hw_State *hw, const hw_uint by);
 
 
 #define HW_THREAD_ALLOC(TH, SIZE)\
@@ -510,8 +507,7 @@ hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
  * VM
  */
 void hw_vm(hw_State *hw);
-void hw_vm_prepare_ret(hw_State *hw);
-void hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
+hw_FnState* hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
 
 /***
  * Byte Code Compiler

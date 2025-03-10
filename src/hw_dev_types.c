@@ -56,14 +56,18 @@ hw_Type *hw_TypeSys_get(hw_TypeSys const *ts, char const *key, hw_uint key_size)
 
 hw_Type *hw_TypeSys_get_via_id(hw_TypeSys const *ts, hw_uint typeid)
 {
-    if(typeid >= hw_TypeID_TOTAL) return NULL;
+    if(typeid >= hw_TypeID_TOTAL) {
+        HW_DEBUG(HW_LOG("Requested Type for ID %"PRIu64", ID OVERFLOW", typeid);)
+        return NULL;
+    }
+    HW_DEBUG(HW_LOG("Type Requested '%.*s'", ts->types[typeid].name_size, ts->types[typeid].name));
     return ts->types + typeid;
 }
 
 hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
 {
-    HW_LOG("Requested VT:%.*s for TYPE:%.*s"
-            , (int)name_size, name, (int)T->name_size, T->name);
+    HW_DEBUG(HW_LOG("Requested VT:%.*s for TYPE:%.*s"
+            , (int)name_size, name, (int)T->name_size, T->name);)
     
     for (size_t i = 0; i < T->vt_count; i++) {
         if(T->vtinfo[i].name_size == name_size) {
@@ -77,7 +81,7 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
         HW_LOG("No function exist '%.*s' for type: '%.*s'"
             , (int)name_size, name, (int)T->name_size, T->name);
     );
-    return hw_VarFn_UNREACHABLE;
+    return NULL;
 }
 
 /**********************************************************************/
@@ -107,7 +111,7 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
 #define _MAKE_VAR(value, as) ((hw_Var){.as = value})
 
 #define _SET_ARG_RAW(n, val) { _GET_ARG_RAW(n) = val; }
-#define _SET_ARG(n, as, val) { _GET_ARG(n).as  = val; }
+#define _SET_ARG(n, as, val) { _GET_ARG(n, as) = val; }
 #define _SET_ARG_TID(n, type)  { _GET_ARG_TID(n) = type; }
 
 #define _CHECK_ARGS(_c, ...)\
@@ -156,7 +160,7 @@ hw_uint hw_Var_parse(hw_State *state, hw_Var *result, hw_Lexer *l)
             hw_strto_float(&result->as_float, l->token.start, l->token.size);
             type = hw_TypeID_float;
         }
-        break; case HW_LEXTOKEN_SQR_BRACE_LEFT: {
+        break; case HW_LEXTOKEN_PAREN_LEFT: {
             hw_Var args[2] = { (hw_Var){.as_list = NULL}
                              , (hw_Var){.as_lexer = l} };
             hw_byte tid[2] = { hw_TypeID_nil, hw_TypeID_nil };
@@ -202,19 +206,56 @@ DEFN(hw_VarFn_UNREACHABLE) {
 }
 
 /* newFrom_Fmt(self, lexer: hw_Lexer) */
+/* to_string(self, result: string) NOTE: String is already initialized */
+void _String_append_data(
+    hw_State *state, hw_String **selfp, hw_byte const *data, hw_u32 _len);
 /*******************
 // INT
  *******************/
+DEFN(hw_int_to_string) {
+    (void)argc;
+    (void)tids;
 
+    hw_String *str = _GET_ARG(0, as_string);
+    _SELF_BIND(hw_int, as_int);
+    hw_byte buffer[32];
+    hw_byte len = snprintf((char *)buffer, 31, "%"PRIi64, self);
+    _String_append_data(state, &str, buffer, len);
+    _SET_ARG(0, as_string, str);
+    return HW_VARP_NIL();
+}
 
 /*******************
 // UINT
  *******************/
+DEFN(hw_uint_to_string) {
+    (void)argc;
+    (void)tids;
 
+    hw_String *str = _GET_ARG(0, as_string);
+    _SELF_BIND(hw_uint, as_uint);
+    hw_byte buffer[32];
+    hw_byte len = snprintf((char *)buffer, 31, "%"PRIi64, self);
+    _String_append_data(state, &str, buffer, len);
+    _SET_ARG(0, as_string, str);
+    return HW_VARP_NIL();
+}
 
 /*******************
 // FLOAT
  *******************/
+DEFN(hw_float_to_string) {
+    (void)argc;
+    (void)tids;
+
+    hw_String *str = _GET_ARG(0, as_string);
+    _SELF_BIND(hw_float, as_float);
+    hw_byte buffer[32];
+    hw_byte len = snprintf((char *)buffer, 31, "%lg", self);
+    _String_append_data(state, &str, buffer, len);
+    _SET_ARG(0, as_string, str);
+    return HW_VARP_NIL();
+}
 
 /*******************
 // STRINGS
@@ -248,6 +289,7 @@ hw_bool _String_expand(hw_State *state, hw_String **selfp, hw_u32 const by)
                                     + (sizeof(*self->data) * self->len) );
     self->data = HW_CAST(void *, self + 1);
     *selfp = self;
+    return 1;
 }
 
 void _String_append_data(
@@ -288,17 +330,15 @@ hw_String* _String_newFrom_dataRaw(
     hw_byte const *data_end = data + _len;
     
     hw_String *self = _String_new(state, _len);
+    hw_byte const *start = data;
 
     while(data < data_end) {
-        _len = 0;
-        hw_byte const *start = data;
         if(*data == '\\') {
-            _String_append_data(state, &self, start, _len);
-            _len = 0;
+            _String_append_data(state, &self, start, data - start);
             data += 1;
             
             #define next(ch)\
-                { _String_push(state, &self, ' '); }
+                { _String_push(state, &self, ch); data += 1; }
 
             if(data >= data_end) { return self; }
             switch (*data) {
@@ -327,8 +367,11 @@ hw_String* _String_newFrom_dataRaw(
             }
 
             start = data;
+        } else if(*data == '\"') {
+            _String_append_data(state, &self, start, data - start);
+            return self;
         }
-        _len += 1;
+        data += 1;
     }
     return self;
 }
@@ -345,11 +388,27 @@ DEFN(hw_String_new) {
     return HW_VARP_NIL();
 }
 
+hw_CStr hw_Lexer_convert_string(hw_Lexer *l, enum hw_LexTokenType end)
+{
+    hw_CStr string = { .data = (void *)l->at, .len = 0 };
+    while (hw_LexToken_is_not(l->token, HW_LEXTOKEN_END_OF_SOURCE)) {
+        hw_Lexer_next_until(l, end);
+        if(l->token.start[-1] != '\\') {
+            string.len = l->at - string.data;
+            return string;
+        }
+    }
+    return string;
+}
+
 DEFN(hw_String_newFrom_fmt) {
     (void)argc;
-    hw_Lexer *l = _GET_ARG(0, as_lexer);
-    if(!hw_Lexer_convert_string(l)) { _GET_SELF_TID() = hw_TypeID_nil; };
-    _SELF(hw_String *) = _String_newFrom_dataRaw(state, l->token.start, l->token.size);
+    hw_CStr string = hw_Lexer_convert_string(_GET_ARG(0, as_lexer)
+                                            , HW_LEXTOKEN_DOUBLE_QUOTE);
+
+    if(!string.len) { _GET_SELF_TID() = hw_TypeID_nil; };
+
+    _SELF(hw_String *) = _String_newFrom_dataRaw(state, string.data, string.len);
     _SELF_ASSIGN(as_string);
     _GET_SELF_TID() = hw_TypeID_string;
     return HW_VARP_NIL();
@@ -431,6 +490,13 @@ DEFN(hw_String_newFrom_file) {
     }
     
     _GET_SELF().as_string = args_list[0].as_string;
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_String_to_string) {
+    _SELF_BIND(hw_String *, as_string);
+    _String_append_data(state, &args[1].as_string, self->data, self->lenUsed);
+    _GET_SELF_TID() = hw_TypeID_string;
     return HW_VARP_NIL();
 }
 
@@ -620,6 +686,18 @@ DEFN(hw_SArr_get) {
  *    Var List
  *******************/
 
+static hw_VarList *_VarList_new(hw_State *state, hw_u32 len)
+{
+    hw_VarList *self = _ALLOC(sizeof(*self) + (sizeof(hw_Var) * len));
+
+    self->len = len;
+    self->lenUsed = 0;
+
+    self->data = HW_CAST(void *, self + 1);
+    self->tid  = _ALLOC(sizeof(*self->tid) * len);
+    return self;
+}
+
 DEFN(hw_VarList_new) {
     (void)args;
     (void)tids;
@@ -627,14 +705,31 @@ DEFN(hw_VarList_new) {
     
     _SELF(hw_VarList *);
     const hw_uint default_len = 8;
+    self = _VarList_new(state, default_len);
+    _SELF_ASSIGN(as_list);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_newFrom_copy) {
+
+    hw_VarList *src = _GET_ARG(0, as_list);
+    _SELF(hw_VarList *) = _VarList_new(state, src->lenUsed + 1);
     
-    self = _ALLOC(sizeof(hw_VarList) + (sizeof(hw_Var) * default_len));
-
-    self->len = default_len;
-    self->lenUsed = 0;
-
-    self->data = HW_CAST(void *, self + 1);
-    self->tid  = _ALLOC(sizeof(*self->tid) * default_len);
+    memcpy(self->tid, src->tid, sizeof(*self->tid) * src->lenUsed);
+    for (size_t i = 0; i < src->lenUsed; i++) {
+        hw_Type *T = hw_TypeSys_get_via_id(state->ts, self->tid[i]);
+        if(T->is_obj) {
+            hw_VarFn newFrom_copy = hw_Type_getvt(T, "newFrom_copy", 4*3);
+            hw_Var a[2] = { [1] = src->data[i] };
+            hw_byte t[2] = { [1] = src->tid[i] };
+            newFrom_copy(state, a, t, 2);
+            self->data[i] = a[0];
+        } else {
+            self->data[i] = src->data[i];
+        }
+    }
+    
+    self->lenUsed = src->lenUsed;
 
     _SELF_ASSIGN(as_list);
     return HW_VARP_NIL();
@@ -663,18 +758,19 @@ DEFN(hw_VarList_newFrom_fmt) {
     (void)argc;
 
     hw_Lexer *l = _GET_ARG(0, as_lexer);
-    if(!hw_LexToken_is(l->token, HW_LEXTOKEN_SQR_BRACE_LEFT)) { 
+    if(!hw_LexToken_is(l->token, HW_LEXTOKEN_PAREN_LEFT)) { 
         _GET_SELF_TID() = hw_TypeID_nil; 
         return HW_VARP_NIL();
     }
     hw_Lexer_next_skipws(l);
 
-hw_VarList_new(state, args, tids, 1);
+    hw_VarList_new(state, args, tids, 1);
     _SELF_BIND(hw_VarList *, as_list);
-    hw_Var val = {0};
-    hw_byte val_tid = hw_Var_parse(state, &val, l);
+
     while (hw_LexToken_is_not(l->token, HW_LEXTOKEN_END_OF_SOURCE)
-        && hw_LexToken_is_not(l->token, HW_LEXTOKEN_SQR_BRACE_RIGHT)) {
+        && hw_LexToken_is_not(l->token, HW_LEXTOKEN_PAREN_RIGHT)) {
+        hw_Var val = {0};
+        hw_byte val_tid = hw_Var_parse(state, &val, l);
         hw_Var arg[2] = { (hw_Var){.as_list = self }, val };
         hw_byte tid[2] = { hw_TypeID_list, val_tid };
         hw_VarList_push_shallow(state, arg, tid, 2);
@@ -683,6 +779,7 @@ hw_VarList_new(state, args, tids, 1);
     }
 
     _SELF_ASSIGN(as_list);
+    _GET_SELF_TID() = hw_TypeID_list;
     return HW_VARP_NIL();
 }
 
@@ -751,18 +848,40 @@ DEFN(hw_VarList_delete) {
         HW_DEBUG(
             printf("{}==== %"PRIu64 "===%" PRIu32 "\n", i, self->lenUsed);
             HW_ASSERT_OP(self->tid[i], <, hw_TypeID_TOTAL, PRIu8, PRIu8));
-        hw_byte const T = self->tid[i];
-        if(state->ts->types[T].is_obj) {
+        hw_Type const *T = hw_TypeSys_get_via_id(state->ts, self->tid[i]);
+        HW_ASSERT(T);
+        if(T->is_obj) {
             HW_DEBUG(HW_LOG("USING vt[1] here %s", ""););
-            HW_VAR_CALL(T, state, vt[1], self->data + i, self->tid + i, 1);
+            hw_VarFn delete = hw_Type_getvt(T, "delete", 6);
+            delete(state, self->data + i, self->tid + i, 1);
         }
     }
+    _FREE(self->tid);
     _FREE(self);
     return HW_VARP_NIL();
 }
 
+DEFN(hw_VarList_to_string) {
+    (void)argc;
+    (void)tids;
 
+    _SELF_BIND(hw_VarList *, as_list);
+    _String_append_data(state, &_GET_ARG(0, as_string), (void *)"( ", 2);
+    for (size_t i = 0; i < self->lenUsed; i++) {
+        args[0] = self->data[i];
+        tids[0] = self->tid[i];
+        hw_Type *T = hw_TypeSys_get_via_id(state->ts, tids[0]);
+        HW_DEBUG(HW_ASSERT(T));
+        hw_VarFn to_string = hw_Type_getvt(T, "to_string", 9);
+        to_string(state, args, tids, 2);
+        _String_append_data(state, &_GET_ARG(0, as_string), (void *)" ", 1);
+    }
 
+    _String_append_data(state, &_GET_ARG(0, as_string), (void *)")", 1);
+
+    _SELF_ASSIGN(as_list);
+    return HW_VARP_NIL();
+}
 
 
 /**************************
@@ -820,6 +939,8 @@ DEFN(hw_SymTable_new) {
 }
 
 DEFN(hw_SymTable_newFrom_fmt) {
+    (void)argc;
+
     hw_Lexer *l = _GET_ARG(0, as_lexer);
     if(!hw_LexToken_is(l->token, HW_LEXTOKEN_BRACE_LEFT)) { 
         _GET_SELF_TID() = hw_TypeID_nil; 
@@ -829,7 +950,8 @@ DEFN(hw_SymTable_newFrom_fmt) {
     
     hw_SymTable_new(state, args, tids, 1);
     _SELF_BIND(hw_SymTable *, as_symtable);
-
+    
+    _SELF_ASSIGN(as_symtable);
     return HW_VARP_NIL();
 }
 
@@ -986,11 +1108,25 @@ struct {
     hw_VarFn  fn;
 } static TYPEVT[hw_TypeID_TOTAL][_TYPEVT_MAX]= {
 
+    [hw_TypeID_uint] = {
+        FNINFO(hw_uint, to_string, 1, 1, hw_TypeID_uint, hw_TypeID_string)
+    },
+
+    [hw_TypeID_int] = {
+        FNINFO(hw_int, to_string, 1, 1, hw_TypeID_int, hw_TypeID_string)
+    },
+
+    [hw_TypeID_float] = {
+        FNINFO(hw_float, to_string, 1, 1, hw_TypeID_float, hw_TypeID_string)
+    },
+
     [hw_TypeID_string] = {
         FNINFO(hw_String, new, 0, 0, hw_TypeID_string),
         FNINFO(hw_String, delete, 0, 0, hw_TypeID_string),
         FNINFO(hw_String, newFrom_data, 2, 0
                 , hw_TypeID_string, hw_TypeID_ptr, hw_TypeID_uint),
+        FNINFO(hw_String, newFrom_copy, 1, 0, hw_TypeID_string),
+        FNINFO(hw_String, to_string, 1, 0, hw_TypeID_string)
     },
 
     [hw_TypeID_arr] = {
@@ -1004,9 +1140,11 @@ struct {
 
     [hw_TypeID_list] = {
         FNINFO(hw_VarList, new, 0, 0, hw_TypeID_list),
+        FNINFO(hw_VarList, newFrom_copy, 1, 1, hw_TypeID_list, hw_TypeID_list),
         FNINFO(hw_VarList, delete, 0, 0, hw_TypeID_list),
         FNINFO(hw_VarList, push_shallow, 1, 0, hw_TypeID_list, hw_TypeID_any),
         FNINFO(hw_VarList, pop_dtor, 0, 0, hw_TypeID_list),
+        FNINFO(hw_VarList, to_string, 1, 1, hw_TypeID_list, hw_TypeID_string),
     },
 
     [hw_TypeID_symtable] = {

@@ -4,26 +4,31 @@
 #include "hw.h"
 #include "hw_dev.h"
 
+
+static void _prnt(hw_State *hw, hw_Var v, hw_byte t)
+{
+    hw_Var argv[2];
+    hw_byte type[2];
+    
+    hw_String_new(hw, argv, type, 1);
+    argv[1] = argv[0];
+    argv[0] = v;
+    type[0] = t;
+    
+    hw_Type *T = hw_TypeSys_get_via_id(hw->ts, t);
+    HW_ASSERT(T);
+    hw_VarFn to_string = hw_Type_getvt(T, "to_string", 9);
+    to_string(hw, argv, type, 2);
+    hw_String *str = argv[1].as_string;
+    hw_logp("%.*s", str->lenUsed, str->data);
+    hw_String_delete(hw, argv+1, type+1, 1);
+}
+
 /**********************************************************************
  *                            Public
  **********************************************************************/
 
-void static _fnState_print(hw_FnState *f)
-{
-    hw_loglnp(
-        "FnState: "
-        "\n     fn  -> %"PRIu64
-        "\n     mod -> %"PRIu64
-        "\n     pc  -> %"PRIu64
-        "\n     var ->%"PRIu64
-      , f->fn
-      , f->mod
-      , f->pc
-      , f->var
-    );
-}
-
-void hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id)
+inline hw_FnState *hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id)
 {
     hw_State_fstack_push(hw, mod_id, fn_id);
     hw_FnState *f = hw_State_fstack_top(hw);
@@ -41,6 +46,30 @@ void hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id)
             , info.stack_sz - info.arg_count);
 
     f->var -= info.arg_count;
+    return f;
+}
+
+static inline hw_FnState* hw_vm_prepare_localcall(hw_State *hw, hw_uint fn_id, hw_Module const *mod, hw_uint mod_id)
+{
+    hw_State_fstack_push(hw, mod_id, fn_id);
+    hw_FnState *f = hw_State_fstack_top(hw);
+
+    f->pc = mod->fnpt[f->fn];
+
+    hw_FnInfo info;
+    hw_Module_get_FnInfo(mod, f->fn, &info);
+
+    HW_DEBUG(HW_ASSERTEX((hw_int)(f->var - info.arg_count) >= 0
+        , "Stack Underflow: %"PRIi64, (f->var - info.arg_count)));
+
+    hw_State_vstack_push_mult(hw, info.stack_sz - info.arg_count);
+
+    memcpy(hw->vstack->tid + f->var
+            , info.types + info.arg_count
+            , info.stack_sz - info.arg_count);
+
+    f->var -= info.arg_count;
+    return f;
 }
 
 void hw_vm_prepare_ret(hw_State *hw)
@@ -52,9 +81,10 @@ void hw_vm_prepare_ret(hw_State *hw)
     f->var += info.mut_count;
     hw_uint const count = hw->vstack->lenUsed - f->var;
 
-    hw_State_vstack_pop_mult_dtor(hw, count);
+    hw_State_vstack_pop_mult(hw, count);
     hw_State_fstack_pop(hw);
 }
+
 
 static void _illegal_inst(hw_State *hw, hw_code const *pc)
 {
@@ -71,13 +101,17 @@ static void _illegal_inst(hw_State *hw, hw_code const *pc)
 
 void hw_vm(hw_State *hw)
 {
-    _L_again: {}
+    _L_Return: {}
     if(!hw->fstack->lenUsed) { HW_DEBUG(HW_LOG("VM DONE~~%s", "")); return;}
     hw_FnState const *f = hw_State_fstack_top(hw);
 
+    //_L_Call: {}
     hw_Module const *mod = hw_Global_get_module(hw->global, f->mod);
 
-    register hw_code const *pc = hw_Module_get_fnpc(mod, f->mod) + f->pc;
+    _L_LocalCall: {}
+    register hw_code const *pc = mod->code + f->pc;
+    HW_DEBUG( HW_ASSERTEX(pc >= mod->code && pc < (mod->code + mod->code_len)
+                    , "%zu", pc - mod->code) );
 
     _L_reset_var: {}
     register hw_Var* vars = hw->vstack->data + f->var;
@@ -105,8 +139,6 @@ void hw_vm(hw_State *hw)
     #endif
 
     #define ON_INST(x) break; case hw_Inst_##x:
-    #define NON_INST(x)\
-        ON_INST(x) HW_ASSERT(0 && " INSTRUCTION :"#x" NOT IMPLEMENTED YET");
 
     #define START() while(1) {                        \
                       vm_debug(hw, mod, pc, vars);    \
@@ -122,7 +154,7 @@ void hw_vm(hw_State *hw)
     START()
         ON_INST(nop);
         ON_INST(defn);
-        ON_INST(return) { hw_vm_prepare_ret(hw); goto _L_again; };
+        ON_INST(return) { hw_vm_prepare_ret(hw); goto _L_Return; };
         
         // 
         ON_INST(push) { 
@@ -141,8 +173,8 @@ void hw_vm(hw_State *hw)
         //
         ON_INST(call) { 
             hw_State_fstack_top_save(hw, pc, vars);
-            hw_vm_prepare_call(hw, f->mod, x(x32)); 
-            goto _L_again; 
+            f = hw_vm_prepare_localcall(hw, x(x32), mod, f->mod); 
+            goto _L_LocalCall; 
         }
        
         //
@@ -165,10 +197,10 @@ void hw_vm(hw_State *hw)
        ON_INST(jk)        pc += s(s32); goto _L_Start;
 
        ON_INST(jt)        if(r(A).as_uint) { pc += r(B).as_int; 
-                                             goto _L_Start;};
+                                             goto _L_Start; };
 
        ON_INST(jtk)       if(r(A).as_uint) { pc  = (pc) + s(s32);
-                                             goto _L_Start;};
+                                             goto _L_Start; };
 
        ON_INST(typeq) r(A).as_uint = t(B) == t(C);
        ON_INST(tideq) r(A).as_uint = t(B) == a(C);
@@ -194,11 +226,22 @@ void hw_vm(hw_State *hw)
        ON_INST(f_mul) r(A).as_float = r(B).as_float * r(C).as_float;
        ON_INST(f_lt)  r(A).as_uint =  r(B).as_float < r(B).as_float;
 
-       ON_INST(prnt_int)  hw_logp("%"PRIi64, r(A).as_int);
-       ON_INST(prnt_chk)  hw_logp("%c", a(A));
-       ON_INST(prnt_chv)  hw_logp("%C", (wchar_t)r(A).as_uint);
-       ON_INST(prnt_str)  hw_logp("%.*s", r(A).as_string->lenUsed, r(A).as_string->data);
+       ON_INST(prnt) {
+            _prnt(hw, r(A), t(A));
+       }
     END()
+
+    #undef t
+    #undef a 
+    #undef r 
+    #undef x 
+    #undef s
+    #undef top
+    #undef topt
+    #undef START 
+    #undef END 
+    #undef ON_INST
+    #undef NON_INST
 }
 
 

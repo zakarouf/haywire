@@ -87,8 +87,6 @@ static void hw_FnObj_new(hw_CompilerBC *comp)
     fnobj->lables = symtable.value.as_symtable;
     HW_DEBUG(HW_LOG("lables %p", (void *)fnobj->lables));
 
-
-
     fnobj->name_size = 32;
     fnobj->name = HW_THREAD_ALLOC(comp->vm_child, fnobj->name_size);
 
@@ -286,18 +284,21 @@ hw_Module* hw_compbc_convert(hw_CompilerBC *comp)
     memcpy(mod->code, obj->code->data
             , obj->code->lenUsed * sizeof(*mod->code));
 
-    memcpy(mod->knst_t, obj->knst->tid 
+    memcpy(mod->knst_t, obj->knst->tid
             , obj->knst->lenUsed * sizeof(*mod->knst_t));
     
     for (size_t i = 0; i < mod->k_count; i++) {
-        mod->knst[i] = obj->knst->data[i];
-        hw_Type     *T = comp->vm_parent->ts->types + mod->knst_t[i];
+        HW_DEBUG(HW_LOG("@CONST %"PRIu64 ", typeid(%"PRIu8")", i, mod->knst_t[i] );)
+        hw_Type *T = hw_TypeSys_get_via_id(comp->vm_parent->ts, mod->knst_t[i]);
+        HW_ASSERT_NOTNULL(T);
         if(T->is_obj) {
             hw_VarFn    copy = hw_Type_getvt(T, "newFrom_copy", 4*3);
             hw_Var      args[2] = {mod->knst[i], obj->knst->data[i]};
             hw_byte     tids[2] = {mod->knst_t[i], mod->knst_t[i]};
             copy(comp->vm_parent, args, tids, 2);
             mod->knst[i] = args[0];
+        } else {
+            mod->knst[i] = obj->knst->data[i];
         }
     }
 
@@ -681,6 +682,9 @@ static void _compiler_defvar(hw_CompilerBC *comp)
 
 static void _compiler_atsym_defn(hw_CompilerBC *comp)
 {
+    // @defn main (..|..)
+    //      
+    // @endfn
     hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_SYMBOL);
     
     hw_LexToken tok_fn_name = comp->lexer.token;
@@ -691,16 +695,21 @@ static void _compiler_atsym_defn(hw_CompilerBC *comp)
     HW_ARR_NEW(comp->vm_child, types, 8);
     HW_ARR_NEW(comp->vm_child, arg_names, 8);
 
-    hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_BRACE_LEFT);
+    hw_uint mut = 0;
+    hw_bool is_defining_mut = 1;
+
+    hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_PAREN_LEFT);
+    _L_again:
     while(1) {
-
         hw_compbc_lex_next_skipws(comp);
-        if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_BRACE_RIGHT)) {
+        if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_PAREN_RIGHT)) {
             goto _L_done;
+        } else if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_PIPE)) {
+            is_defining_mut = 0;
+            goto _L_again;
         } else if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_SYMBOL)) {
-
         } else {
-            _ERROR("expected 'SYMBOL' or '}'%s", "");
+            _ERROR("expected 'SYMBOL' or ')'%s", "");
         }
         
         hw_CStr arg_name = { .data = (void *)comp->lexer.token.start
@@ -714,10 +723,11 @@ static void _compiler_atsym_defn(hw_CompilerBC *comp)
 
         HW_ARR_PUSH(comp->vm_child, types, T->id);
         HW_ARR_PUSH(comp->vm_child, arg_names, arg_name);
-    
+        if(is_defining_mut) { mut += 1; }
+
         hw_compbc_lex_next_skipws(comp);
 
-        if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_BRACE_RIGHT)) {
+        if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_PAREN_RIGHT)) {
             goto _L_done;
         } else if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_COMMA)) {
         
@@ -729,10 +739,8 @@ static void _compiler_atsym_defn(hw_CompilerBC *comp)
     _L_done:
     HW_ASSERT(types->lenUsed == arg_names->lenUsed);
 
-    hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_NUMBER);
-    hw_uint mut = hw_compbc_lex_getint(comp);
-
-    hw_compbc_w_defn(comp, tok_fn_name.start, tok_fn_name.size, types->lenUsed, mut, types->data, arg_names->data);
+    hw_compbc_w_defn(comp, tok_fn_name.start, tok_fn_name.size
+            , types->lenUsed, mut, types->data, arg_names->data);
 
     HW_ARR_DELETE(comp->vm_child, types);
     HW_ARR_DELETE(comp->vm_child, arg_names);

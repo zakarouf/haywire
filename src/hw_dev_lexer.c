@@ -22,7 +22,7 @@ static hw_CStr const hw_TOKEN_NAMES[HW_LEXTOKEN_TOTAL+1] = {
                                               
     , TOKEN(COMMA), TOKEN(DOT), TOKEN(COLON), TOKEN(SEMI_COLON), TOKEN(AT)
     , TOKEN(PERCENT), TOKEN(QUOTE), TOKEN(DOUBLE_QUOTE), TOKEN(DOLLAR)
-    , TOKEN(HASH), TOKEN(AND), TOKEN(BACK_SLASH)
+    , TOKEN(PIPE), TOKEN(HASH), TOKEN(AND), TOKEN(BACK_SLASH)
                                               
     /* Single or Multi Character Tokens */    
     , TOKEN(PLUS), TOKEN(MINUS), TOKEN(SLASH), TOKEN(ASTER)
@@ -172,6 +172,7 @@ static int _check_if_char(hw_Lexer *lex)
         _match('"', DOUBLE_QUOTE);
         _match('$', DOLLAR);
         _match('@', AT);
+        _match('|', PIPE);
         _match('%', PERCENT);
         _match('#', HASH);
         _match('&', AND);
@@ -312,23 +313,5 @@ hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size)
         return !memcmp(lex->token.start, string, string_size);
     }
     return 0;
-}
-
-hw_bool hw_Lexer_convert_string(hw_Lexer *lex)
-{
-    if(!hw_LexToken_is(lex->token, HW_LEXTOKEN_DOUBLE_QUOTE)) 
-    { return HW_FALSE; } 
-
-    hw_LexToken start = lex->token;
-    hw_bool done = 0;
-    while(!_isend(lex) && done) {
-        hw_Lexer_next_until(lex, HW_LEXTOKEN_DOUBLE_QUOTE);
-        if(lex->token.start[-1] != '\\') { done = 1; }
-    }
-    if(_isend(lex)) return HW_FALSE;
-    start.start += 1;
-    start.size = lex->token.start - (start.start + 1);
-    
-    return HW_TRUE;
 }
 

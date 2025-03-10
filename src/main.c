@@ -11,7 +11,7 @@
 #include "hw_dev_core.c"
 #include "hw_dev_lexer.c"
 #include "hw_dev_types.c"
-#include "hw_hwo.c"
+#include "hw_compbc.c"
 #include "hw_vm.c"
 #endif
 
@@ -180,6 +180,7 @@ int main(int argc, char *argv[])
 
     hw_compbc_compile_from_source(comp);
     hw_Module *mod = hw_compbc_convert(comp);
+    hw_compbc_delete(comp);
 
     if(argc > 2) {
         hw_debug_Module_disasm(hw, mod);
@@ -191,9 +192,7 @@ int main(int argc, char *argv[])
 
     hw_vm_prepare_call(hw, mod_id, fn_id);
     hw_vm(hw);
-    hw_compbc_delete(comp);
 
-    hw_logp("All Ok\n");
     hw_State_delete(hw);
     return EXIT_SUCCESS;
 }
