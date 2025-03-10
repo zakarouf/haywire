@@ -1,0 +1,34 @@
+; filetype: HayWire Assmembly (.hws)
+; progen: haywire version 0.0.1
+; author: zakarouf
+; description: testing
+; END
+
+@defn add1 (x: uint)
+    @defvar one: uint
+    loada32 one 1
+    i_add x x one
+@endfn
+
+@defn loop_add1 (|count: uint)
+    @defvar i: uint
+    @defvar cmp: uint 
+    loada32 i 0
+    :_L1
+        push i
+        call %add1
+        pop i 0
+
+        i_lt cmp i count
+        jtk cmp &_L1
+
+    prnt i
+@endfn
+
+@defn main ()
+    @defvar i: uint
+    loada32 i 10000 
+    push i
+    call %loop_add1
+@endfn
+

@@ -1,12 +1,16 @@
 # tool macros
 CXX := gcc
 
-CXXFLAGS := -std=c99 -O3\
+CXXFLAGS := -std=c99 -O3 -flto\
 			-Wall -Wextra -Wpedantic -Wshadow -Winline -Wswitch\
 			-Wfatal-errors\
 			-Wno-unused-parameter
 
-DBGFLAGS := -O0 -fsanitize=address -ggdb3 -DHW_DEBUG_CODE_ENABLE
+DBGFLAGS := -O0\
+			-ggdb3\
+			-DHW_DEBUG_CODE_ENABLE\
+			-fsanitize=address
+
 CCOBJFLAGS := $(CXXFLAGS) -c
 
 # path macros

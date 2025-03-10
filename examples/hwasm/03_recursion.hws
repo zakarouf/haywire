@@ -1,0 +1,36 @@
+; filetype: HayWire Assmembly (.hws)
+; progen: haywire version 0.0.1
+; author: zakarouf
+; description: testing
+; END
+
+; fib(x)
+;   if(x == 1) return 1
+;   return fib(x - 1) + f(x - 2)
+@defn fib (x: uint)
+    @defvar cmp: uint
+    @defvar res1: uint
+    
+    i_kle cmp x 1
+    jtk cmp &return
+    
+    i_ksub res1 x 1
+        call %fib
+
+    dup cmp res1
+
+    i_ksub res1 x 2
+        call %fib
+    
+    i_add x cmp res1
+    
+    :return
+    @endfn
+
+@defn main ()
+    @defvar x: uint
+    loada32 x 35
+    call %fib
+    prnt x
+    @endfn
+

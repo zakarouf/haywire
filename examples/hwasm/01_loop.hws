@@ -1,10 +1,12 @@
 ; filetype: HayWire Assmembly (.hws)
 ; progen: haywire version 0.0.1
 ; author: zakarouf
-; description: testing
+; description: Loop Test
 ; END
 
-@defn main {} 0
+@const loop 1000000
+
+@defn main ()
     @defvar i: uint
     @defvar step: uint
     @defvar limit: uint
@@ -12,13 +14,14 @@
 
     loada32 i 0
     loada32 step 1
-    loada32 limit 100000000
     loada32 cmp 0
+
+    loadknst limit #loop
 
     :lable_6
     i_add       i i step
     i_lt        cmp i limit
     jtk         cmp &lable_6
-    prnt_int    i
+    prnt    i
     @endfn
 

@@ -1,0 +1,26 @@
+; filetype: HayWire Assmembly (.hws)
+; progen: haywire version 0.0.1
+; author: zakarouf
+; description: testing
+; END
+
+@const number 100
+@const list (1 2 3)
+@const string " Hello World\n"
+
+@defn main()
+    @defvar num: uint
+    @defvar msg: string
+    @defvar lst: list
+
+    loadknst num #number
+    loadknst msg #string
+    loadknst lst #list
+
+    prnt num
+    prnt lst
+    prnt msg
+
+@endfn
+
+
