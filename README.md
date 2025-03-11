@@ -52,7 +52,7 @@ A small language implementation written in C.
 ```
 make -j
 ```
-This will result in the './bin/hw' binary executable created.
+This will result in the `./bin/hw` binary executable created.
 Optionally you can use the following command below to build a debug executable.
 ```
 make debug -j 
@@ -60,11 +60,29 @@ make debug -j
 > Haywire Only depends on the C Standard Library & CRT. Removing/Replacing them
 > is a low priority goal.
 
+## Byte-code, IR & VM
+The Virtual Machine is fully implemented and ready. Along side the bytecode compiler. You can write a human readable of IR for the VM. 
+```asm
+; file: hello_world.hws
+@const MESSAGE "Hello, World!\n"
+@defn main()
+    @defvar msg:string
+    loadknst msg #MESSAGE
+    prnt msg
+    @endfn
 
-## Programming Prospectus
+```
+Save the file, run it.
+```text 
+$ hw hello_world.hws
+Hello, World!
+```
+> See more in `./examples/hwasm`
+
+## Language Prospectus
 While not yet totally implemented `haywire` will have c-like syntax;
 
-```zig
+```python
 # `//` or `#`` for writting comments
 const std = @import("std")  // Importing modules
 const error = std.error     // Importing specific symbols or sub-modules from modules.
