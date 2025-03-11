@@ -38,7 +38,7 @@ static hw_VarArr *_wrap_args(hw_State *s, int argc, char *argv[])
               , (hw_Var){.as_uint = hw_TypeID_string} };
 
     hw_VarArr_newFrom_conf( s, args 
-      , (hw_byte[]){hw_TypeID_arr, hw_TypeID_uint}, 2);
+      , (hw_byte[]){hw_TypeID_array, hw_TypeID_uint}, 2);
     arr = args[0];
 
     for (int i = 0; i < argc; i++) {
@@ -57,7 +57,7 @@ static hw_VarArr *_wrap_args(hw_State *s, int argc, char *argv[])
         args[0] = arr;
         args[1] = string;
         hw_VarArr_push(s, args, (hw_byte[]){
-              hw_TypeID_arr,
+              hw_TypeID_array,
               hw_TypeID_string}, 2);
 
         arr = args[0];
@@ -143,7 +143,7 @@ void test_main(hw_State *hw, hw_VarArr *args)
     hw_vm(hw);
 
     hw_Var _vt_args[] = { (hw_Var){.as_arr = args} };
-    hw_byte tid = hw_TypeID_arr;
+    hw_byte tid = hw_TypeID_array;
     hw_VarArr_delete(hw, _vt_args, &tid, 1);
 }
 

@@ -256,37 +256,19 @@ void hw_compbc_delete(hw_CompilerBC *comp)
 hw_Module* hw_compbc_convert(hw_CompilerBC *comp)
 {
     hw_ModuleObj *obj = comp->obj;
-    hw_uint const module_size = sizeof(hw_Module)
-                + (sizeof(*(obj->data->data)) * obj->data->lenUsed)
-                + (sizeof(*(obj->fnpt->data)) * obj->fnpt->lenUsed)
-                + (sizeof(*(obj->code->data)) * obj->code->lenUsed)
-                + (sizeof(*(obj->knst->data)) * obj->knst->lenUsed)
-                + (sizeof(*(obj->knst->tid )) * obj->knst->lenUsed);
-
-    hw_Module *mod = HW_THREAD_ALLOC(comp->vm_parent, module_size);
-    
-    mod->code_len = obj->code->lenUsed;
-    mod->data_size = obj->data->lenUsed;
-    mod->k_count = obj->knst->lenUsed;
-    mod->fn_count = obj->fnpt->lenUsed;
-    
-    mod->data =     HW_CAST(void *, mod + 1);
-    mod->fnpt =     HW_CAST(void *, mod->data + mod->data_size);
-    mod->code =     HW_CAST(void *, mod->fnpt + mod->fn_count);
-    mod->knst =     HW_CAST(void *, mod->code + mod->code_len);
-    mod->knst_t =   HW_CAST(void *, mod->knst + mod->k_count);
+    hw_Module *mod = hw_Module_newblank(comp->vm_parent, obj->fnpt->lenUsed
+                                                       , obj->code->lenUsed
+                                                       , obj->data->lenUsed
+                                                       , obj->knst->lenUsed, 0);
 
     memcpy(mod->data, obj->data->data, obj->data->lenUsed);
-
     memcpy(mod->fnpt, obj->fnpt->data
             , mod->fn_count * sizeof(*mod->fnpt));
-
     memcpy(mod->code, obj->code->data
             , obj->code->lenUsed * sizeof(*mod->code));
-
     memcpy(mod->knst_t, obj->knst->tid
             , obj->knst->lenUsed * sizeof(*mod->knst_t));
-    
+
     for (size_t i = 0; i < mod->k_count; i++) {
         HW_DEBUG(HW_LOG("@CONST %"PRIu64 ", typeid(%"PRIu8")", i, mod->knst_t[i] );)
         hw_Type *T = hw_TypeSys_get_via_id(comp->vm_parent->ts, mod->knst_t[i]);

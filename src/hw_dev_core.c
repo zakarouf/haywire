@@ -170,6 +170,16 @@ void *hw_loadfile(
     return data;
 }
 
+hw_bool hw_writefile(char const path[], void *data, hw_u32 unitsize, hw_u32 len)
+{
+    FILE *fp;
+    if ((fp = fopen(path, "wb")) == NULL) {
+        return HW_FALSE;
+    }
+    fwrite(data, unitsize, len, fp);
+    return HW_FALSE;
+}
+
 hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size, void const* rhs, hw_uint rhs_size)
 {
     if((lhs_size != rhs_size)) {return  lhs_size - rhs_size;}
@@ -340,6 +350,34 @@ void hw_delete(hw_State *self)
     HW_DEBUG(HW_LOG("VM Exit %s", ""));
 }
 #endif
+
+hw_Module *hw_Module_newblank(
+    hw_State *hw, hw_u32 fn_count, hw_u32 code_len, hw_u32 data_size, hw_u32 knst_count, hw_bool set_0)
+{
+    hw_Module *m = NULL;
+    hw_uint const mod_size =   sizeof(*m)
+                            + (sizeof(*m->fnpt) * fn_count )
+                            + (sizeof(*m->code) * code_len )
+                            + (sizeof(*m->data) * data_size)
+                            + (sizeof(*m->knst) * knst_count)
+                            + (sizeof(*m->knst_t) * fn_count);
+
+    m = HW_THREAD_ALLOC(hw, mod_size);
+    m->fn_count = fn_count;
+    m->code_len = code_len;
+    m->data_size = data_size;
+    m->k_count = knst_count;
+
+    m->fnpt = HW_CAST(void *, m + 1);
+    m->code = HW_CAST(void *, m->fnpt + fn_count );
+    m->data = HW_CAST(void *, m->code + code_len);
+    m->knst = HW_CAST(void *, m->data + data_size );
+    m->knst_t = HW_CAST(void *, m->knst + knst_count );
+
+    if(set_0) memset(m + 1, 0, mod_size - sizeof(*m));
+
+    return m;
+}
 
 void hw_Module_delete(hw_State *hw, hw_Module *m)
 {

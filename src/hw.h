@@ -23,6 +23,13 @@
         HW_THREAD_FREE(s, a);\
     }
 
+#define HW_ARR_RESERVE(s, a, size)\
+  {                                             \
+      if(((s)->len - (s)->lenUsed) < (size)) {  \
+          HW_ARR_EXPAND(s, a, (size));          \
+      }                                         \
+  }
+
 #define HW_ARR_EXPAND(s, a, by)\
     {                                                       \
         (a)->len += by;                                     \
@@ -45,14 +52,14 @@
         (a)->data[(a)->lenUsed-1] = dat;                        \
     }                                                           \
 
-#define HW_ARR_PUSHSTREAM(s, a, dats, dats_len)\
+#define HW_ARR_PUSHSTREAM(s, a, dats, dat_size)                 \
     {                                                           \
-        if(((a)->lenUsed+dats_len) >= (a)->len ) {              \
-            HW_ARR_EXPAND(s, a, dats_len + 1)                   \
+        if(((a)->lenUsed+(dat_size)) >= (a)->len ) {            \
+            HW_ARR_EXPAND(s, a, ((dat_size) + 1))               \
         }                                                       \
         memcpy((a)->data + (a)->lenUsed, dats                   \
-                , dats_len * sizeof(*(a)->data));               \
-        (a)->lenUsed += dats_len;                               \
+                , ((dat_size) + 0) * sizeof(*(a)->data));       \
+        (a)->lenUsed += (dat_size);                             \
     }                                                           \
 
 #define HW_ARR_TOP(ARR) (ARR)->data[(ARR)->lenUsed-1]
@@ -221,7 +228,8 @@ enum hw_TypeID {
     , hw_TypeID_float
 
     , hw_TypeID_error
-    , hw_TypeID_arr
+
+    , hw_TypeID_array
     , hw_TypeID_sarr
     , hw_TypeID_list
     , hw_TypeID_table
@@ -420,9 +428,11 @@ struct hw_Type {
     hw_VarFn            vt[16];
     hw_FnInfo           vtinfo[16];
     
-    hw_byte             name[256];
+    hw_byte             name[32];
+    hw_byte             c_name[32];
     hw_byte             is_obj;
     hw_byte             name_size;
+    hw_byte             c_name_size;
 };
 
 struct hw_TypeSys {
@@ -544,10 +554,11 @@ struct hw_Module {
     hw_uint k_count;
 
     hw_uint *fnpt;
-    hw_Var  *knst;
-    hw_byte *knst_t;
     hw_byte *data;
     hw_code *code;
+
+    hw_byte *knst_t;
+    hw_Var  *knst;
 };
 
 struct hw_ModuleArr {

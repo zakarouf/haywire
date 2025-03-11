@@ -43,6 +43,9 @@
  */
 #define HW_CAST(T, ...) ((T)(__VA_ARGS__))
 
+#define HW_CAST_SET(T, ptr, offset, val) \
+    { *HW_CAST(T*, ptr + offset) = val; }
+
 /**
  * Log & Exit
  */
@@ -208,6 +211,7 @@ void *hw_loadfile(
     hw_State *state, char const path[], hw_uint unitsize, hw_uint *len);
 hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size
         , void const* rhs, hw_uint rhs_size);
+hw_bool hw_writefile(char const path[], void *data, hw_u32 unitsize, hw_u32 len);
 
 /**
  * Section: Var Interface Call
@@ -467,6 +471,8 @@ void hw_Module_get_FnInfo(hw_Module const *mod
 hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id);
 hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, hw_uint *fn_id);
 
+hw_Module *hw_Module_newblank(
+    hw_State *hw, hw_u32 fn_count, hw_u32 code_len, hw_u32 data_size, hw_u32 knst_count, hw_bool set_0);
 /**
  * VM;
  */
