@@ -165,7 +165,36 @@ void print_tokens(hw_Lexer lexer)
     }
 }
 
+void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[])
+{
+    hw_byteArr *buffer;
+    HW_ARR_NEW(hw, buffer, hw_Module_calcsize(m));
+    
+    hw_Var args[2] = { [0] = (hw_Var){.as_module = m}
+                     , [1] = (hw_Var){.as_bytearr = buffer} };
 
+    hw_byte tid[2] = { [0] = hw_TypeID_module
+                     , [1] = hw_TypeID_bytearr };
+
+    hw_Module_serialize(hw, args, tid, 2);
+    buffer = args[1].as_bytearr;
+
+    FILE *fp = fopen(path, "wb");
+    HW_ASSERT(fp && "CANT OPEN FILE");
+    fwrite(buffer->data, buffer->lenUsed, sizeof(*buffer->data), fp);
+    fclose(fp);
+    HW_ARR_DELETE(hw, buffer);
+}
+
+hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[])
+{
+    hw_byteArr *file = hw_byteArr_newloadfile(hw, path);
+    hw_Var args[3] = { [1].as_uint = 0, [2].as_bytearr = file };
+    hw_byte tid[3] = {0};
+    hw_Module_newFrom_deserialize(hw, args, tid, 3);
+    HW_ARR_DELETE(hw, file);
+    return args[0].as_module;
+}
 
 int main(int argc, char *argv[])
 {
@@ -183,6 +212,10 @@ int main(int argc, char *argv[])
     hw_compbc_delete(comp);
 
     if(argc > 2) {
+        hw_Module_writetofile(hw, mod, "out.hwo");
+        hw_Module *new_mod = hw_Module_loadFromFile(hw, "out.hwo");
+        HW_ASSERT(hw_ptrcmp(mod, hw_Module_calcsize(mod)
+                          , new_mod, hw_Module_calcsize(new_mod)));
         hw_debug_Module_disasm(hw, mod);
     }
 
@@ -190,6 +223,7 @@ int main(int argc, char *argv[])
     hw_uint fn_id = 1;
     HW_ASSERT(hw_Module_get_fn(mod, (void *)"main", 4, &fn_id));
 
+    
     hw_vm_prepare_call(hw, mod_id, fn_id);
     hw_vm(hw);
 
@@ -198,6 +232,36 @@ int main(int argc, char *argv[])
 }
 
 /**
+int main_v02(int argc, char *argv[])
+{
+     hw_State *hw = hw_State_new_default(NULL);
+    _static_checks();
+    _check_vm_inst(hw);
+    hw_VarArr *args = _wrap_args(hw, argc, argv);
+    
+    #define ARG_PARSE_START()\
+        { hw_Var *i = args->data+2, *i_end = args->data + args->lenUsed;\
+          do { if(0) {
+
+    #define ARG_PARSE_END()\
+          } else {                                              \
+              hw_debug_print_var(hw, *i, hw_TypeID_string);     \
+              HW_ASSERT(0 && "Unknown Argument"); }             \
+          i++; } while(i < i_end);
+
+    #define ARG_CHECK(name) \
+        } else if(hw_ptrcmp(name, sizeof(name)-1\
+                , i->as_string->data, i->as_string->lenUsed) == 0) {
+
+    ARG_PARSE_START();
+        ARG_CHECK("--disasm")
+        ARG_CHECK("-o")
+        ARG_CHECK("-r")
+    ARG_PARSE_END();   
+
+    return EXIT_SUCCESS;
+}
+
 int main_memory(int argc, char *argv[])
 {
     hw_State *hw = hw_State_new_default(NULL);

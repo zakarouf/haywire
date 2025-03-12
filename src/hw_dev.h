@@ -206,13 +206,16 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size);
 /**
  * Utils
  */
+hw_bool hw_byteArr_loadinc(
+    hw_byteArr const *stream, hw_uint* index
+  , hw_ptr dest, hw_uint const dest_size);
 hw_uint hw_hash_string_fnv(hw_byte const *str, hw_uint len);
 void *hw_loadfile(
     hw_State *state, char const path[], hw_uint unitsize, hw_uint *len);
 hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size
         , void const* rhs, hw_uint rhs_size);
 hw_bool hw_writefile(char const path[], void *data, hw_u32 unitsize, hw_u32 len);
-
+hw_byteArr *hw_byteArr_newloadfile(hw_State *hw, const char path[]);
 /**
  * Section: Var Interface Call
  */
@@ -277,6 +280,15 @@ DEFN(hw_SymTable, delete);
 DEFN(hw_SymTable, set);
 DEFN(hw_SymTable, get);
 DEFN(hw_SymTable, reset);
+
+/* ByteArr */
+DEFN(hw_byteArr, new);
+DEFN(hw_byteArr, delete);
+DEFN(hw_byteArr, pushstr);
+
+/* Module */
+DEFN(hw_Module, newFrom_deserialize); // &self, &index, bytearr
+DEFN(hw_Module, serialize); // &self, &bytearray
 
 #undef DEFN
 
@@ -471,6 +483,7 @@ void hw_Module_get_FnInfo(hw_Module const *mod
 hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id);
 hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, hw_uint *fn_id);
 
+hw_uint hw_Module_calcsize(hw_Module *m);
 hw_Module *hw_Module_newblank(
     hw_State *hw, hw_u32 fn_count, hw_u32 code_len, hw_u32 data_size, hw_u32 knst_count, hw_bool set_0);
 /**
@@ -553,6 +566,7 @@ void hw_debug_vm_step(
 
 void hw_debug_print_fnobj(hw_CompilerBC const *comp);
 void hw_debug_print_mobj(hw_CompilerBC const *comp);
+void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t);
 
 /**
  * Section: Undef

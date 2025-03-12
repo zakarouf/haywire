@@ -493,6 +493,9 @@ DEFN(hw_String_newFrom_file) {
 }
 
 DEFN(hw_String_to_string) {
+    (void)argc;
+    (void)tids;
+
     _SELF_BIND(hw_String *, as_string);
     _String_append_data(hw, &args[1].as_string, self->data, self->lenUsed);
     _GET_SELF_TID() = hw_TypeID_string;
@@ -710,6 +713,8 @@ DEFN(hw_VarList_new) {
 }
 
 DEFN(hw_VarList_newFrom_copy) {
+    (void)argc;
+    (void)tids;
 
     hw_VarList *src = _GET_ARG(0, as_list);
     _SELF(hw_VarList *) = _VarList_new(hw, src->lenUsed + 1);
@@ -1090,115 +1095,171 @@ DEFN(hw_SymTable_get) {
 }
 
 /**
+ * ByteArr
+ */
+DEFN(hw_byteArr_new) {
+    (void)argc;
+    (void)tids;
+
+    _SELF(hw_byteArr *);
+    HW_ARR_NEW(hw, self, 8);
+    _SELF_ASSIGN(as_bytearr);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_byteArr_delete) {
+    (void)argc;
+    (void)tids;
+
+    _SELF_BIND(hw_byteArr *, as_bytearr);
+    HW_ARR_DELETE(hw, self);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_byteArr_pushptr) {
+    (void)argc;
+    (void)tids;
+
+    _SELF_BIND(hw_byteArr *, as_bytearr);
+    hw_ptr dats = _GET_ARG(0, as_ptr);
+    hw_uint dat_size = _GET_ARG(0, as_uint);
+    HW_ARR_PUSHSTREAM(hw, self, dats, dat_size);
+    _SELF_ASSIGN(as_bytearr);
+    return HW_VARP_NIL();
+}
+
+/**
  *  Module
  */
-
-DEFN(hw_Module_serialize)
+DEFN(hw_Module_newFrom_deserialize) // &self, &index, bytearr
 {
+    (void)argc;
+    (void)tids;
+
+    hw_uint index = _GET_ARG(0, as_uint);
+    hw_byteArr *stream = _GET_ARG(1, as_bytearr);
+    hw_uint mod_size = 0;
+
+    HW_ASSERT(hw_byteArr_loadinc(stream, &index, &mod_size, sizeof(mod_size)));
+
+    hw_Module _m;
+    HW_ASSERT(hw_byteArr_loadinc(stream, &index, &_m, sizeof(_m)));
+    _SELF(hw_Module *) = hw_Module_newblank(
+            hw, _m.fn_count, _m.code_len, _m.data_size, _m.k_count, 0);
+    
+    HW_ASSERT(hw_byteArr_loadinc(stream, &index, self + 1, mod_size - sizeof(_m)));
+
+    for (size_t i = 0; i < self->k_count; i++) {
+        hw_Type *T = hw_TypeSys_get_via_id(hw->ts, self->knst_t[i]);
+        HW_ASSERT(T);
+        if(T->is_obj) {
+            HW_ASSERT(0);
+        }
+    }
+
+    _SET_ARG(0, as_uint, index);
+    _SELF_ASSIGN(as_module);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_Module_serialize) // &self, &bytearray
+{
+    (void)argc;
+    (void)tids;
+
     hw_Module *m = _GET_SELF().as_module;
-    hw_byteArr *buffer = _GET_ARG(0, as_barr);
-    hw_uint bf = buffer->lenUsed;
+    hw_byteArr *buffer = _GET_ARG(0, as_bytearr);
+    hw_uint mod_size = hw_Module_calcsize(m);
 
-    HW_ARR_EXPAND(hw, buffer, (m->data_size * sizeof(*m->data))
-                            + (m->code_len * sizeof(*m->code))
-                            + (m->k_count * sizeof(*m->knst))
-                            + (m->k_count * sizeof(*m->knst_t))
-                            + sizeof(*m) );
-
-    HW_ARR_PUSHSTREAM(hw, buffer, &bf, (sizeof(bf) + 0) );
+    HW_ARR_EXPAND(hw, buffer, mod_size);
+    HW_ARR_PUSHSTREAM(hw, buffer, &mod_size, sizeof(hw_uint));
+    HW_ARR_PUSHSTREAM(hw, buffer, m, mod_size);
     
-    HW_ARR_PUSHSTREAM(hw, buffer, m, (sizeof(*m) + 0) );
-
-    HW_ARR_PUSHSTREAM(hw, buffer, m->fnpt, sizeof(*m->fnpt) * m->fn_count);
-    HW_ARR_PUSHSTREAM(hw, buffer, m->data, sizeof(*m->data) * m->data_size);
-    HW_ARR_PUSHSTREAM(hw, buffer, m->code, sizeof(*m->code) * m->code_len);
-
-    HW_ARR_PUSHSTREAM(hw, buffer, m->knst_t, sizeof(*m->knst_t) * m->k_count);
-    HW_ARR_PUSHSTREAM(hw, buffer, m->knst, sizeof(*m->knst) * m->k_count);
-
-    HW_CAST_SET(hw_uint, buffer->data, bf, bf);
-    
-    _SET_ARG(0, as_barr, buffer);
-    _SET_ARG(1, as_uint, bf);
+    _SET_ARG(0, as_bytearr, buffer);
     return HW_VARP_NIL();
 }
-
-#define HW_DESER(ptr, index, T)
-DEFN(hw_Module_newFrom_deserialize)
-{
-    hw_byte const *data = _GET_ARG(0, as_ptr);
-    hw_uint data_size = _GET_ARG(1, as_uint);
-    hw_uint index = 0;
-    
-    return HW_VARP_NIL();
-}
-
 
 /*
  * Default TypeSys
  */
-#define FNINFO(T, _name, _argc, _mutc, ...)\
+#define FNINFO(T, _name, _mutc, ...)\
     {{\
         .name = (void *) #_name\
       , .name_size = sizeof(#_name)-1\
-      , .arg_count = _argc+1\
+      , .arg_count = sizeof((hw_byte[]){__VA_ARGS__})/sizeof(hw_byte)\
       , .mut_count = _mutc\
       , .types = (hw_byte[]){__VA_ARGS__, hw_TypeID_nil}\
     }, T##_##_name} 
 
 #define _TYPEVT_MAX 6
-struct {
+
+const struct {
     hw_FnInfo info;
     hw_VarFn  fn;
 } static TYPEVT[hw_TypeID_TOTAL][_TYPEVT_MAX]= {
 
     [hw_TypeID_uint] = {
-        FNINFO(hw_uint, to_string, 1, 1, hw_TypeID_uint, hw_TypeID_string)
+        FNINFO(hw_uint, to_string, 1, hw_TypeID_uint, hw_TypeID_string)
     },
 
     [hw_TypeID_int] = {
-        FNINFO(hw_int, to_string, 1, 1, hw_TypeID_int, hw_TypeID_string)
+        FNINFO(hw_int, to_string, 1, hw_TypeID_int, hw_TypeID_string)
     },
 
     [hw_TypeID_float] = {
-        FNINFO(hw_float, to_string, 1, 1, hw_TypeID_float, hw_TypeID_string)
+        FNINFO(hw_float, to_string, 1, hw_TypeID_float, hw_TypeID_string)
     },
 
     [hw_TypeID_string] = {
-        FNINFO(hw_String, new, 0, 0, hw_TypeID_string),
-        FNINFO(hw_String, delete, 0, 0, hw_TypeID_string),
-        FNINFO(hw_String, newFrom_data, 2, 0
-                , hw_TypeID_string, hw_TypeID_ptr, hw_TypeID_uint),
-        FNINFO(hw_String, newFrom_copy, 1, 0, hw_TypeID_string),
-        FNINFO(hw_String, to_string, 1, 0, hw_TypeID_string)
+        FNINFO(hw_String, new, 0, hw_TypeID_string),
+        FNINFO(hw_String, delete, 0, hw_TypeID_string),
+        FNINFO(hw_String, newFrom_data, 0, hw_TypeID_string
+                , hw_TypeID_ptr, hw_TypeID_uint),
+        
+        FNINFO(hw_String, newFrom_copy, 0, hw_TypeID_string),
+        FNINFO(hw_String, to_string, 0, hw_TypeID_string)
     },
 
     [hw_TypeID_array] = {
-        FNINFO(hw_VarArr, newFrom_conf, 1, 0, hw_TypeID_array, hw_TypeID_uint),
-        FNINFO(hw_VarArr, delete, 0, 0, hw_TypeID_array),
-        FNINFO(hw_VarArr, push, 1, 0, hw_TypeID_array, hw_TypeID_any),
-        FNINFO(hw_VarArr, pushStream, 2, 0, hw_TypeID_array, hw_TypeID_uint, hw_TypeID_ptr),
-        FNINFO(hw_VarArr, pop, 0, 0, hw_TypeID_array),
-        //FNINFO(hw_VarArr, popStream, 1, 0, hw_TypeID_array, hw_TypeID_uint),
+        FNINFO(hw_VarArr, newFrom_conf, 1, hw_TypeID_array, hw_TypeID_uint),
+        FNINFO(hw_VarArr, delete, 0, hw_TypeID_array),
+        FNINFO(hw_VarArr, push, 1, hw_TypeID_array, hw_TypeID_any),
+        FNINFO(hw_VarArr, pushStream, 2, hw_TypeID_array, hw_TypeID_uint, hw_TypeID_ptr),
+        FNINFO(hw_VarArr, pop, 0, hw_TypeID_array),
+        //FNINFO(hw_VarArr, popStream, 1, hw_TypeID_array, hw_TypeID_uint),
     },
 
     [hw_TypeID_list] = {
-        FNINFO(hw_VarList, new, 0, 0, hw_TypeID_list),
-        FNINFO(hw_VarList, newFrom_copy, 1, 1, hw_TypeID_list, hw_TypeID_list),
-        FNINFO(hw_VarList, delete, 0, 0, hw_TypeID_list),
-        FNINFO(hw_VarList, push_shallow, 1, 0, hw_TypeID_list, hw_TypeID_any),
-        FNINFO(hw_VarList, pop_dtor, 0, 0, hw_TypeID_list),
-        FNINFO(hw_VarList, to_string, 1, 1, hw_TypeID_list, hw_TypeID_string),
+        FNINFO(hw_VarList, new, 0, hw_TypeID_list),
+        FNINFO(hw_VarList, newFrom_copy, 1, hw_TypeID_list, hw_TypeID_list),
+        FNINFO(hw_VarList, delete, 0, hw_TypeID_list),
+        FNINFO(hw_VarList, push_shallow, 1, hw_TypeID_list, hw_TypeID_any),
+        FNINFO(hw_VarList, pop_dtor, 0, hw_TypeID_list),
+        FNINFO(hw_VarList, to_string, 1, hw_TypeID_list, hw_TypeID_string),
     },
 
     [hw_TypeID_symtable] = {
-        FNINFO(hw_SymTable, new, 0, 0, hw_TypeID_symtable),
-        FNINFO(hw_SymTable, delete, 0, 0, hw_TypeID_symtable),
-        FNINFO(hw_SymTable, get, 2, 0
+        FNINFO(hw_SymTable, new, 0, hw_TypeID_symtable),
+        FNINFO(hw_SymTable, delete, 0, hw_TypeID_symtable),
+        FNINFO(hw_SymTable, get, 2
                 , hw_TypeID_symtable, hw_TypeID_string, hw_TypeID_any),
-        FNINFO(hw_SymTable, set, 2, 0
+        FNINFO(hw_SymTable, set, 2
                 , hw_TypeID_symtable, hw_TypeID_string, hw_TypeID_any),
-        FNINFO(hw_SymTable, reset, 0, 0, hw_TypeID_symtable)
+        FNINFO(hw_SymTable, reset, 0, hw_TypeID_symtable)
+    },
+
+    [hw_TypeID_bytearr] = {
+        FNINFO(hw_byteArr, new, 0, hw_TypeID_bytearr),
+        FNINFO(hw_byteArr, delete, 0, hw_TypeID_bytearr),
+        FNINFO(hw_byteArr, pushptr, 2
+                , hw_TypeID_bytearr, hw_TypeID_ptr, hw_TypeID_uint)
+    },
+
+    [hw_TypeID_module] = {
+        FNINFO(hw_Module, newFrom_deserialize, 1
+            , hw_TypeID_module, hw_TypeID_uint, hw_TypeID_bytearr),
+        FNINFO(hw_Module, serialize, 1
+            , hw_TypeID_module, hw_TypeID_bytearr)
     },
 };
 
@@ -1216,6 +1277,7 @@ struct {
 
 static void _default_setall_atoms(hw_TypeSys *ts)
 {
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(nil,   hw_byte,   0)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(ptr,   hw_ptr,   0)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(int,   hw_int,   0)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(uint,  hw_uint,  0)));
@@ -1228,6 +1290,7 @@ static void _default_setall_objects(hw_TypeSys *ts)
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(sarr,     hw_SArr,       1)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(list,     hw_VarList,    1)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(symtable, hw_SymTable,   1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(bytearr,  hw_byteArr,   1)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(string,   hw_String,     1)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(module,   hw_Module,     1)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(thread,   hw_State,      1)));

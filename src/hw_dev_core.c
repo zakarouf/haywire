@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <threads.h>
 
 /**
  * Section: Pre-Processor
@@ -129,6 +130,16 @@ void hw_exit(hw_int code, const char *msg, size_t const size)
     exit(code);
 }
 
+inline hw_bool hw_byteArr_loadinc(
+    hw_byteArr const *stream, hw_uint* index
+  , hw_ptr dest, hw_uint const dest_size)
+{
+    if((*index + dest_size) > stream->lenUsed) return 0;
+    memcpy(dest, stream->data + *index, dest_size);
+    *index += dest_size;
+    return 1;
+}
+
 hw_uint hw_hash_string_fnv(hw_byte const *str, hw_uint len)
 {
     HW_STATIC_ASSERT(sizeof(hw_uint) == 8);
@@ -178,6 +189,26 @@ hw_bool hw_writefile(char const path[], void *data, hw_u32 unitsize, hw_u32 len)
     }
     fwrite(data, unitsize, len, fp);
     return HW_FALSE;
+}
+
+hw_byteArr *hw_byteArr_newloadfile(hw_State *hw, const char path[])
+{
+    FILE *fp;
+    if ((fp = fopen(path, "rb")) == NULL) {
+        return NULL;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    hw_uint fsize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);  /* same as rewind(f); */
+
+    hw_byteArr *self;
+    HW_ARR_NEW(hw, self, fsize + 1);
+    fread(self->data, 1, fsize, fp);
+    fclose(fp);
+
+    self->lenUsed = fsize;
+    return self;
 }
 
 hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size, void const* rhs, hw_uint rhs_size)
@@ -281,9 +312,17 @@ hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size)
 /**
  * Section: Array Macro
  */
+HW_DEBUG(
+    static thread_local hw_uint total_alloc_size = 0;
+    static thread_local hw_uint total_alloc_call = 0;
+)
 static void* _malloc_wrapper(hw_Allocator *self, size_t size)
 {
     (void)self;
+    HW_DEBUG(
+      total_alloc_call += 1;
+      total_alloc_size += size;
+    );
     return HW_MALLOC(size);
 }
 
@@ -310,6 +349,13 @@ void hw_Allocator_default(hw_Allocator *self)
 void hw_Allocator_default_delete(hw_Allocator *allocator)
 {
     (void)allocator;
+    
+    HW_DEBUG(
+        hw_float alloc_size_kb = (hw_float)total_alloc_size/1000.0;
+        HW_LOG("MEMORY USAGE: \n"
+                    "  Alloc:%lf KBs\n"
+                    "  Calls:%"PRIu64 "\n"
+                    , alloc_size_kb, total_alloc_call));
 }
 
 
@@ -351,16 +397,18 @@ void hw_delete(hw_State *self)
 }
 #endif
 
+
+inline hw_uint hw_Module_calcsize(hw_Module *m)
+{
+    return HW_MODULE_SIZE(m, m->fn_count, m->code_len, m->data_size, m->k_count);
+}
+
 hw_Module *hw_Module_newblank(
     hw_State *hw, hw_u32 fn_count, hw_u32 code_len, hw_u32 data_size, hw_u32 knst_count, hw_bool set_0)
 {
     hw_Module *m = NULL;
-    hw_uint const mod_size =   sizeof(*m)
-                            + (sizeof(*m->fnpt) * fn_count )
-                            + (sizeof(*m->code) * code_len )
-                            + (sizeof(*m->data) * data_size)
-                            + (sizeof(*m->knst) * knst_count)
-                            + (sizeof(*m->knst_t) * fn_count);
+    hw_uint const mod_size = HW_MODULE_SIZE(
+        m, fn_count, code_len, data_size, knst_count);
 
     m = HW_THREAD_ALLOC(hw, mod_size);
     m->fn_count = fn_count;
@@ -368,6 +416,8 @@ hw_Module *hw_Module_newblank(
     m->data_size = data_size;
     m->k_count = knst_count;
 
+    // NOTE: If you change this order
+    //       You have to also change how serialize and deserialize works
     m->fnpt = HW_CAST(void *, m + 1);
     m->code = HW_CAST(void *, m->fnpt + fn_count );
     m->data = HW_CAST(void *, m->code + code_len);

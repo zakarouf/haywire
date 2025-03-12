@@ -185,7 +185,7 @@ union hw_Var {
     hw_Error const  *as_error;
 
     /* Objects */
-    hw_byteArr      *as_barr,   **as_barr_p;
+    hw_byteArr      *as_bytearr,   **as_bytearr_p;
     hw_String       *as_string, **as_string_p;
     hw_CStr         *as_cstr,   **as_cstr_p;
     hw_Lexer        *as_lexer;
@@ -237,7 +237,7 @@ enum hw_TypeID {
     , hw_TypeID_katable
     , hw_TypeID_kvtable
 
-    , hw_TypeID_barr
+    , hw_TypeID_bytearr
     , hw_TypeID_string
     , hw_TypeID_type
     , hw_TypeID_typesys
@@ -755,5 +755,13 @@ struct hw_CompilerBC {
 #define HW_VARP_BYTE(v)     HW_VARP(v, byte)
 #define HW_VARP_BOOL(v)     HW_VARP(v, bool)
 #define HW_VARP_ERROR(v)    HW_VARP(v, error)
+
+#define HW_MODULE_SIZE(m, fn_count, code_len, data_size, k_count)\
+          (sizeof(*m)\
+              + (fn_count *    sizeof(*m->fnpt))\
+              + (code_len *    sizeof(*m->code))\
+              + (data_size *   sizeof(*m->data))\
+              + (k_count *     sizeof(*m->knst))\
+              + (k_count *     sizeof(*m->knst_t)))
 
 #endif

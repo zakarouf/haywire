@@ -87,6 +87,37 @@ void hw_debug_code_disasm(hw_State const *hw, hw_code code)
     }    
 }
 
+void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t)
+{
+    hw_Var argv[2];
+    hw_byte type[2];
+    
+    hw_String_new(hw, argv, type, 1);
+    argv[1] = argv[0];
+    argv[0] = v;
+    type[0] = t;
+    
+    hw_Type *T = hw_TypeSys_get_via_id(hw->ts, t);
+    HW_ASSERT(T);
+    hw_VarFn to_string = hw_Type_getvt(T, "to_string", 9);
+    to_string(hw, argv, type, 2);
+    hw_String *str = argv[1].as_string;
+    hw_logp("%.*s", str->lenUsed, str->data);
+    hw_String_delete(hw, argv+1, type+1, 1);
+}
+
+static void _mod_print_constant(hw_State *hw, hw_Module const *m)
+{
+    for (size_t i = 0; i < m->k_count; i++) {
+        hw_Type *T = hw_TypeSys_get_via_id(hw->ts, m->knst_t[i]);
+        HW_ASSERT(T != NULL);
+        fprintf(hw->stdout, "@const _knst_%"PRIu64 ":%.*s "
+                , i, T->name_size, T->name);
+        hw_debug_print_var(hw, m->knst[i], m->knst_t[i]);
+        fprintf(hw->stdout, "\n");
+    }
+}
+
 void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
 {
     hw_FnInfo info;
@@ -106,7 +137,7 @@ void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
             , info.stack_sz
             , info.types - m->data
             , m->code->getx.x32);
-
+    
     fprintf(hw->stdout, "@defn %.*s (", (int)info.name_size, info.name);
     for (size_t i = 0; i < info.arg_count; i++) {
         hw_Type *T = hw_TypeSys_get_via_id(hw->ts, info.types[i]);
@@ -124,10 +155,10 @@ void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
 void hw_debug_Module_disasm(hw_State *hw, hw_Module const *m)
 {
     fprintf(stdout
-        , "; Module Disassamble\n"
-          "; instructions %"PRIu64"\n"
-          "; data %"PRIu64" bytes\n"
-          "; functions %"PRIu64"\n"
+        , ";; Module Disassamble\n"
+          ";; instructions %"PRIu64"\n"
+          ";; data %"PRIu64" bytes\n"
+          ";; functions %"PRIu64"\n"
         , m->code_len
         , m->data_size
         , m->fn_count);
@@ -140,6 +171,8 @@ void hw_debug_Module_disasm(hw_State *hw, hw_Module const *m)
     fprintf(stdout
         , "; constants %"PRIu64"\n"
         , m->k_count);
+    
+    _mod_print_constant(hw, m);
 
     hw_uint fn = 0;
     for (size_t i = 0; i < m->code_len; i++) {

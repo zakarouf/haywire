@@ -517,6 +517,16 @@ void hw_compbc_lex_next_skipws_expect(hw_CompilerBC *comp, enum hw_LexTokenType 
     }
 }
 
+void hw_compbc_lex_expect(hw_CompilerBC *comp, enum hw_LexTokenType ttype)
+{
+    if(hw_LexToken_is_not(comp->lexer.token, ttype)) {
+         hw_CStr const tname = hw_get_token_name(ttype);
+        _ERROR("Expected %.*s, got: %.*s"
+                , (int)tname.len, tname.data
+                , (int)comp->lexer.token.size, comp->lexer.token.start );
+    }   
+}
+
 hw_int hw_compbc_lex_getint(hw_CompilerBC *comp)
 {
     hw_Lexer *lex = &comp->lexer;
@@ -550,6 +560,19 @@ static const struct hw_InstData *_get_instruction(
     return NULL;
 }
 
+static hw_LexToken _compiler_try_promote_symbol_todotted(hw_CompilerBC *comp)
+{
+    hw_Lexer *l = &comp->lexer;
+    hw_LexToken fn_name = l->token;
+    hw_compbc_lex_next(comp);
+    while ( hw_LexToken_is_not(l->token, HW_LEXTOKEN_END_OF_SOURCE)
+         && (  hw_LexToken_is(l->token, HW_LEXTOKEN_DOT)
+            || hw_LexToken_is(l->token, HW_LEXTOKEN_SYMBOL))) {
+        hw_compbc_lex_next(comp);
+    }
+    fn_name.size = l->token.start - fn_name.start;
+    return fn_name;
+}
 
 static hw_int _compiler_next_eval_operand(hw_CompilerBC *comp)
 {
@@ -592,6 +615,7 @@ static hw_int _compiler_next_eval_operand(hw_CompilerBC *comp)
         }
         break; case HW_LEXTOKEN_PERCENT:{
                 hw_compbc_lex_next_expect(comp, HW_LEXTOKEN_SYMBOL);
+                comp->lexer.token = _compiler_try_promote_symbol_todotted(comp);                
                 assign_operand(obj->fntable, "Function", as_uint);
         }
         break; case HW_LEXTOKEN_HASH: {
@@ -662,14 +686,14 @@ static void _compiler_defvar(hw_CompilerBC *comp)
     hw_compbc_deflocalvar(comp, var_name.data, var_name.len, (hw_VarInfo){.type = T->id, .is_unique = HW_TRUE});
 }
 
+
 static void _compiler_atsym_defn(hw_CompilerBC *comp)
 {
     // @defn main (..|..)
     //      
     // @endfn
     hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_SYMBOL);
-    
-    hw_LexToken tok_fn_name = comp->lexer.token;
+    hw_LexToken tok_fn_name = _compiler_try_promote_symbol_todotted(comp);
     
     HW_ARR(hw_CStr) *arg_names;
     hw_byteArr *types;
@@ -679,8 +703,13 @@ static void _compiler_atsym_defn(hw_CompilerBC *comp)
 
     hw_uint mut = 0;
     hw_bool is_defining_mut = 1;
+    
+    if(hw_LexToken_is_ws(comp->lexer.token)) {
+        hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_PAREN_LEFT);
+    } else {
+        hw_compbc_lex_expect(comp, HW_LEXTOKEN_PAREN_LEFT);
+    }
 
-    hw_compbc_lex_next_skipws_expect(comp, HW_LEXTOKEN_PAREN_LEFT);
     _L_again:
     while(1) {
         hw_compbc_lex_next_skipws(comp);
@@ -691,7 +720,7 @@ static void _compiler_atsym_defn(hw_CompilerBC *comp)
             goto _L_again;
         } else if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_SYMBOL)) {
         } else {
-            _ERROR("expected 'SYMBOL' or ')'%s", "");
+            _ERROR("expected 'SYMBOL', ')', '|'%s", "");
         }
         
         hw_CStr arg_name = { .data = (void *)comp->lexer.token.start
@@ -711,8 +740,9 @@ static void _compiler_atsym_defn(hw_CompilerBC *comp)
 
         if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_PAREN_RIGHT)) {
             goto _L_done;
+        } else if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_PIPE)) {
+            is_defining_mut = 0;
         } else if(hw_LexToken_is(comp->lexer.token, HW_LEXTOKEN_COMMA)) {
-        
         } else {
             _ERROR("expected ',' or '}'%s", "");
         }

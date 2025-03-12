@@ -4,26 +4,6 @@
 #include "hw.h"
 #include "hw_dev.h"
 
-
-static void _prnt(hw_State *hw, hw_Var v, hw_byte t)
-{
-    hw_Var argv[2];
-    hw_byte type[2];
-    
-    hw_String_new(hw, argv, type, 1);
-    argv[1] = argv[0];
-    argv[0] = v;
-    type[0] = t;
-    
-    hw_Type *T = hw_TypeSys_get_via_id(hw->ts, t);
-    HW_ASSERT(T);
-    hw_VarFn to_string = hw_Type_getvt(T, "to_string", 9);
-    to_string(hw, argv, type, 2);
-    hw_String *str = argv[1].as_string;
-    hw_logp("%.*s", str->lenUsed, str->data);
-    hw_String_delete(hw, argv+1, type+1, 1);
-}
-
 /**********************************************************************
  *                            Public
  **********************************************************************/
@@ -227,7 +207,7 @@ void hw_vm(hw_State *hw)
        ON_INST(f_lt)  r(A).as_uint =  r(B).as_float < r(B).as_float;
 
        ON_INST(prnt) {
-            _prnt(hw, r(A), t(A));
+            hw_debug_print_var(hw, r(A), t(A));
        }
     END()
 
