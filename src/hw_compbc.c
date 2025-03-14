@@ -208,7 +208,7 @@ static void hw_ModuleObj_reset(hw_CompilerBC *comp)
         HW_VAR_CALLEX(comp->vm_child
                     , mobj->knst->tid[i]
                     , mobj->knst->data[i]
-                    , "delete", (), ());
+                    , "delete", (), (), );
     }
 
     mobj->knst->lenUsed = 0;
@@ -627,7 +627,7 @@ hw_int hw_compbc_lex_getint(hw_CompilerBC *comp)
     #undef buffsize
 }
 
-static const struct hw_InstData *_get_instruction(
+static const struct hw_InstInfo *_get_instruction(
     hw_CompilerBC *comp, hw_byte const *str, hw_uint size)
 {
     hw_Global const *g = comp->vm_child->global;
@@ -712,7 +712,7 @@ static hw_int _compiler_next_eval_operand(hw_CompilerBC *comp)
 static void _compiler_inst(hw_CompilerBC *comp)
 {
     hw_LexToken inst = comp->lexer.token;
-    hw_InstData const* instdata = _get_instruction(comp, inst.start, inst.size);
+    hw_InstInfo const* instdata = _get_instruction(comp, inst.start, inst.size);
     
     if(instdata == NULL) {
         _ERROR("Unknown Instruction '%.*s'"

@@ -70,7 +70,7 @@ static void _illegal_inst(hw_State *hw, hw_code const *pc)
 {
     hw_byte inst = pc->get.opcode;
     if(inst < hw->global->insts_count) {
-        hw_InstData const *ix = hw->global->insts + inst;
+        hw_InstInfo const *ix = hw->global->insts + inst;
         hw_loglnp("error: instruction not implemented %.*s"
                 , (int)ix->name_size, ix->name);
         return;

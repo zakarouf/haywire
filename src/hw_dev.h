@@ -81,13 +81,21 @@ void hw_logstr(const char *msg, size_t const);
  * hw_VarFn
  */
 #define HW_MACRO_EXPAND(...) __VA_ARGS__
-#define HW_VAR_CALLEX(hw, type_id, self, name, arglist, argt)\
-    {\
-        hw_Var __args[] = {self, HW_MACRO_EXPAND arglist};\
-        hw_byte __tid[] = {type_id HW_MACRO_EXPAND argt};\
-        hw_Type *__T = hw_TypeSys_get_via_id(hw->ts, type_id);\
-        hw_VarFn __fn = hw_Type_getvt(__T, name, sizeof(name)-1);\
-        __fn(hw, __args, __tid, sizeof(__tid));\
+#define HW_VARFN(hw, fn, args, argtypes, ...)           \
+    {                                                   \
+        hw_Var __args[] = {HW_MACRO_EXPAND args};       \
+        hw_byte __tid[] = {HW_MACRO_EXPAND argtypes};   \
+        fn(hw, __args, __tid, sizeof(__tid));           \
+        __VA_ARGS__;                                    \
+    }
+
+#define HW_VAR_CALLEX(hw, type_id, self, name, arglist, argt, ...)\
+    {                                                               \
+        hw_Type *__T = hw_TypeSys_get_via_id(hw->ts, type_id);      \
+        hw_VarFn __fn = hw_Type_getvt(__T, name, sizeof(name)-1);   \
+        HW_VARFN(hw, __fn                                           \
+            , (self, HW_MACRO_EXPAND arglist)                       \
+            , (type_id, HW_MACRO_EXPAND argt), __VA_ARGS__)         \
     }
 
 
@@ -265,7 +273,7 @@ DEFN(hw_String, delete);
 DEFN(hw_String, newFrom_data);
 DEFN(hw_String, newFrom_file);
 DEFN(hw_String, newFrom_fmt);
-DEFN(hw_String, append_str);
+DEFN(hw_String, append_bytes);
 void hw_String_fmt(hw_State *hw, hw_String **buffer
         , char const *restrict format, ...);
 
@@ -590,6 +598,7 @@ void hw_debug_State_trace(hw_State *hw);
 void hw_debug_vm_step(
     hw_State *hw, hw_Module const *m, hw_code const *pc, hw_Var const *v);
 
+void hw_debug_print_inst(hw_State *hw);
 void hw_debug_print_fnobj(hw_CompilerBC const *comp);
 void hw_debug_print_mobj(hw_CompilerBC const *comp);
 void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t);

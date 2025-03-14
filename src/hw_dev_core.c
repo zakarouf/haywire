@@ -15,92 +15,93 @@
 
 
 #define INST(x) hw_Inst_##x
-#define ID(_name, dret, it)             \
+#define ID(_name, dret, it, _brief)     \
     [INST(_name)] = {                   \
         .name = #_name                  \
       , .name_size = sizeof(#_name)-1   \
       , .inst_type = hw_InstType_##it   \
       , .inst_code = INST(_name)        \
-      , .no_direct = dret        \
+      , .no_direct = dret               \
+      , .brief = (void *)_brief         \
+      , .brief_size = sizeof(_brief)-1  \
     }
 
-struct hw_InstData const HW_INST_DATA[] = {
-    ID(nop,     HW_FALSE, abc)
-  , ID(defn,    HW_TRUE, ax32) // a = mut, [x32] = data(finfo)
-  , ID(return,  HW_FALSE, a)
-  , ID(tailret, HW_FALSE, abc) // ret with function call
-  , ID(push, HW_FALSE, a)
-  , ID(pushex, HW_FALSE, abc)
-  , ID(pop, HW_FALSE, ab) // release top variables in stack, copy to stack variable a, if b is true
-  , ID(popex, HW_FALSE, abc)
+static struct hw_InstInfo const INSTRUCTION_INFO[] = {
+    ID(nop,     HW_FALSE, abc,  "NOP")
+  , ID(defn,    HW_TRUE, ax32,  "a = mut, [x32] = data(finfo)")
+  , ID(return,  HW_FALSE, nop,  "return call")
+  , ID(tailret, HW_FALSE, abc,  "ret with function call")
+  , ID(push,    HW_FALSE, a,    "push r(A) to stack")
+  , ID(pushex,  HW_FALSE, abc,  "push r(A)..r(B) to stack")
+  , ID(pop,     HW_FALSE, ab,   "release top variables in stack"
+                                ", copy to stack variable a, if b is true")
+  , ID(popex,   HW_FALSE, abc,  "")
 
   /* Gets */
-  , ID(get_type, HW_FALSE, ab)     // R(Ax) = @typeof(R(Bx))
-  , ID(get_routine, HW_FALSE, ab)  // R(Ax) = Thread(R(Bx))
-  , ID(get_native, HW_FALSE, ab)
-  , ID(get_vt, HW_FALSE, ab)
+  , ID(get_type,    HW_FALSE, ab, "R(Ax) = @typeof(R(Bx))") 
+  , ID(get_routine, HW_FALSE, ab, "R(Ax) = Thread(R(Bx))")  // 
+  , ID(get_native,  HW_FALSE, ab, "")
+  , ID(get_vt,      HW_FALSE, ab, "")
 
   /* Call */
-  , ID(call,       HW_FALSE, x32)
-  , ID(callm,      HW_TRUE, abc)
-  , ID(calln,      HW_TRUE, abc)
-  , ID(callc,      HW_TRUE, abc)
+  , ID(call,       HW_FALSE, x32, "")
+  , ID(callm,      HW_TRUE, abc, "")
+  , ID(calln,      HW_TRUE, abc, "")
+  , ID(callc,      HW_TRUE, abc, "")
 
   // ------
-  , ID(top,     HW_FALSE, ax32)
-  , ID(dup,     HW_FALSE, ab)
-  , ID(dups,     HW_FALSE, abc)
-  , ID(type,    HW_FALSE, ab)
+  , ID(top,     HW_FALSE, ax32, "")
+  , ID(dup,     HW_FALSE, ab,   "")
+  , ID(dups,    HW_FALSE, abc,  "")
+  , ID(type,    HW_FALSE, ab,   "")
 
-  , ID(reff,    HW_FALSE, ab)
-  , ID(dreff,    HW_FALSE, ab)
+  , ID(reff,    HW_FALSE, ab,   "")
+  , ID(dreff,   HW_FALSE, ab,   "")
 
-  , ID(loada32,     HW_FALSE, ax32)
-  , ID(loadb32,     HW_FALSE, ax32)
-  , ID(load,        HW_FALSE, ax32)
-  , ID(loadknst,    HW_FALSE, ax32)
-  , ID(loadobj,     HW_FALSE, ax32)
+  , ID(loada32,     HW_FALSE, ax32, "")
+  , ID(loadb32,     HW_FALSE, ax32, "")
+  , ID(load,        HW_FALSE, ax32, "")
+  , ID(loadknst,    HW_FALSE, ax32, "")
+  , ID(loadobj,     HW_FALSE, ax32, "")
 
-  , ID(list,    HW_FALSE, abc)
-  , ID(unlist,  HW_FALSE, abc)
+  , ID(list,    HW_FALSE, abc, "")
+  , ID(unlist,  HW_FALSE, abc, "")
   
   /* Comaparism And Jump*/
-  , ID(jmp,     HW_FALSE, a)
-  , ID(jk,      HW_FALSE, x32)
-  , ID(jt,      HW_FALSE, ab)
-  , ID(jtk,     HW_FALSE, ax32)
+  , ID(jmp,     HW_FALSE, a,    "")
+  , ID(jk,      HW_FALSE, x32,  "")
+  , ID(jt,      HW_FALSE, ab,   "")
+  , ID(jtk,     HW_FALSE, ax32, "")
   
-  , ID(typeq,   HW_FALSE, abc) 
-  , ID(tideq,   HW_FALSE, abc) 
+  , ID(typeq,   HW_FALSE, abc, "")
+  , ID(tideq,   HW_FALSE, abc, "")
 
   /* Maths (number) */
-  , ID(i_add,  HW_FALSE, abc)
-  , ID(i_sub,  HW_FALSE, abc)
-  , ID(i_mul,  HW_FALSE, abc)
-  , ID(i_div,  HW_FALSE, abc)
-  , ID(i_mod,  HW_FALSE, abc)
-  , ID(i_lt,  HW_FALSE, abc)
-  , ID(i_le,  HW_FALSE, abc)
-  , ID(i_eq,  HW_FALSE, abc)
+  , ID(i_add, HW_FALSE, abc, "")
+  , ID(i_sub, HW_FALSE, abc, "")
+  , ID(i_mul, HW_FALSE, abc, "")
+  , ID(i_div, HW_FALSE, abc, "")
+  , ID(i_mod, HW_FALSE, abc, "")
+  , ID(i_lt,  HW_FALSE, abc, "")
+  , ID(i_le,  HW_FALSE, abc, "")
+  , ID(i_eq,  HW_FALSE, abc, "")
 
-  , ID(i_kadd,  HW_FALSE, abc)
-  , ID(i_ksub,  HW_FALSE, abc)
-  , ID(i_kmul,  HW_FALSE, abc)
-  , ID(i_kdiv,  HW_FALSE, abc)
-  , ID(i_kmod,  HW_FALSE, abc)
-  , ID(i_klt,  HW_FALSE, abc)
-  , ID(i_kle,  HW_FALSE, abc)
-  , ID(i_keq,  HW_FALSE, abc)
+  , ID(i_kadd,  HW_FALSE, abc, "")
+  , ID(i_ksub,  HW_FALSE, abc, "")
+  , ID(i_kmul,  HW_FALSE, abc, "")
+  , ID(i_kdiv,  HW_FALSE, abc, "")
+  , ID(i_kmod,  HW_FALSE, abc, "")
+  , ID(i_klt,  HW_FALSE, abc, "")
+  , ID(i_kle,  HW_FALSE, abc, "")
+  , ID(i_keq,  HW_FALSE, abc, "")
 
   /* Maths (floats) */
-  , ID(f_add,  HW_FALSE, abc)
-  , ID(f_mul,  HW_FALSE, abc)
-  , ID(f_lt,   HW_FALSE, abc)
+  , ID(f_add,  HW_FALSE, abc, "")
+  , ID(f_mul,  HW_FALSE, abc, "")
+  , ID(f_lt,   HW_FALSE, abc, "")
 
-  , ID(prnt, HW_FALSE, a)
-
-
-  , ID(TOTAL, HW_FALSE, nop)
+  , ID(prnt, HW_FALSE, a, "")
+  , ID(TOTAL, HW_FALSE, nop, "")
 };
 
 #undef INST
@@ -511,7 +512,7 @@ hw_Global *hw_Global_new(hw_State *parent)
     hw_VarList_new(parent, &vlist, (hw_byte[]){hw_TypeID_list}, 1);
     g->constants = vlist.as_list;
 
-    g->insts = HW_INST_DATA;
+    g->insts = INSTRUCTION_INFO;
     g->insts_count = hw_Inst_TOTAL;
 
     g->tsys = hw_TypeSys_new_default(&parent->allocator);

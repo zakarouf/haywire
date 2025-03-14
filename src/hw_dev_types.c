@@ -471,7 +471,7 @@ DEFN(hw_String_delete) {
     return HW_VARP_NIL();
 }
 
-DEFN(hw_String_append_cstr) {
+DEFN(hw_String_append_bytes) {
     (void)tids;
     (void)argc;
 

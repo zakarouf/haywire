@@ -4,6 +4,21 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+void hw_debug_print_inst(hw_State *hw)
+{
+    hw_InstInfo const *instinfo = hw->global->insts;
+    hw_u32 const inst_count = hw->global->insts_count;
+
+    hw_loglnp("Instructions: Total(%"PRIu32")", inst_count); 
+    for (size_t i = 0; i < inst_count; i++) {
+        hw_loglnp("  %02"PRIx64" %.*s\n"
+                  "     (%.*s)"
+                , i, instinfo->name_size, instinfo->name
+                , instinfo->brief_size, instinfo->brief);
+        instinfo += 1;
+    }
+}
+
 void hw_debug_print_mobj(hw_CompilerBC const *comp)
 {
     hw_ModuleObj *mo = comp->obj;
@@ -56,7 +71,7 @@ void hw_debug_code_disasm(hw_State const *hw, hw_code code)
 
     hw_uint opcode = code.get.opcode;
     HW_DEBUG(HW_ASSERT(opcode < hw->global->insts_count));
-    struct hw_InstData const *insdata = hw->global->insts + opcode;
+    hw_InstInfo const *insdata = hw->global->insts + opcode;
 
     fwrite("    ", 4, 1, out);
     fwrite(insdata->name, insdata->name_size, 1, out);

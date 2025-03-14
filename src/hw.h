@@ -482,13 +482,15 @@ enum hw_InstType {
   , hw_InstType_s32  // [ins nil s32]
 };
 
-typedef struct hw_InstData hw_InstData;
-struct hw_InstData {
+typedef struct hw_InstInfo hw_InstInfo;
+struct hw_InstInfo {
     char const       name[16];
     hw_byte          name_size;
     enum hw_InstType inst_type;
     hw_byte          inst_code;    
     hw_byte          no_direct;
+    hw_byte const *  brief;
+    hw_u32           brief_size;
 };
 
 struct hw_codeArr {
@@ -615,7 +617,7 @@ struct hw_Global {
     hw_SymTable     *builtin_names;
 
     hw_TypeSys      *tsys;
-    hw_InstData     const *insts;
+    hw_InstInfo     const *insts;
     hw_byte         insts_count;
 };
 
