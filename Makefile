@@ -39,7 +39,10 @@ DISTCLEAN_LIST := $(OBJ) \
                   $(OBJ_DEBUG)
 CLEAN_LIST := $(TARGET) \
 			  $(TARGET_DEBUG) \
-			  $(DISTCLEAN_LIST)
+			  $(DISTCLEAN_LIST)\
+			  $(BIN_PATH)\
+			  $(DBG_PATH)\
+			  $(OBJ_PATH)
 
 # default rule
 default: makedir all
@@ -85,9 +88,9 @@ debug: $(TARGET_DEBUG)
 .PHONY: clean
 clean:
 	@echo CLEAN $(CLEAN_LIST)
-	@rm -f $(CLEAN_LIST)
+	@rm -rf $(CLEAN_LIST)
 
 .PHONY: distclean
 distclean:
 	@echo CLEAN $(CLEAN_LIST)
-	@rm -f $(DISTCLEAN_LIST)
+	@rm -rf $(DISTCLEAN_LIST)
