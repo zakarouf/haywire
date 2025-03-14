@@ -74,7 +74,7 @@ The Virtual Machine is fully implemented and ready. Along side the bytecode comp
 ```
 Save the file, run it.
 ```text 
-$ hw hello_world.hws
+$ hw -c hello_world.main hello_world.hws
 Hello, World!
 ```
 > See more in `./examples/hwasm`
