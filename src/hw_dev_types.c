@@ -376,6 +376,25 @@ hw_String* _String_newFrom_dataRaw(
     return self;
 }
 
+void hw_String_fmt(hw_State *hw, hw_String **buffer, char const *restrict format, ...)
+{
+    va_list vargs;
+    va_start(vargs, format);
+    hw_String *buf = *buffer;
+    hw_uint len = vsnprintf(NULL, 0, format, vargs);
+    va_end(vargs);
+
+    if((len + buf->lenUsed) > buf->len) {
+        _String_expand(hw, &buf, len + 1);
+    }
+    va_start(vargs, format);
+    buf->lenUsed += vsnprintf(
+            (char *)buf->data + buf->lenUsed
+          , buf->len - buf->lenUsed, format, vargs);
+    va_end(vargs);
+    *buffer = buf;
+}
+
 DEFN(hw_String_new) {
     (void)args;
     (void)tids;

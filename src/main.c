@@ -45,7 +45,7 @@ static hw_VarArr *_wrap_args(hw_State *s, int argc, char *argv[])
         hw_Var string;
 
         args[1].as_ptr = argv[i];
-        args[2].as_uint = strlen(argv[i]);
+        args[2].as_uint = strlen(argv[i]) + 1;
         hw_String_newFrom_data(s, args
             , (hw_byte[]){
             hw_TypeID_nil, 
@@ -53,6 +53,8 @@ static hw_VarArr *_wrap_args(hw_State *s, int argc, char *argv[])
             hw_TypeID_uint}, 3);
 
         string = args[0];
+        string.as_string->lenUsed -= 1;
+        string.as_string->data[string.as_string->lenUsed] = '\0';
       
         args[0] = arr;
         args[1] = string;
@@ -63,9 +65,18 @@ static hw_VarArr *_wrap_args(hw_State *s, int argc, char *argv[])
         arr = args[0];
     }
     
+    HW_DEBUG(
+        HW_LOG("ARGS: %"PRIu32, arr.as_arr->lenUsed);
+        for (size_t i = 0; i < arr.as_arr->lenUsed; i++) {
+            hw_debug_print_var(s, arr.as_arr->data[i]
+                    , arr.as_arr->tid);
+            hw_logp("\n");
+        }
+    );
+
+
     return arr.as_arr;
 }
-
 
 static void _static_checks(void)
 {
@@ -83,71 +94,6 @@ static void _static_checks(void)
     X(sizeof(hw_uint) == WORD_SIZE);
     X(sizeof(hw_code) == WORD_SIZE);
 }
-
-#if 0
-static hw_Module* test_module(hw_State *hw)
-{
-    char const source[] = "nosource";
-    hw_uint source_size = sizeof(source);
-    hw_CompilerBC *comp = hw_compbc_new(
-            hw, source, source_size);
-
-    hw_compbc_w_defn(comp, (void *)"add_loop", 8
-        , 5, 1, (hw_byte[]){  hw_TypeID_int
-                            , hw_TypeID_int
-                            , hw_TypeID_int
-                            , hw_TypeID_int
-                            , hw_TypeID_int
-                        }
-        , (hw_CStr[]){ {(void *)"res", 3}
-                     , {(void *)"x", 1} 
-                     , {(void *)"y", 1} 
-                     , {(void *)"step", 4} 
-                     , {(void *)"unused", 6}
-        });
-    
-    hw_uint v_result = 0
-      ,     v_initial = 1
-      ,     v_step    = 2
-      ,     v_iter    = 3;
-    hw_compbc_inst(comp, hw_code_abc(hw_Inst_dup, v_result, v_initial, 0));
-
-    hw_int lable_repeat = hw_compbc_inst(comp
-        , hw_code_abc(hw_Inst_i_add, v_result, v_result, v_step));
-    hw_compbc_inst(comp, hw_code_abc(hw_Inst_i_sub, v_iter, v_iter, v_initial)); 
-    hw_compbc_inst(comp, hw_code_as32(hw_Inst_jtk, v_iter
-          , lable_repeat - comp->obj->code->lenUsed - 2));
-    
-    hw_compbc_w_endfn(comp);
-
-    hw_Module *mod = hw_compbc_convert(comp);
-    hw_compbc_delete(comp);
-    return mod; 
-}
-
-void test_main(hw_State *hw, hw_VarArr *args)
-{
-    hw_Module *mod = test_module(hw);
-    hw_debug_Module_disasm(hw, mod);
-
-    hw_uint mod_id = hw_Global_add_module((void *)hw->global, mod);
-
-    hw_VarP v = {.value.as_int = 0, .type = hw_TypeID_int};
-    hw_State_vstack_push(hw, v.value, v.type); v.value.as_int = 1;
-    hw_State_vstack_push(hw, v.value, v.type); v.value.as_int = 1;
-    hw_State_vstack_push(hw, v.value, v.type); v.value.as_int = 10;
-    hw_State_vstack_push(hw, v.value, v.type);
-    hw_State_vstack_push(hw, v.value, v.type);
-    
-    hw_vm_prepare_call(hw, mod_id, 0);
-    hw_vm(hw);
-
-    hw_Var _vt_args[] = { (hw_Var){.as_arr = args} };
-    hw_byte tid = hw_TypeID_array;
-    hw_VarArr_delete(hw, _vt_args, &tid, 1);
-}
-
-#endif
 
 hw_CStr hw_get_token_name(hw_uint token_type);
 
@@ -196,13 +142,114 @@ hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[])
     return args[0].as_module;
 }
 
+typedef struct hw_Config hw_Config;
+struct hw_Config {
+    HW_ARR(hw_String *) *files;
+    hw_String *out_file;
+    hw_String *call;
+    hw_VarArr *args;
+    struct hw_ConfigFlags {
+        hw_byte run:1
+              , disasm:1;
+    } flags;
+};
+
+static hw_byte _argparse_is_arg(hw_String *arg)
+{
+    if(arg->lenUsed == 2) { return arg->data[0] == '-'; }
+    if(arg->lenUsed > 2 
+    && (arg->data[0] == '-' && arg->data[1] == '-')) {return 2;}
+    return 0;
+}
+
+#define ARG(n) (args->data[ARG + n].as_string)
+
+static hw_uint _argparse_single_char_conf(
+    hw_VarArr *args, hw_Config *conf, hw_byte ch, hw_uint ARG)
+{
+    switch (ch) {
+               case 'd': conf->flags.disasm = 1;
+        break; case 'r': conf->flags.run = 1;
+        break; case 'c': conf->call = ARG(1); ARG += 1;
+        break; default: hw_loglnp("Unknown command '-%c'", ch);
+    }
+    return ARG;
+}
+
+static hw_uint _argparse_mult_string(
+    hw_VarArr *args, hw_Config *conf, hw_uint ARG)
+{
+    
+}
+
+hw_int hw_argparse(
+    hw_State *hw, hw_Config *conf, int argc, char *argv[]) {
+
+    HW_ARR_NEW(hw, conf->files, 8);
+
+    hw_VarArr *args = _wrap_args(hw, argc, argv);
+    conf->args = args;
+    hw_uint ARG = 1;
+
+    while(ARG < args->lenUsed) {
+        hw_byte argtype = _argparse_is_arg(ARG(0));
+        if(argtype == 1) {
+            ARG = _argparse_single_char_conf(args, conf, ARG(0)->data[1], ARG);
+        } else if(argtype == 2) {
+            ARG = _argparse_mult_string(args, conf, ARG);
+        } else {
+            HW_ARR_PUSH(hw, conf->files, ARG(0));
+        }
+        ARG += 1;
+    }
+
+    
+    return 0;
+}
+#undef ARG
+
+void config_del(hw_State *hw, hw_Config *conf)
+{
+    hw_VarArr_delete(hw
+        , (hw_Var[]){[0].as_arr = conf->args}, (hw_byte[]){hw_TypeID_array}, 1);
+    HW_ARR_DELETE(hw, conf->files);
+}
+
 int main(int argc, char *argv[])
 {
-    HW_ASSERTEX(argc > 1, "`%s` requires one argument, \nUsage: %s <file>", argv[0], argv[0]);
+    HW_ASSERTEX(argc >= 3, "`%s` requires one argument, \nUsage: %s <fn> <file_1> <file_2> ... <file_n>", argv[0], argv[0]);
     hw_State *hw = hw_State_new_default(NULL);
     _static_checks();
     _check_vm_inst(hw);
+    hw_Config conf = {0};
+    HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
     
+    if(conf.files->lenUsed) {
+        hw_Module *mod;
+        hw_uint mod_id = hw_compbc_compile_files_and_combine(hw, &mod, conf.files->lenUsed, conf.files->data);
+        if(conf.call != NULL) {
+            hw_uint fn_id = 0;
+            HW_ASSERT(hw_Module_get_fn(mod, conf.call->data, conf.call->lenUsed, &fn_id));
+            hw_vm_prepare_call(hw, mod_id, fn_id);
+            hw_vm(hw);       
+        }
+        if(conf.flags.disasm) {
+            hw_debug_Module_disasm(hw, mod);
+        }
+    }
+    config_del(hw, &conf);
+    hw_State_delete(hw);
+
+    /*
+    hw_Module *mod;
+    hw_uint mod_id = hw_compbc_compile_files_and_combine(hw, &mod, argc - 2,(const char **) argv + 2);
+    hw_uint fn_id = 0;
+    HW_ASSERT(hw_Module_get_fn(mod, (void const *)argv[1], strlen(argv[1]), &fn_id));
+    hw_vm_prepare_call(hw, mod_id, fn_id);
+    hw_vm(hw);
+    hw_State_delete(hw);
+    */
+    #if 0 
     hw_CompilerBC *comp = hw_compbc_new(hw);
     HW_ASSERT(hw_compbc_load_source_fromFile(comp, argv[1], strlen(argv[1]))
              && "FILE NOT LOADED");
@@ -211,23 +258,20 @@ int main(int argc, char *argv[])
     hw_Module *mod = hw_compbc_convert(comp);
     hw_compbc_delete(comp);
 
-    if(argc > 2) {
-        hw_Module_writetofile(hw, mod, "out.hwo");
-        hw_Module *new_mod = hw_Module_loadFromFile(hw, "out.hwo");
-        HW_ASSERT(hw_ptrcmp(mod, hw_Module_calcsize(mod)
-                          , new_mod, hw_Module_calcsize(new_mod)));
-        hw_debug_Module_disasm(hw, mod);
-    }
+
+    hw_Module_writetofile(hw, mod, "out.hwo");
+    hw_Module *new_mod = hw_Module_loadFromFile(hw, "out.hwo");
+    HW_ASSERT(hw_ptrcmp(mod, hw_Module_calcsize(mod)
+                      , new_mod, hw_Module_calcsize(new_mod)));
+    hw_debug_Module_disasm(hw, mod);
+
 
     hw_uint mod_id = hw_Global_add_module((void *)hw->global, mod);
     hw_uint fn_id = 1;
     HW_ASSERT(hw_Module_get_fn(mod, (void *)"main", 4, &fn_id));
-
+    #endif
     
-    hw_vm_prepare_call(hw, mod_id, fn_id);
-    hw_vm(hw);
 
-    hw_State_delete(hw);
     return EXIT_SUCCESS;
 }
 

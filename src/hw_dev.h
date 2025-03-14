@@ -78,6 +78,20 @@ void hw_logstr(const char *msg, size_t const);
                     , "%"fmt_x" "#op" %"fmt_y, x, y) ;
 
 /**
+ * hw_VarFn
+ */
+#define HW_MACRO_EXPAND(...) __VA_ARGS__
+#define HW_VAR_CALLEX(hw, type_id, self, name, arglist, argt)\
+    {\
+        hw_Var __args[] = {self, HW_MACRO_EXPAND arglist};\
+        hw_byte __tid[] = {type_id HW_MACRO_EXPAND argt};\
+        hw_Type *__T = hw_TypeSys_get_via_id(hw->ts, type_id);\
+        hw_VarFn __fn = hw_Type_getvt(__T, name, sizeof(name)-1);\
+        __fn(hw, __args, __tid, sizeof(__tid));\
+    }
+
+
+/**
  * Section: hw_char
  */
 #define hw_char_is_ws(x) ((x) == ' ' | (x) == '\n' | (x) == '\t')
@@ -104,6 +118,7 @@ void hw_logstr(const char *msg, size_t const);
 hw_i32 hw_strto_uint(hw_uint *ret, hw_byte const *str, hw_u32 size);
 hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size);
 hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size);
+void hw_String_trim(hw_String *str, hw_byte ch);
 
 /**
  * Section: Tokens
@@ -251,6 +266,8 @@ DEFN(hw_String, newFrom_data);
 DEFN(hw_String, newFrom_file);
 DEFN(hw_String, newFrom_fmt);
 DEFN(hw_String, append_str);
+void hw_String_fmt(hw_State *hw, hw_String **buffer
+        , char const *restrict format, ...);
 
 /* List */
 DEFN(hw_VarList, new);
@@ -306,6 +323,8 @@ hw_Var hw_SymTable_get__wrap(hw_State *hw, hw_SymTable *s, hw_CStr key);
 hw_uint hw_SymTable_index(
     hw_SymTable *sym, hw_byte const *key, hw_uint key_size);
 
+void hw_Module_delete(hw_State *hw, hw_Module *m);
+void hw_Module_delete_detatch_knstobj(hw_State *hw, hw_Module *m);
 /**
  * INSTS
  */
@@ -539,6 +558,11 @@ hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp
 
 void hw_compbc_delete(hw_CompilerBC *comp);
 hw_uint hw_compbc_inst(hw_CompilerBC *comp, hw_code inst);
+hw_uint hw_compbc_inststream(hw_CompilerBC *comp, hw_code const *insts, hw_u32 i_count);
+hw_uint hw_compbc_data(hw_CompilerBC *comp, void const *data, hw_uint const size);
+hw_uint hw_compbc_fndata(
+    hw_CompilerBC *comp, hw_byte const *name, hw_byte const *tids
+  , hw_u32 name_size, hw_u32 mut_count, hw_u32 args_passed, hw_u32 stack_size);
 hw_uint hw_compbc_knst(hw_CompilerBC *comp
         , hw_Var const value, hw_byte const tid);
 hw_Module* hw_compbc_convert(hw_CompilerBC *comp);
@@ -553,6 +577,8 @@ hw_uint hw_compbc_w_defn(hw_CompilerBC *comp
 void hw_compbc_w_endfn(hw_CompilerBC *comp);
 
 void hw_compbc_compile_from_source(hw_CompilerBC *comp);
+hw_uint hw_compbc_compile_files_and_combine(hw_State *hw
+        , hw_Module **out_mod, hw_u32 files, hw_String **filenames);
 
 /**
  * Debug

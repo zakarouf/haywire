@@ -217,6 +217,15 @@ hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size, void const* rhs, hw_uint rh
     return memcmp(lhs, rhs, lhs_size);
 }
 
+void hw_String_trim(hw_String *str, hw_byte ch)
+{
+    hw_u32 cur = str->lenUsed-1;
+    while(cur) {
+        if(str->data[cur] == ch) str->lenUsed = cur;
+        cur -= 1;
+    }
+}
+
 hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size)
 {
     hw_int result = 0;
@@ -429,6 +438,11 @@ hw_Module *hw_Module_newblank(
     return m;
 }
 
+void hw_Module_delete_detatch_knstobj(hw_State *hw, hw_Module *m)
+{
+    HW_THREAD_FREE(hw, m);
+}
+
 void hw_Module_delete(hw_State *hw, hw_Module *m)
 {
     for (size_t i = 0; i < m->k_count; i++) {
@@ -439,7 +453,7 @@ void hw_Module_delete(hw_State *hw, hw_Module *m)
             delete(hw, m->knst + i, m->knst_t, 1);
         }
     }
-    HW_THREAD_FREE(hw, m);
+    hw_Module_delete_detatch_knstobj(hw, m);
 }
 
 hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id)
@@ -478,6 +492,7 @@ hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, h
     for (size_t i = 0; i < m->fn_count; i++) {
         hw_FnInfo info;
         hw_Module_get_FnInfo(m, i, &info);
+        HW_DEBUG(HW_LOG("FNINFO: %.*s ~= %.*s", (int)name_size, name, (int)info.name_size, info.name));
         if(name_size == info.name_size) {
             if(!memcmp(name, info.name, name_size)) {
                 *fn_id = i;
@@ -545,15 +560,10 @@ hw_Module* hw_Global_get_module(hw_Global const *g, hw_uint mod_id)
 hw_Module* hw_Global_get_module_from_name(
     hw_Global const *g, hw_byte const *name, hw_uint const name_size)
 {
-    hw_uint count = g->modules.loaded->lenUsed;
-    for (size_t i = 0; i < count; i++) {
-        hw_Module *m = g->modules.loaded->data[i];
-        if(name_size == m->name_size) {
-            if(!memcmp(m->data, name, name_size)) {
-                return m;
-            }
-        }
-    }
+    (void)g;
+    (void)name;
+    (void)name_size;
+    HW_ASSERT(0 && "NOT IMPLEMENTED, HINT: USE HASHTABLE, MOD NAMES ARE DECOUPLED");
     return NULL;
 }
 

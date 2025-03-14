@@ -172,6 +172,7 @@ union hw_Var {
 
     hw_int          as_bool;
     hw_byte         as_byte,    *as_byte_p,  **as_byte_pp;
+    hw_byte               const *as_cbyte_p;
     hw_uint         as_uint,    *as_uint_p,  **as_uint_pp;
     hw_int          as_int,     *as_int_p,   **as_int_pp;
     hw_float        as_float,   *as_float_p, **as_float_pp;
@@ -542,8 +543,6 @@ struct hw_FnStateArr {
 struct hw_Module {
     //TODO: Match the specifications above
     hw_uint magic;
-    hw_uint name_size;
-    hw_uint name_hash;
 
     hw_uint fn_count;
     hw_uint pubfn_count;
@@ -646,10 +645,6 @@ typedef struct hw_VarInfo hw_VarInfo;
 typedef struct hw_FnObj hw_FnObj;
 
 struct hw_ModuleObj {
-    hw_byte *name;
-    hw_uint name_size;
-    hw_uint name_hash;
-
     hw_uintArr      *fnpt;
     hw_SymTable     *fntable;
 
@@ -722,6 +717,7 @@ struct hw_CompilerBC {
     hw_Lexer        lexer;   
     hw_CStr         sname;
     hw_CStr         source;
+    hw_CStr         out_name;
 };
 
 #define HW_STATIC_ASSERT(exp)\

@@ -189,6 +189,31 @@ static void hw_ModuleObj_delete(hw_CompilerBC *comp)
     HW_THREAD_FREE(comp->vm_child, comp->obj);
 }
 
+static void hw_ModuleObj_reset(hw_CompilerBC *comp)
+{
+    hw_ModuleObj *mobj = comp->obj;
+    mobj->code->lenUsed = 0;
+    mobj->data->lenUsed = 0;
+    mobj->defer_fncall_names->lenUsed = 0;
+    mobj->defer_fncall_pc->lenUsed = 0;
+    
+    hw_Var args[] = { [0].as_symtable = mobj->fntable };
+    hw_byte tid[] = {hw_TypeID_symtable};
+    hw_SymTable_reset(comp->vm_child, args, tid, 1);
+
+    args[0].as_symtable = mobj->knsttable;
+    hw_SymTable_reset(comp->vm_child, args, tid, 1);
+
+    for (size_t i = 0; i < mobj->knst->lenUsed; i++) {
+        HW_VAR_CALLEX(comp->vm_child
+                    , mobj->knst->tid[i]
+                    , mobj->knst->data[i]
+                    , "delete", (), ());
+    }
+
+    mobj->knst->lenUsed = 0;
+}
+
 hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp 
         , char const *source_name, hw_uint source_name_size)
 {
@@ -199,7 +224,9 @@ hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp
     void *source = hw_loadfile(comp->vm_child, source_name, 1, &source_size);
     HW_ASSERT(source_size < UINT32_MAX); // 4GB is Max File Size;
                                          //
-    if(source == NULL) return 0;
+    if(source == NULL) {
+        HW_DEBUG(HW_LOG("~~FAILED TO LOAD FILE: %s", source_name));
+    };
 
     comp->sname.len = source_name_size;
     comp->sname.data = HW_THREAD_ALLOC(comp->vm_child, source_name_size);
@@ -253,6 +280,11 @@ void hw_compbc_delete(hw_CompilerBC *comp)
     hw_State_delete(child);
 }
 
+void hw_compbc_reset(hw_CompilerBC *comp)
+{
+    hw_ModuleObj_reset(comp);
+}
+
 hw_Module* hw_compbc_convert(hw_CompilerBC *comp)
 {
     hw_ModuleObj *obj = comp->obj;
@@ -293,12 +325,34 @@ hw_uint hw_compbc_inst(hw_CompilerBC *comp, hw_code const inst)
     return comp->obj->code->lenUsed-1;
 }
 
+hw_uint hw_compbc_inststream(hw_CompilerBC *comp, hw_code const *insts, hw_u32 i_count)
+{
+    hw_u32 at = comp->obj->code->lenUsed;
+    HW_ARR_PUSHSTREAM(comp->vm_child, comp->obj->code, insts, i_count);
+    return at;
+}
+
 hw_uint hw_compbc_data(hw_CompilerBC *comp, void const *data, hw_uint const size)
 {
     hw_uint const index = comp->obj->data->lenUsed;
     HW_ARR_PUSHSTREAM(comp->vm_child, comp->obj->data, data, size);
     HW_DEBUG(HW_LOG("DATA INDEX %"PRIu64 "\n", index));
     return index;
+}
+
+hw_uint hw_compbc_fndata(
+    hw_CompilerBC *comp, hw_byte const *name, hw_byte const *tids
+  , hw_u32 name_size, hw_u32 mut_count, hw_u32 args_passed, hw_u32 stack_size)
+{
+    hw_uint const fninfo_index = 
+    hw_compbc_data(comp, (hw_uint[]){name_size}, sizeof(hw_uint));
+    hw_compbc_data(comp, (hw_uint[]){mut_count}, sizeof(hw_uint));
+    hw_compbc_data(comp, (hw_uint[]){args_passed}, sizeof(hw_uint));
+    hw_compbc_data(comp, (hw_uint[]){stack_size}, sizeof(hw_uint));
+    hw_compbc_data(comp, name, name_size);
+
+    hw_compbc_data(comp, tids, sizeof(*tids) * stack_size);
+    return fninfo_index;
 }
 
 hw_uint hw_compbc_knst(hw_CompilerBC *comp, hw_Var val, hw_byte val_tid)
@@ -308,6 +362,27 @@ hw_uint hw_compbc_knst(hw_CompilerBC *comp, hw_Var val, hw_byte val_tid)
         [1] = val
     };
     hw_byte tid[2] = { hw_TypeID_list, val_tid };
+    hw_VarList_push_shallow(comp->vm_child, args, tid, 2);
+    comp->obj->knst = args[0].as_list;
+    return comp->obj->knst->lenUsed-1;
+}
+
+hw_uint hw_compbc_knstcopy(hw_CompilerBC *comp, hw_Var val, hw_byte val_tid)
+{
+    hw_Var args[2] = { 
+        [0].as_list = comp->obj->knst,
+        [1] = val
+    };
+    hw_byte tid[2] = { hw_TypeID_list, val_tid };
+    hw_Type *T = hw_TypeSys_get_via_id(comp->vm_child->ts, val_tid);
+    HW_ASSERT(T);
+    if(T->is_obj) {
+        hw_VarFn newFrom_copy = hw_Type_getvt(T, "newFrom_copy", 4*3);
+        hw_Var copy_args[2] = { [1] = val };
+        hw_byte copy_args_tid[2] = { [1] = val_tid};
+        newFrom_copy(comp->vm_child, copy_args, copy_args_tid, 2);
+        val = copy_args[0];
+    }
     hw_VarList_push_shallow(comp->vm_child, args, tid, 2);
     comp->obj->knst = args[0].as_list;
     return comp->obj->knst->lenUsed-1;
@@ -431,20 +506,24 @@ void hw_compbc_w_endfn(hw_CompilerBC *comp)
     HW_ASSERT(fnobj->lock);
     comp->fnobj->lock = 0;
     HW_ASSERT(fnobj->var_infos->lenUsed == fnobj->vartable->lenUsed);
-     
-    hw_uint const fninfo_index = 
-    hw_compbc_data(comp, (hw_uint[]){fnobj->name_sizeUsed}, sizeof(hw_uint));
-    hw_compbc_data(comp, (hw_uint[]){fnobj->mut_count}, sizeof(hw_uint));
-    hw_compbc_data(comp, (hw_uint[]){fnobj->args_passed}, sizeof(hw_uint));
-    hw_compbc_data(comp, (hw_uint[]){fnobj->vartable->lenUsed}, sizeof(hw_uint));
-    hw_compbc_data(comp, fnobj->name, fnobj->name_sizeUsed);
-
+    
+    hw_byte *tids = HW_THREAD_ALLOC(comp->vm_child, fnobj->var_infos->lenUsed);
     for (size_t i = 0; i < fnobj->var_infos->lenUsed; i++) {
         hw_byte typeid = fnobj->var_infos->data[i].type;
         HW_DEBUG(HW_ASSERT(
             hw_TypeSys_get_via_id(comp->vm_child->ts, typeid)));
-        hw_compbc_data(comp, &typeid, 1);
+        tids[i] = typeid;
     }
+
+    hw_uint const fninfo_index = hw_compbc_fndata(comp
+            , fnobj->name
+            , tids
+            , fnobj->name_sizeUsed
+            , fnobj->mut_count
+            , fnobj->args_passed
+            , fnobj->var_infos->lenUsed);
+
+    HW_THREAD_FREE(comp->vm_child, tids);
 
     comp->obj->code->data[fnobj->defn_pc].getx.x32 = fninfo_index;
     hw_compbc_inst(comp, hw_code_as32(hw_Inst_return, 0, 0));
@@ -862,6 +941,136 @@ void hw_compbc_compile_from_source(hw_CompilerBC *comp)
         isend = _compiler_top(comp);
         hw_compbc_lex_next_skipws(comp);
     }
+}
+
+void hw_compbc_combine_addmod(hw_CompilerBC *comp, hw_Module const *m, hw_String *name)
+{
+    hw_ModuleObj *mobj = comp->obj;
+    hw_uint code_start = hw_compbc_inststream(comp, m->code, m->code_len);
+    hw_uint fnpt_start = mobj->fnpt->lenUsed;
+    hw_uint knst_start = mobj->knst->lenUsed;
+
+    HW_ARR_PUSHSTREAM(comp->vm_child, mobj->fnpt, m->fnpt, m->fn_count);
+
+    hw_Var buffer;
+    hw_String_new(comp->vm_child, &buffer, (hw_byte[]){hw_TypeID_nil}, 1);
+
+    //hw_uint data_start = mobj->data->lenUsed;
+    for (size_t i = 0; i < m->fn_count; i++) {
+        hw_uint *fnpt = mobj->fnpt->data + fnpt_start + i;
+        mobj->fnpt->data[fnpt_start + i] += code_start;
+        hw_FnInfo finfo;
+        hw_Module_get_FnInfo(m, i, &finfo);
+        
+        buffer.as_string->lenUsed = 0;
+        hw_String_fmt(comp->vm_child, &buffer.as_string, "%.*s.%.*s"
+                , name->lenUsed, name->data
+                , finfo.name_size, finfo.name);
+        HW_DEBUG(HW_LOG("FN NAMESPACE, %s", "");
+                hw_debug_print_var(comp->vm_child, buffer, hw_TypeID_string));
+        
+        hw_uint data_at = hw_compbc_fndata(comp
+                , buffer.as_string->data, finfo.types
+                , buffer.as_string->lenUsed
+                , finfo.mut_count, finfo.arg_count, finfo.stack_sz);
+        
+        HW_ASSERT(mobj->code->data[*fnpt].get.opcode == hw_Inst_defn);
+        mobj->code->data[*fnpt].getx.x32 = data_at;
+    }
+    hw_String_delete(comp->vm_child, &buffer, (hw_byte[]){hw_TypeID_nil}, 1);
+
+    for (size_t i = 0; i < m->k_count; i++) {
+        hw_compbc_knst(comp, m->knst[i], m->knst_t[i]);
+    }
+
+    for (size_t i = code_start; i < mobj->code->lenUsed; i++) {
+        hw_code *inst = mobj->code->data + i;
+        switch (inst->get.opcode) {
+                   case hw_Inst_loadknst:
+                            inst->getx.x32 += knst_start;
+            break; case hw_Inst_call:
+                            inst->getx.x32 += fnpt_start;
+            break;
+
+        }
+    }
+}
+
+hw_Module *hw_compbc_combine(hw_State *hw, hw_u32 mod_count, hw_Module **mods, hw_String **names)
+{
+    hw_CompilerBC *comp = hw_compbc_new(hw);
+    for (size_t i = 0; i < mod_count; i++) {
+        hw_compbc_combine_addmod(comp, mods[i], names[i]);
+    }
+    hw_Module *m = hw_compbc_convert(comp);
+    hw_compbc_delete(comp);
+    return m;
+}
+
+static hw_String *_Transform_filename_to_modname(hw_State *hw, hw_byte const *file_name, hw_u32 file_namesize)
+{
+    hw_byte const* end = file_name + (file_namesize - 1);
+    hw_byte const* start = file_name;
+    hw_byte const* at = start;
+    while (at < end) {
+        if(*at == '/') { start = at+1; }
+        at += 1;
+    }
+    at = end;
+    while (at > start && *at != '.') {
+        at -= 1;
+    }
+    end = at;
+    at = start;
+
+    hw_Var args[3] = { 
+          [1].as_cbyte_p = start
+        , [2].as_uint = end - start};
+    hw_byte tids[3];
+    hw_String_newFrom_data(hw, args, tids, 3);
+    return args[0].as_string;
+}
+
+hw_uint hw_compbc_compile_files_and_combine(hw_State *hw, hw_Module **out_mod, hw_u32 files, hw_String **filenames)
+{
+    HW_ARR(hw_Module *) *mods;
+    HW_ARR(hw_String *) *mod_names;
+
+    HW_ARR_NEW(hw, mods, files);
+    HW_ARR_NEW(hw, mod_names, files);
+
+    for (size_t i = 0; i < files; i++) {
+        hw_CompilerBC *comp = hw_compbc_new(hw);
+        hw_String *mod_name = _Transform_filename_to_modname(hw,
+                filenames[i]->data, filenames[i]->lenUsed);
+
+        HW_ARR_PUSH(hw, mod_names, mod_name);
+
+        if(!hw_compbc_load_source_fromFile(
+                comp, (char *)filenames[i]->data, filenames[i]->lenUsed)) {
+            HW_ASSERTEX(0, "FILE NOT LOADED: %.*s"
+                    , filenames[i]->lenUsed, filenames[i]->data);
+        }
+
+        hw_compbc_compile_from_source(comp);
+        hw_Module *mod = hw_compbc_convert(comp);
+        HW_ARR_PUSH(hw, mods, mod);
+        hw_compbc_delete(comp);
+    }
+
+    hw_Module *out = hw_compbc_combine(
+            hw, mods->lenUsed, mods->data, mod_names->data);
+
+    for (size_t i = 0; i < files; i++) {
+        hw_Module_delete_detatch_knstobj(hw, mods->data[i]);
+        hw_String_delete(hw, (hw_Var[]){ [0].as_string = mod_names->data[i]}
+                            , (hw_byte[]){ hw_TypeID_string }, 1);
+    }
+    HW_ARR_DELETE(hw, mod_names);
+    HW_ARR_DELETE(hw, mods);
+    
+    *out_mod = out;
+    return hw_Global_add_module((void *)hw->global, out);
 }
 
 #undef _ERROR
