@@ -714,7 +714,7 @@ struct hw_CompilerBC {
     hw_State        *vm_child;
 
     hw_FnObj        *fnobj;
-    hw_ModuleObj    *obj;
+    hw_ModuleObj    *mobj;
     
     hw_Lexer        lexer;   
     hw_CStr         sname;

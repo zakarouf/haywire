@@ -21,7 +21,7 @@ void hw_debug_print_inst(hw_State *hw)
 
 void hw_debug_print_mobj(hw_CompilerBC const *comp)
 {
-    hw_ModuleObj *mo = comp->obj;
+    hw_ModuleObj *mo = comp->mobj;
 
     hw_loglnp(
         "ModuleObj:\n"

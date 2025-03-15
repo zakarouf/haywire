@@ -556,8 +556,33 @@ void hw_vm(hw_State *hw);
 hw_FnState* hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
 
 /***
- * Byte Code Compiler
+ * Module Object
  **/
+hw_ModuleObj* hw_ModuleObj_new(hw_State *hw);
+void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *mobj);
+void hw_ModuleObj_reset(hw_State *hw, hw_ModuleObj *mobj);
+hw_uint hw_ModuleObj_inst(hw_State *hw, hw_ModuleObj *mobj
+                        , hw_code const inst);
+hw_uint hw_ModuleObj_inststream(hw_State *hw, hw_ModuleObj *mobj
+                              , hw_code const *insts, hw_u32 i_count);
+hw_uint hw_ModuleObj_data(hw_State *hw, hw_ModuleObj *mobj
+                        , void const *data, hw_uint const size);
+hw_uint hw_ModuleObj_fndata(
+    hw_State *hw, hw_ModuleObj *mobj, hw_byte const *name, hw_byte const *tids
+  , hw_u32 name_size, hw_u32 mut_count, hw_u32 args_passed, hw_u32 stack_size);
+
+hw_uint hw_ModuleObj_knst(hw_State *hw, hw_ModuleObj *mobj
+                        , hw_Var val, hw_byte val_tid);
+hw_uint hw_ModuleObj_knstcopy(hw_State *hw, hw_ModuleObj *mobj
+                            , hw_Var val, hw_byte val_tid);
+hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
+hw_Module *hw_Module_combine(hw_State *hw, hw_u32 mod_count, hw_Module **mods, hw_String **namespaces);
+
+void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, hw_String *namespace);
+hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
+/***
+ * Byte Code Compiler
+ */
 hw_CompilerBC *hw_compbc_new(hw_State *parent);
 void hw_compbc_load_source_fromData(
         hw_CompilerBC *comp, void const *source, hw_uint size);
@@ -565,24 +590,6 @@ hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp
         , char const *source_name, hw_uint source_name_size);
 
 void hw_compbc_delete(hw_CompilerBC *comp);
-hw_uint hw_compbc_inst(hw_CompilerBC *comp, hw_code inst);
-hw_uint hw_compbc_inststream(hw_CompilerBC *comp, hw_code const *insts, hw_u32 i_count);
-hw_uint hw_compbc_data(hw_CompilerBC *comp, void const *data, hw_uint const size);
-hw_uint hw_compbc_fndata(
-    hw_CompilerBC *comp, hw_byte const *name, hw_byte const *tids
-  , hw_u32 name_size, hw_u32 mut_count, hw_u32 args_passed, hw_u32 stack_size);
-hw_uint hw_compbc_knst(hw_CompilerBC *comp
-        , hw_Var const value, hw_byte const tid);
-hw_Module* hw_compbc_convert(hw_CompilerBC *comp);
-
-
-int hw_compbc_deflocalvar(hw_CompilerBC *comp
-        , hw_byte const *var_name, hw_uint name_size, hw_VarInfo vinf);
-hw_uint hw_compbc_w_defn(hw_CompilerBC *comp
-        , hw_byte const *name,      hw_uint const name_size
-        , hw_uint const total_arg,  hw_uint const mut_count
-        , hw_byte const *tids,      hw_CStr const *arg_names);
-void hw_compbc_w_endfn(hw_CompilerBC *comp);
 
 void hw_compbc_compile_from_source(hw_CompilerBC *comp);
 hw_uint hw_compbc_compile_files_and_combine(hw_State *hw

@@ -225,7 +225,11 @@ void config_del(hw_State *hw, hw_Config *conf)
     HW_ARR_DELETE(hw, conf->files);
 }
 
+#ifdef HAYWIRE_LIBRARY_IMPLEMENTATION
+int hw_main(int argc, char *argv[])
+#else
 int main(int argc, char *argv[])
+#endif
 {
     hw_State *hw = hw_State_new_default(NULL);
     _static_checks();
@@ -266,3 +270,4 @@ int main(int argc, char *argv[])
     
     return EXIT_SUCCESS;
 }
+
