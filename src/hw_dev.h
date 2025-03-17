@@ -560,28 +560,42 @@ hw_FnState* hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
 hw_ModuleObj* hw_ModuleObj_new(hw_State *hw);
 void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *mobj);
 void hw_ModuleObj_reset(hw_State *hw, hw_ModuleObj *mobj);
+hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[]);
+void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[]);
+
 hw_uint hw_ModuleObj_inst(hw_State *hw, hw_ModuleObj *mobj
                         , hw_code const inst);
+
 hw_uint hw_ModuleObj_inststream(hw_State *hw, hw_ModuleObj *mobj
                               , hw_code const *insts, hw_u32 i_count);
+
 hw_uint hw_ModuleObj_data(hw_State *hw, hw_ModuleObj *mobj
                         , void const *data, hw_uint const size);
-hw_uint hw_ModuleObj_fndata(
-    hw_State *hw, hw_ModuleObj *mobj, hw_byte const *name, hw_byte const *tids
-  , hw_u32 name_size, hw_u32 mut_count, hw_u32 args_passed, hw_u32 stack_size);
+
+hw_uint hw_ModuleObj_fndata(hw_State *hw, hw_ModuleObj *mobj
+            , hw_byte const *name, hw_byte const *tids
+            , hw_u32 name_size, hw_u32 mut_count
+            , hw_u32 args_passed, hw_u32 stack_size);
 
 hw_uint hw_ModuleObj_knst(hw_State *hw, hw_ModuleObj *mobj
-                        , hw_Var val, hw_byte val_tid);
-hw_uint hw_ModuleObj_knstcopy(hw_State *hw, hw_ModuleObj *mobj
-                            , hw_Var val, hw_byte val_tid);
-hw_Module *hw_Module_combine(hw_State *hw, hw_u32 mod_count, hw_Module **mods, hw_String **namespaces);
+                                      , hw_Var val
+                                      , hw_byte val_tid);
 
-void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, hw_String *namespace);
+hw_uint hw_ModuleObj_knstcopy(hw_State *hw, hw_ModuleObj *mobj
+                                          , hw_Var val
+                                          , hw_byte val_tid);
+
+hw_Module *hw_Module_combine(hw_State *hw, hw_u32 mod_count
+                                         , hw_Module **mods
+                                         , hw_String **namespaces);
+
+void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj
+                                     , hw_Module const *m
+                                     , hw_String *namespace);
+
 hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
 
 
-hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[]);
-void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[]);
 /***
  * Byte Code Compiler
  */
