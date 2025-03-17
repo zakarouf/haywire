@@ -111,40 +111,10 @@ void print_tokens(hw_Lexer lexer)
     }
 }
 
-void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[])
-{
-    hw_byteArr *buffer;
-    HW_ARR_NEW(hw, buffer, hw_Module_calcsize(m));
-    
-    hw_Var args[2] = { [0] = (hw_Var){.as_module = m}
-                     , [1] = (hw_Var){.as_bytearr = buffer} };
-
-    hw_byte tid[2] = { [0] = hw_TypeID_module
-                     , [1] = hw_TypeID_bytearr };
-
-    hw_Module_serialize(hw, args, tid, 2);
-    buffer = args[1].as_bytearr;
-
-    FILE *fp = fopen(path, "wb");
-    HW_ASSERT(fp && "CANT OPEN FILE");
-    fwrite(buffer->data, buffer->lenUsed, sizeof(*buffer->data), fp);
-    fclose(fp);
-    HW_ARR_DELETE(hw, buffer);
-}
-
-hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[])
-{
-    hw_byteArr *file = hw_byteArr_newloadfile(hw, path);
-    hw_Var args[3] = { [1].as_uint = 0, [2].as_bytearr = file };
-    hw_byte tid[3] = {0};
-    hw_Module_newFrom_deserialize(hw, args, tid, 3);
-    HW_ARR_DELETE(hw, file);
-    return args[0].as_module;
-}
-
 typedef struct hw_Config hw_Config;
 struct hw_Config {
     HW_ARR(hw_String *) *files;
+    HW_ARR(hw_String *) *namespaces;
     hw_String *out_file;
     hw_String *call;
     hw_VarArr *args;
@@ -173,7 +143,7 @@ inline static hw_String *argnext(hw_VarArr *args, hw_uint *arg_i)
     return args->data[*arg_i].as_string;
 }
 
-static hw_uint _argparse_single_char_conf(
+static hw_uint _argparse_single_char_conf(hw_State *hw,
     hw_VarArr *args, hw_Config *conf, hw_byte ch, hw_uint ARG)
 {
     switch (ch) {
@@ -199,6 +169,7 @@ static hw_uint _argparse_mult_string(
 hw_int hw_argparse(
     hw_State *hw, hw_Config *conf, int argc, char *argv[]) {
     HW_ARR_NEW(hw, conf->files, 8);
+    HW_ARR_NEW(hw, conf->namespaces, 8);
     hw_VarArr *args = _wrap_args(hw, argc, argv);
     conf->args = args;
     hw_uint ARG = 0;
@@ -206,7 +177,7 @@ hw_int hw_argparse(
     while(arg) {
         hw_byte argtype = _argparse_is_arg(arg);
         if(argtype == 1) {
-            ARG = _argparse_single_char_conf(args, conf, ARG()->data[1], ARG);
+            ARG = _argparse_single_char_conf(hw, args, conf, ARG()->data[1], ARG);
         } else if(argtype == 2) {
             ARG = _argparse_mult_string(args, conf, ARG);
         } else {
@@ -223,6 +194,30 @@ void config_del(hw_State *hw, hw_Config *conf)
     hw_VarArr_delete(hw
         , (hw_Var[]){[0].as_arr = conf->args}, (hw_byte[]){hw_TypeID_array}, 1);
     HW_ARR_DELETE(hw, conf->files);
+    HW_ARR_DELETE(hw, conf->namespaces);
+}
+
+static hw_Module* _compile_files(
+    hw_State *hw, hw_Config *conf, hw_uint *mod_id)
+{
+    hw_Module *mod;
+    *mod_id = hw_compbc_compile_files_and_combine(
+            hw, &mod, conf->files->lenUsed, conf->files->data);
+    return mod;
+}
+
+static hw_Module* _compile_file(hw_State *hw, hw_Config *conf, hw_uint *mod_id)
+{
+    hw_Module *mod;
+    hw_CompilerBC *comp = hw_compbc_new(hw);
+    hw_compbc_load_source_fromFile(comp
+            , (void *)conf->files->data[0]->data, conf->files->data[0]->lenUsed);
+    hw_compbc_compile_from_source(comp);
+    mod = hw_ModuleObj_to_Module(hw, comp->mobj);
+
+    *mod_id = hw_Global_add_module((void *)hw->global, mod);
+    hw_compbc_delete(comp);
+    return mod;
 }
 
 #ifdef HAYWIRE_LIBRARY_IMPLEMENTATION
@@ -242,8 +237,14 @@ int main(int argc, char *argv[])
         hw_debug_print_inst(hw);
     }
     if(conf.files->lenUsed) {
-        hw_Module *mod;
-        hw_uint mod_id = hw_compbc_compile_files_and_combine(hw, &mod, conf.files->lenUsed, conf.files->data);
+        hw_Module *mod = NULL;
+        hw_uint mod_id = 0;
+        if(conf.files->lenUsed == 1) {
+            mod = _compile_file(hw, &conf, &mod_id);
+        } else {
+            mod = _compile_files(hw, &conf, &mod_id);
+        }
+
         if(conf.call != NULL) {
             hw_uint fn_id = 0;
             HW_ASSERT(hw_Module_get_fn(mod, conf.call->data, conf.call->lenUsed, &fn_id));
@@ -263,6 +264,8 @@ int main(int argc, char *argv[])
 
             hw_Module_writetofile(hw, mod, (void *)conf.out_file->data);
         }
+
+
     }
 
     config_del(hw, &conf);
