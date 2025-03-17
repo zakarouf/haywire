@@ -144,17 +144,16 @@ hw_ModuleObj* hw_ModuleObj_new(hw_State *hw)
     memset(obj, 0, sizeof(*obj));
     HW_ARR_NEW(hw, obj->fnpt, 16);
 
-    hw_Var list = {0};
+    hw_Var arg = {0};
     hw_VarList_new(
-        hw, &list
-      , (hw_byte[1]){hw_TypeID_nil}, 1); obj->knst = list.as_list;
+        hw, &arg
+      , (hw_byte[1]){hw_TypeID_nil}, 1); obj->knst = arg.as_list;
 
     HW_ARR_NEW(hw, obj->data, 128);
     HW_ARR_NEW(hw, obj->code, 80);
     HW_ARR_NEW(hw, obj->defer_fncall_pc, 16);
     HW_ARR_NEW(hw, obj->defer_fncall_names, 16);
 
-    hw_Var arg;
     hw_byte tid = hw_TypeID_symtable;
     hw_SymTable_new(hw, &arg, &tid, 1);
     obj->fntable = arg.as_symtable;
@@ -1050,14 +1049,20 @@ hw_uint hw_compbc_compile_files_and_combine(hw_State *hw, hw_Module **out_mod, h
 
         HW_ARR_PUSH(hw, mod_names, mod_name);
 
-        if(!hw_compbc_load_source_fromFile(
-                comp, (char *)filenames[i]->data, filenames[i]->lenUsed)) {
-            HW_ASSERTEX(0, "FILE NOT LOADED: %.*s"
-                    , filenames[i]->lenUsed, filenames[i]->data);
+        hw_Module *mod = NULL;
+        if(filenames[i]->data[filenames[i]->lenUsed-1] == 'o') {
+            mod = hw_Module_loadFromFile(hw, (void *)filenames[i]->data);
+            HW_ASSERT(mod);
+        } else { 
+            if(!hw_compbc_load_source_fromFile(
+                    comp, (char *)filenames[i]->data, filenames[i]->lenUsed)) {
+                HW_ASSERTEX(0, "FILE NOT LOADED: %.*s"
+                        , filenames[i]->lenUsed, filenames[i]->data);
+            }
+            hw_compbc_compile_from_source(comp);
+            mod = hw_ModuleObj_to_Module(hw, comp->mobj);
         }
 
-        hw_compbc_compile_from_source(comp);
-        hw_Module *mod = hw_ModuleObj_to_Module(hw, comp->mobj);
         HW_ARR_PUSH(hw, mods, mod);
         hw_compbc_delete(comp);
     }
@@ -1075,6 +1080,37 @@ hw_uint hw_compbc_compile_files_and_combine(hw_State *hw, hw_Module **out_mod, h
     
     *out_mod = out;
     return hw_Global_add_module((void *)hw->global, out);
+}
+
+void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[])
+{
+    hw_byteArr *buffer;
+    HW_ARR_NEW(hw, buffer, hw_Module_calcsize(m));
+    
+    hw_Var args[2] = { [0] = (hw_Var){.as_module = m}
+                     , [1] = (hw_Var){.as_bytearr = buffer} };
+
+    hw_byte tid[2] = { [0] = hw_TypeID_module
+                     , [1] = hw_TypeID_bytearr };
+
+    hw_Module_to_serialize(hw, args, tid, 2);
+    buffer = args[1].as_bytearr;
+
+    FILE *fp = fopen(path, "wb");
+    HW_ASSERT(fp && "CANT OPEN FILE");
+    fwrite(buffer->data, buffer->lenUsed, sizeof(*buffer->data), fp);
+    fclose(fp);
+    HW_ARR_DELETE(hw, buffer);
+}
+
+hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[])
+{
+    hw_byteArr *file = hw_byteArr_newloadfile(hw, path);
+    hw_Var args[3] = { [1].as_uint = 0, [2].as_bytearr = file };
+    hw_byte tid[3] = {0};
+    hw_Module_newFrom_deserialize(hw, args, tid, 3);
+    HW_ARR_DELETE(hw, file);
+    return args[0].as_module;
 }
 
 #undef _ERROR

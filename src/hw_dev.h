@@ -313,7 +313,7 @@ DEFN(hw_byteArr, pushstr);
 
 /* Module */
 DEFN(hw_Module, newFrom_deserialize); // &self, &index, bytearr
-DEFN(hw_Module, serialize); // &self, &bytearray
+DEFN(hw_Module, to_serialize); // &self, &bytearray
 
 #undef DEFN
 
@@ -359,12 +359,11 @@ enum hw_Inst {
   , INST(get_vt)       // R(Ax) = typeof(R(Bx))->R(Cx)
 
   /* Call */
-  , INST(call)      // call function `x32` defined inside the module
-  , INST(callm)     // call R(Ax)
-  , INST(calln)     // call native functions implemented for haywire
-                    // call R(Ax)
-
-  , INST(callc)     // call any c function through ffi
+  , INST(call)          // call function `x32` defined inside the module
+  , INST(call_mod)      // R(Ax) mod:u32 fn:u32
+  , INST(call_native)   // call native functions implemented for haywire
+  , INST(call_c)        // call loaded c function through ffi
+  , INST(call_sym)      // try to link symbol, and perform an appropiate call
 
   /* Variable Manupulation */
   , INST(top)  // R(x32 + A) = stack.get_top()
@@ -575,11 +574,14 @@ hw_uint hw_ModuleObj_knst(hw_State *hw, hw_ModuleObj *mobj
                         , hw_Var val, hw_byte val_tid);
 hw_uint hw_ModuleObj_knstcopy(hw_State *hw, hw_ModuleObj *mobj
                             , hw_Var val, hw_byte val_tid);
-hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
 hw_Module *hw_Module_combine(hw_State *hw, hw_u32 mod_count, hw_Module **mods, hw_String **namespaces);
 
 void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, hw_String *namespace);
 hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
+
+
+hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[]);
+void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[]);
 /***
  * Byte Code Compiler
  */

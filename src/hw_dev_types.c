@@ -381,7 +381,7 @@ void hw_String_fmt(hw_State *hw, hw_String **buffer, char const *restrict format
     va_list vargs;
     va_start(vargs, format);
     hw_String *buf = *buffer;
-    hw_uint len = vsnprintf(NULL, 0, format, vargs);
+    hw_uint len = vsnprintf(NULL, 0, format, vargs)+1;
     va_end(vargs);
 
     if((len + buf->lenUsed) > buf->len) {
@@ -458,6 +458,36 @@ DEFN(hw_String_newFrom_copy) {
     _SELF_ASSIGN(as_string);
     _GET_SELF_TID() = hw_TypeID_string;
 
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_String_newFrom_deserialize) { // &self, &index, bytearray
+    (void)argc;
+    (void)tids;
+    hw_uint index = _GET_ARG(0, as_uint);
+    hw_byteArr *buffer = _GET_ARG(1, as_bytearr);
+    
+    hw_u32 len;
+    hw_byteArr_loadinc(buffer, &index, &len, sizeof(len));
+    _SELF(hw_String *) = _String_new(hw, len + 1);
+    hw_byteArr_loadinc(buffer, &index, self->data, len * sizeof(*self->data));
+    self->lenUsed = len;
+
+    _SET_ARG(0, as_uint, index);
+    _SELF_ASSIGN(as_string);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_String_to_serialize) { // &self, &bytearray
+                               //
+    (void)argc;
+    (void)tids;
+    _SELF_BIND(hw_String *, as_string);
+    hw_byteArr *buffer = _GET_ARG(0, as_bytearr);
+    HW_ARR_PUSHSTREAM(hw, buffer, &self->lenUsed, sizeof(self->lenUsed));
+    HW_ARR_PUSHSTREAM(hw, buffer, self->data
+            , self->lenUsed * sizeof(*self->data));
+    _SET_ARG(0, as_bytearr, buffer);
     return HW_VARP_NIL();
 }
 
@@ -806,6 +836,52 @@ DEFN(hw_VarList_newFrom_fmt) {
     return HW_VARP_NIL();
 }
 
+DEFN(hw_VarList_to_serialize) { // &self, &bytearray
+    _SELF_BIND(hw_VarList *, as_list);
+    hw_byteArr *buffer = _GET_ARG(0, as_bytearr);
+    HW_ARR_PUSHSTREAM(hw, buffer, &self->lenUsed, sizeof(self->lenUsed));
+    HW_ARR_PUSHSTREAM(hw, buffer, self->tid, sizeof(*self->tid) * self->lenUsed);
+    for (size_t i = 0; i < self->lenUsed; i++) {
+        hw_Type *T = hw_TypeSys_get_via_id(hw->ts, self->tid[i]);
+        if (T->is_obj) {
+            hw_VarFn serialize = hw_Type_getvt(T, "serialize", 5+4);
+            args[0] = self->data[i];
+            tids[0] = self->tid[i];
+            serialize(hw, args, tids, argc);
+        } else {
+            HW_ARR_PUSHSTREAM(hw, buffer, self->data + i, sizeof(*self->data));
+        }
+    }
+    _SELF_ASSIGN(as_list);
+    _SET_ARG(0, as_bytearr, buffer);
+    return HW_VARP_NIL();
+}
+
+DEFN(hw_VarList_newFrom_deserialize) { // &self, &index, &bytearray
+    hw_uint index = _GET_ARG(0, as_uint);
+    hw_byteArr *stream = _GET_ARG(1, as_bytearr);
+    hw_u32 len = 0;
+    hw_byteArr_loadinc(stream, &index, &len, sizeof(len));
+    _SELF(hw_VarList *) = _VarList_new(hw, len);
+    hw_byteArr_loadinc(stream, &index, self->tid, sizeof(*self->tid) * len);
+    for (size_t i = 0; i < len; i++) {
+        hw_Type *T = hw_TypeSys_get_via_id(hw->ts, self->tid[i]);
+        if (T->is_obj) {
+            #define HW_CONST_STR(x) x, (sizeof(x)-1)
+            hw_VarFn deserialize = hw_Type_getvt(T, HW_CONST_STR("newFrom_deserialize"));
+            deserialize(hw, args, tids, argc);
+            self->data[i] = args[0];
+            index = args[0].as_uint;
+        } else {
+            hw_byteArr_loadinc(
+                stream, &index, self->data + i, sizeof(*self->data));
+        }
+    }
+    self->lenUsed = len;
+    _SELF_ASSIGN(as_list);
+    _SET_ARG(0, as_uint, index);
+    return HW_VARP_NIL();
+}
 
 DEFN(hw_VarList_push_shallow) {
     (void)tids;
@@ -1167,12 +1243,16 @@ DEFN(hw_Module_newFrom_deserialize) // &self, &index, bytearr
             hw, _m.fn_count, _m.code_len, _m.data_size, _m.k_count, 0);
     
     HW_ASSERT(hw_byteArr_loadinc(stream, &index, self + 1, mod_size - sizeof(_m)));
-
+    
+    hw_uint kdata_index = index;
     for (size_t i = 0; i < self->k_count; i++) {
         hw_Type *T = hw_TypeSys_get_via_id(hw->ts, self->knst_t[i]);
         HW_ASSERT(T);
         if(T->is_obj) {
-            HW_ASSERT(0);
+            hw_VarFn newFrom_deserialize = hw_Type_getvt(T, HW_CONST_STR("newFrom_deserialize"));
+            args[1].as_uint = kdata_index + self->knst[i].as_uint;
+            newFrom_deserialize(hw, args, tids, argc);
+            self->knst[i] = args[0];
         }
     }
 
@@ -1181,7 +1261,28 @@ DEFN(hw_Module_newFrom_deserialize) // &self, &index, bytearr
     return HW_VARP_NIL();
 }
 
-DEFN(hw_Module_serialize) // &self, &bytearray
+/*
+typedef struct hw_Struct hw_Struct;
+typedef struct hw_Sum hw_Sum;
+typedef struct hw_SumDef hw_SumDef;
+
+struct hw_Struct {
+    hw_byte *tids;
+    hw_Var  *data;
+};
+
+struct hw_Sum {
+    hw_uint tid:8, tag:56;
+    hw_Var value;
+};
+
+struct hw_SumDef {
+    hw_Struct   *defs;
+    hw_Var      *symbols;
+};
+*/
+
+DEFN(hw_Module_to_serialize) // &self, &bytearray
 {
     (void)argc;
     (void)tids;
@@ -1193,8 +1294,26 @@ DEFN(hw_Module_serialize) // &self, &bytearray
     HW_ARR_EXPAND(hw, buffer, mod_size);
     HW_ARR_PUSHSTREAM(hw, buffer, &mod_size, sizeof(hw_uint));
     HW_ARR_PUSHSTREAM(hw, buffer, m, mod_size);
+    hw_Var *knst = HW_CAST(hw_Var *,  buffer->data 
+                                    + (buffer->lenUsed 
+                                        - (sizeof(*knst) * m->k_count)));
+    hw_uint kdata_index = buffer->lenUsed;
+    for (size_t i = 0; i < m->k_count; i++) {
+        hw_Type *T = hw_TypeSys_get_via_id(hw->ts, m->knst_t[i]);
+        if(T->is_obj) {
+            hw_VarFn to_serialize = hw_Type_getvt(
+                    T, HW_CONST_STR("to_serialize"));
+            args[0] = knst[i];
+            args[1].as_bytearr = buffer;
+            hw_uint index = kdata_index - buffer->lenUsed;
+            to_serialize(hw, args, tids, 2);
+            buffer = args[1].as_bytearr;
+            knst[i].as_uint = index;
+        }
+    }
     
     _SET_ARG(0, as_bytearr, buffer);
+    _GET_SELF().as_module = m;
     return HW_VARP_NIL();
 }
 
@@ -1210,7 +1329,7 @@ DEFN(hw_Module_serialize) // &self, &bytearray
       , .types = (hw_byte[]){__VA_ARGS__, hw_TypeID_nil}\
     }, T##_##_name} 
 
-#define _TYPEVT_MAX 6
+#define _TYPEVT_MAX 8
 
 const struct {
     hw_FnInfo info;
@@ -1231,12 +1350,14 @@ const struct {
 
     [hw_TypeID_string] = {
         FNINFO(hw_String, new, 0, hw_TypeID_string),
+        FNINFO(hw_String, newFrom_deserialize, 0, hw_TypeID_string, hw_TypeID_uint, hw_TypeID_bytearr),
         FNINFO(hw_String, delete, 0, hw_TypeID_string),
         FNINFO(hw_String, newFrom_data, 0, hw_TypeID_string
                 , hw_TypeID_ptr, hw_TypeID_uint),
         
         FNINFO(hw_String, newFrom_copy, 0, hw_TypeID_string),
-        FNINFO(hw_String, to_string, 0, hw_TypeID_string)
+        FNINFO(hw_String, to_string, 1, hw_TypeID_string, hw_TypeID_string),
+        FNINFO(hw_String, to_serialize, 1, hw_TypeID_string, hw_TypeID_bytearr)
     },
 
     [hw_TypeID_array] = {
@@ -1251,10 +1372,12 @@ const struct {
     [hw_TypeID_list] = {
         FNINFO(hw_VarList, new, 0, hw_TypeID_list),
         FNINFO(hw_VarList, newFrom_copy, 1, hw_TypeID_list, hw_TypeID_list),
+        FNINFO(hw_VarList, newFrom_deserialize, 1, hw_TypeID_list, hw_TypeID_uint, hw_TypeID_bytearr),
         FNINFO(hw_VarList, delete, 0, hw_TypeID_list),
         FNINFO(hw_VarList, push_shallow, 1, hw_TypeID_list, hw_TypeID_any),
         FNINFO(hw_VarList, pop_dtor, 0, hw_TypeID_list),
         FNINFO(hw_VarList, to_string, 1, hw_TypeID_list, hw_TypeID_string),
+        FNINFO(hw_VarList, to_serialize, 0, hw_TypeID_list, hw_TypeID_bytearr)
     },
 
     [hw_TypeID_symtable] = {
@@ -1277,7 +1400,7 @@ const struct {
     [hw_TypeID_module] = {
         FNINFO(hw_Module, newFrom_deserialize, 1
             , hw_TypeID_module, hw_TypeID_uint, hw_TypeID_bytearr),
-        FNINFO(hw_Module, serialize, 1
+        FNINFO(hw_Module, to_serialize, 1
             , hw_TypeID_module, hw_TypeID_bytearr)
     },
 };

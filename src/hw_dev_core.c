@@ -44,10 +44,11 @@ static struct hw_InstInfo const INSTRUCTION_INFO[] = {
   , ID(get_vt,      HW_FALSE, ab, "")
 
   /* Call */
-  , ID(call,       HW_FALSE, x32, "")
-  , ID(callm,      HW_TRUE, abc, "")
-  , ID(calln,      HW_TRUE, abc, "")
-  , ID(callc,      HW_TRUE, abc, "")
+  , ID(call,          HW_FALSE, x32,  "")
+  , ID(call_mod,      HW_FALSE, ax32,   "")
+  , ID(call_native,   HW_FALSE, ax32,  "")
+  , ID(call_c,        HW_FALSE, ax32,  "")
+  , ID(call_sym,      HW_FALSE, ax32,  "")
 
   // ------
   , ID(top,     HW_FALSE, ax32, "")
@@ -431,8 +432,8 @@ hw_Module *hw_Module_newblank(
     m->fnpt = HW_CAST(void *, m + 1);
     m->code = HW_CAST(void *, m->fnpt + fn_count );
     m->data = HW_CAST(void *, m->code + code_len);
-    m->knst = HW_CAST(void *, m->data + data_size );
-    m->knst_t = HW_CAST(void *, m->knst + knst_count );
+    m->knst_t = HW_CAST(void *, m->data + data_size);
+    m->knst = HW_CAST(void *, m->knst_t + knst_count );
 
     if(set_0) memset(m + 1, 0, mod_size - sizeof(*m));
 
