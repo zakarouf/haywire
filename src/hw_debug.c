@@ -115,9 +115,13 @@ void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t)
     hw_Type *T = hw_TypeSys_get_via_id(hw->ts, t);
     HW_ASSERT(T);
     hw_VarFn to_string = hw_Type_getvt(T, "to_string", 9);
-    to_string(hw, argv, type, 2);
-    hw_String *str = argv[1].as_string;
-    hw_logp("%.*s", str->lenUsed, str->data);
+    if(to_string) {
+        to_string(hw, argv, type, 2);
+        hw_String *str = argv[1].as_string;
+        hw_logp("%.*s", str->lenUsed, str->data);
+    } else {
+        hw_logp("(NILTYPE)");
+    }
     hw_String_delete(hw, argv+1, type+1, 1);
 }
 

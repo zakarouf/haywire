@@ -66,8 +66,8 @@ hw_Type *hw_TypeSys_get_via_id(hw_TypeSys const *ts, hw_uint typeid)
 
 hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
 {
-    HW_DEBUG(HW_LOG("Requested VT:%.*s for TYPE:%.*s"
-            , (int)name_size, name, (int)T->name_size, T->name);)
+    HW_DEBUG(HW_LOG("Requested VT:%.*s for TYPE:%.*s (id:%"PRIu64")"
+            , (int)name_size, name, (int)T->name_size, T->name, T->id);)
     
     for (size_t i = 0; i < T->vt_count; i++) {
         if(T->vtinfo[i].name_size == name_size) {
@@ -1261,26 +1261,6 @@ DEFN(hw_Module_newFrom_deserialize) // &self, &index, bytearr
     return HW_VARP_NIL();
 }
 
-/*
-typedef struct hw_Struct hw_Struct;
-typedef struct hw_Sum hw_Sum;
-typedef struct hw_SumDef hw_SumDef;
-
-struct hw_Struct {
-    hw_byte *tids;
-    hw_Var  *data;
-};
-
-struct hw_Sum {
-    hw_uint tid:8, tag:56;
-    hw_Var value;
-};
-
-struct hw_SumDef {
-    hw_Struct   *defs;
-    hw_Var      *symbols;
-};
-*/
 
 DEFN(hw_Module_to_serialize) // &self, &bytearray
 {

@@ -75,11 +75,18 @@ typedef int64_t             hw_int;
 typedef uint64_t            hw_uint;
 
 typedef double              hw_float;
+typedef float               hw_f32x2[2];
 
 typedef int32_t             hw_i32;
 typedef uint32_t            hw_u32;
 typedef int16_t             hw_i16;
 typedef uint16_t            hw_u16;
+
+typedef hw_u32              hw_u32x2[2];
+typedef hw_i32              hw_i32x2[2];
+typedef hw_u16              hw_u16x4[4];
+typedef hw_i16              hw_i16x4[4];
+typedef hw_byte             hw_byte8[8];
 
 typedef _Bool               hw_bool;
 
@@ -88,8 +95,8 @@ typedef _Bool               hw_bool;
 #define HW_INT_MIN          INT64_MIN
 #define HW_FLOAT_MAX        DBL_MAX
 #define HW_FLOAT_MIN        DBL_MIN
-
 #define HW_TYPEID_MAX       UINT8_MAX
+
 #define HW_WORD_SIZE        (sizeof(hw_uint))
 
 typedef union   hw_Var      hw_Var;
@@ -110,6 +117,11 @@ typedef struct  hw_u32Arr   hw_u32Arr;
 typedef struct  hw_uintArr  hw_uintArr;
 typedef struct  hw_byteArr  hw_byteArr;
 
+typedef struct hw_Struct hw_Struct;
+typedef struct hw_StructObj hw_StructObj;
+typedef struct hw_Sum hw_Sum;
+typedef struct hw_SumDef hw_SumDef;
+
 typedef struct hw_Lexer hw_Lexer;
 typedef struct hw_LexToken hw_LexToken;
 typedef struct hw_LexTokenArr hw_LexTokenArr;
@@ -118,8 +130,15 @@ typedef struct hw_LexTokenArr hw_LexTokenArr;
 typedef struct hw_Error         hw_Error;
 /************************************************************/
 
+/**
+ * Allocator
+ */
 typedef struct  hw_Allocator    hw_Allocator;
+typedef struct hw_ArenaRegion hw_ArenaRegion;
+typedef struct hw_Arena hw_Arena;
+#define HW_ARENAREGION_FRAG_COUNT 16
 
+/**/
 typedef struct  hw_Type         hw_Type;
 typedef struct  hw_TypeSys      hw_TypeSys;
 typedef struct  hw_FnInfo       hw_FnInfo;
@@ -178,12 +197,22 @@ union hw_Var {
     hw_float        as_float,   *as_float_p, **as_float_pp;
 
     hw_byte         as_word[HW_WORD_SIZE],   *(as_word_p[HW_WORD_SIZE]);
-    
+    hw_u32x2        as_u32x2;
+    hw_i32x2        as_i32x2;
+    hw_u16x4        as_u16x4;
+    hw_i16x4        as_i16x4;
+
     /* FnPtr */
     hw_VarFn        as_nativefn;
     
     /* Error Object */
     hw_Error const  *as_error;
+
+    /* Structs */
+    hw_Struct       *as_struct;
+    hw_Sum          *as_sum;
+    hw_StructObj    *as_structobj;
+    hw_SumDef       *as_sumdef;
 
     /* Objects */
     hw_byteArr      *as_bytearr,   **as_bytearr_p;
@@ -229,6 +258,10 @@ enum hw_TypeID {
     , hw_TypeID_float
 
     , hw_TypeID_error
+    , hw_TypeID_struct
+    , hw_TypeID_sum
+    , hw_TypeID_structobj
+    , hw_TypeID_sumdef
 
     , hw_TypeID_array
     , hw_TypeID_sarr
@@ -258,11 +291,30 @@ struct hw_Error {
     hw_VarP context;
 };
 
+/**
+ * Memory Allocators
+ */
 struct hw_Allocator {
-    hw_ptr  state;
+    hw_Var  state;
+    void    (*delete)   (hw_Allocator *self);
     hw_ptr  (*alloc)    (hw_Allocator *self, size_t size);
     void    (*free)     (hw_Allocator *self, hw_ptr pointer);
     hw_ptr  (*realloc)  (hw_Allocator *self, hw_ptr, size_t size);
+};
+
+struct hw_ArenaRegion {
+    hw_u32    capacity;
+    hw_u32    used;
+    hw_u32    frags[HW_ARENAREGION_FRAG_COUNT];
+    hw_ArenaRegion  *next;
+    hw_byte         *pool;
+};
+
+struct hw_Arena {
+    hw_ArenaRegion *begin
+                 , *at
+                 , *end;
+    hw_u32  default_size;
 };
 
 /*************************************************************/
@@ -288,6 +340,27 @@ struct hw_Lexer {
     hw_LexToken     token;
 };
 
+struct hw_Struct {
+    hw_u32  count;
+    hw_u32  tag;
+    hw_byte *tids;
+    hw_Var  *data;
+};
+
+struct hw_StructObj {
+    hw_uint *tags;
+    hw_Var  *data;
+};
+
+struct hw_Sum {
+    hw_uint tid:8, tag:56;
+    hw_Var value;
+};
+
+struct hw_SumDef {
+    hw_Struct   *defs;
+    hw_Var      *symbols;
+};
 
 struct hw_u32Arr {
     hw_u32  *data;

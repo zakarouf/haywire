@@ -77,6 +77,23 @@ void hw_logstr(const char *msg, size_t const);
             HW_ASSERTEX(x op y\
                     , "%"fmt_x" "#op" %"fmt_y, x, y) ;
 
+
+#ifdef HW_BUILD_SINGLE_THREAD
+#warning "Building Single Threaded VM"
+#define HW_THREAD_ALLOC(TH, size)           HW_MALLOC(size)
+#define HW_THREAD_REALLOC(TH, ptr, size)    HW_REALLOC(ptr, size)
+#define HW_THREAD_FREE(TH, ptr)             HW_FREE(ptr)
+#else
+#define HW_THREAD_ALLOC(TH, SIZE)\
+            (TH)->allocator.alloc(&(TH)->allocator, SIZE)
+
+#define HW_THREAD_REALLOC(TH, PTR, SIZE)\
+            (TH)->allocator.realloc(&(TH)->allocator, PTR, SIZE)
+
+#define HW_THREAD_FREE(TH, PTR)\
+            (TH)->allocator.free(&(TH)->allocator, PTR)
+#endif
+
 /**
  * hw_VarFn
  */
@@ -212,12 +229,29 @@ void hw_Lexer_next_until(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_next_expect(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size);
 
+
+/**
+ * Memory Allocators 
+ */
+void hw_Allocator_new_gpa(hw_Allocator *self);
+void hw_Allocator_gpa_delete(hw_Allocator *allocator);
+void hw_Allocator_new_arena(hw_Allocator *self);
+void hw_Allocator_arena_delete(hw_Allocator *self);
+
+hw_ArenaRegion *hw_ArenaRegion_new(hw_u32 max_capacity);
+hw_ptr hw_ArenaRegion_alloc(hw_ArenaRegion *region, hw_u32 size);
+hw_bool hw_ArenaRegion_check(hw_ArenaRegion *r);
+
+hw_Arena *hw_Arena_new(hw_u32 pool_capacity);
+void hw_Arena_delete(hw_Arena *arena);
+void *hw_Arena_alloc(hw_Arena *arena, hw_u32 size);
+hw_u32 hw_Arena_total_used(hw_Arena *arena);
+hw_u32 hw_Arena_total(hw_Arena *arena);
+hw_bool hw_Arena_check(hw_Arena *arena);
+
 /**
  * Section: Type Impl
  */
-void hw_Allocator_default(hw_Allocator *self);
-void hw_Allocator_default_delete(hw_Allocator *allocator);
-
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator);
 hw_TypeSys* hw_TypeSys_new_default(hw_Allocator *allocator);
 void hw_TypeSys_delete(hw_TypeSys *t, hw_Allocator *allocator);
@@ -503,7 +537,6 @@ enum hw_Inst {
     *(HW_CAST(hw_byte *, x) + (bit_num >> 3))
 
 
-//
 void hw_Module_get_FnInfo(hw_Module const *mod
         , hw_uint fn_id, hw_FnInfo *info);
 hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id);
@@ -511,7 +544,9 @@ hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, h
 
 hw_uint hw_Module_calcsize(hw_Module *m);
 hw_Module *hw_Module_newblank(
-    hw_State *hw, hw_u32 fn_count, hw_u32 code_len, hw_u32 data_size, hw_u32 knst_count, hw_bool set_0);
+    hw_State *hw, hw_u32 fn_count, hw_u32 code_len
+  , hw_u32 data_size, hw_u32 knst_count, hw_bool set_0);
+
 /**
  * VM;
  */
@@ -537,16 +572,6 @@ hw_uint hw_State_vstack_push_mult(hw_State *hw, const hw_uint by);
 hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
 void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by);
 void hw_State_vstack_pop_mult(hw_State *hw, const hw_uint by);
-
-
-#define HW_THREAD_ALLOC(TH, SIZE)\
-            (TH)->allocator.alloc(&(TH)->allocator, SIZE)
-
-#define HW_THREAD_REALLOC(TH, PTR, SIZE)\
-            (TH)->allocator.realloc(&(TH)->allocator, PTR, SIZE)
-
-#define HW_THREAD_FREE(TH, PTR)\
-            (TH)->allocator.free(&(TH)->allocator, PTR)
 
 /**
  * VM

@@ -323,11 +323,13 @@ hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size)
 /**
  * Section: Array Macro
  */
+
+
 HW_DEBUG(
     static thread_local hw_uint total_alloc_size = 0;
     static thread_local hw_uint total_alloc_call = 0;
 )
-static void* _malloc_wrapper(hw_Allocator *self, size_t size)
+static void* _gpa_malloc(hw_Allocator *self, size_t size)
 {
     (void)self;
     HW_DEBUG(
@@ -337,27 +339,19 @@ static void* _malloc_wrapper(hw_Allocator *self, size_t size)
     return HW_MALLOC(size);
 }
 
-static void* _realloc_wrapper(hw_Allocator *self, void *ptr, size_t size)
+static void* _gpa_realloc(hw_Allocator *self, void *ptr, size_t size)
 {
     (void)self;
     return HW_REALLOC(ptr, size);
 }
 
-static void  _free_wrapper(hw_Allocator *self, void *ptr)
+static void  _gpa_free(hw_Allocator *self, void *ptr)
 {
     (void)self;
     HW_FREE(ptr);
 }
 
-void hw_Allocator_default(hw_Allocator *self)
-{
-    self->state = NULL;
-    self->alloc = _malloc_wrapper;
-    self->realloc = _realloc_wrapper;
-    self->free = _free_wrapper;
-}
-
-void hw_Allocator_default_delete(hw_Allocator *allocator)
+void hw_Allocator_gpa_delete(hw_Allocator *allocator)
 {
     (void)allocator;
     
@@ -369,7 +363,193 @@ void hw_Allocator_default_delete(hw_Allocator *allocator)
                     , alloc_size_kb, total_alloc_call));
 }
 
+void hw_Allocator_new_gpa(hw_Allocator *self)
+{
+    self->state.as_ptr = NULL;
+    self->alloc = _gpa_malloc;
+    self->realloc = _gpa_realloc;
+    self->free = _gpa_free;
+    self->delete = hw_Allocator_gpa_delete;
+}
 
+hw_ArenaRegion *hw_ArenaRegion_new(hw_u32 max_capacity)
+{
+    hw_ArenaRegion *region = HW_MALLOC(sizeof(*region) + max_capacity + sizeof(hw_u32));
+    memset(region->frags, 0, sizeof(region->frags));
+    region->pool = HW_CAST(void *, region + 1);
+    HW_CAST_SET(hw_u32, region->pool, 0, 0);
+    region->next = NULL;
+    region->capacity = max_capacity;
+    region->used = sizeof(hw_u32);
+    return region;
+}
+
+inline static hw_ptr hw_ArenaRegion_setalloc(hw_byte *pool, hw_u32 size)
+{
+    HW_CAST_SET(hw_u32, pool, 0, size);
+    return pool + sizeof(hw_u32);
+}
+
+inline static hw_u32 hw_ArenaRegion_getptr_size(hw_byte *ptr)
+{
+    return *HW_CAST(hw_u32 *, ptr - sizeof(hw_u32));
+}
+
+hw_ptr hw_ArenaRegion_alloc(hw_ArenaRegion *region, hw_u32 size)
+{
+    #if 0
+    for (size_t i = 0; i < HW_ARENAREGION_FRAG_COUNT; i++) {
+        if(hw_ArenaRegion_getptr_size(region->pool 
+                                    + region->frags[i]) > size) {
+            hw_ptr ptr = region->pool + region->frags[i];
+            region->frags[i] = 0;
+            return ptr;
+        }
+    }
+    #endif
+    hw_uint total_size = size + sizeof(hw_u32);
+    if((region->capacity - region->used) < (total_size)) return NULL;
+    hw_ptr ptr = hw_ArenaRegion_setalloc(region->pool + region->used, size);
+    region->used += total_size;
+    return ptr;
+}
+
+/*
+hw_bool hw_ArenaRegion_free(hw_ArenaRegion *region, hw_ptr ptr)
+{
+    hw_int pool_index = (hw_byte *)ptr - region->pool;
+}
+
+void hw_ArenaRegion_realloc(hw_ArenaRegion *region
+                          , hw_ptr ptr, hw_u32 new_size) {
+}
+*/
+
+hw_bool hw_ArenaRegion_check(hw_ArenaRegion *r)
+{
+    if(!r->capacity) return 0;
+    if(r->used > r->capacity) return 0;
+    if(!r->pool) return 0;
+
+    return 1;
+}
+
+hw_Arena *hw_Arena_new(hw_u32 pool_capacity)
+{
+    hw_ArenaRegion *reg = hw_ArenaRegion_new(pool_capacity + sizeof(hw_Arena));
+    hw_Arena *arena = HW_CAST(void *, reg->pool);
+    reg->used += sizeof(*arena);
+
+    arena->begin = reg;
+    arena->at = reg;
+    arena->end = reg;
+    arena->default_size = pool_capacity;
+
+    return arena;
+}
+
+void hw_Arena_delete(hw_Arena *arena)
+{
+    hw_ArenaRegion *reg = arena->begin;
+    hw_ArenaRegion *reg_next = reg->next;
+    HW_FREE(reg);
+    reg = reg_next;
+    while(reg) {
+        reg->next = reg;
+        HW_FREE(reg);
+        reg = reg->next;
+    }
+}
+
+void *hw_Arena_alloc(hw_Arena *arena, hw_u32 size)
+{
+    hw_ptr ptr = hw_ArenaRegion_alloc(arena->end, size);
+    if(ptr) return ptr;
+    hw_ArenaRegion *region = hw_ArenaRegion_new(arena->default_size > size
+                                               ?arena->default_size : size);
+    arena->end->next = region;
+    arena->end = region;
+    return hw_ArenaRegion_alloc(region, size);
+}
+
+hw_u32 hw_Arena_total_used(hw_Arena *arena)
+{
+    hw_ArenaRegion *r = arena->begin;
+    hw_u32 total = r->used;
+    r = r->next;
+    while(r != NULL) {
+        total += r->used;
+        r = r->next;
+    }
+    return total;
+}
+
+hw_u32 hw_Arena_total(hw_Arena *arena)
+{
+    hw_ArenaRegion *r = arena->begin;
+    hw_u32 total = r->capacity;
+    r = r->next;
+    while(r != NULL) {
+        total += r->capacity;
+        r = r->next;
+    }
+    return total;
+}
+
+hw_bool hw_Arena_check(hw_Arena *arena)
+{
+    if(!arena) return 0;
+    hw_bool line_check = 0;
+
+    hw_ArenaRegion *r = arena->begin;
+    if(!hw_ArenaRegion_check(r)) return 0;
+
+    r = r->next;
+    while(r != NULL) {
+        if(!hw_ArenaRegion_check(r)) return 0;
+        r = r->next;
+        if(r == arena->end) {
+            if(r->next == NULL) {
+                line_check = 1;
+            }
+        }
+    }
+
+    return line_check;
+}
+
+static void* _arena_wrap_alloc(hw_Allocator *self, size_t size)
+{
+    return hw_Arena_alloc(self->state.as_ptr, size);
+}
+
+static void _arena_wrap_free(hw_Allocator *self, void *p)
+{
+    (void)self;
+    (void)p;
+}
+
+static void *_arena_wrap_realloc(hw_Allocator *self, void *p, size_t new_size)
+{
+    hw_ptr new_p = hw_Arena_alloc(self->state.as_ptr, new_size);
+    hw_u32 size = hw_ArenaRegion_getptr_size(p);
+    memcpy(new_p, p, size);
+    return new_p;
+}
+
+void hw_Allocator_arena_delete(hw_Allocator *self)
+{
+    hw_Arena_delete(self->state.as_ptr);
+}
+
+void hw_Allocator_new_arena(hw_Allocator *self)
+{
+    self->state.as_ptr = hw_Arena_new(1000 * 1000 * 10);
+    self->alloc = _arena_wrap_alloc;
+    self->realloc = _arena_wrap_realloc;
+    self->free = _arena_wrap_free;
+    self->delete = hw_Allocator_arena_delete;
+}
 
 /**
  * Global
@@ -587,7 +767,7 @@ hw_VarFn hw_Global_get_builtin(hw_Global *g, hw_CStr const name)
 hw_State *hw_State_new_default(hw_State *parent)
 {
     hw_Allocator allocator;
-    hw_Allocator_default(&allocator);
+    hw_Allocator_new_gpa(&allocator);
     hw_State *s = allocator.alloc(&allocator, sizeof(*s));
     s->allocator = allocator;
 
@@ -624,7 +804,7 @@ void hw_State_delete(hw_State *s)
     HW_ARR_DELETE(s, s->fstack);
     hw_Allocator allocator = s->allocator;
     allocator.free(&allocator, s);
-    hw_Allocator_default_delete(&allocator);
+    allocator.delete(&allocator);
 }
 
 void hw_State_vstack_reserve(hw_State *hw, hw_uint const by)
@@ -713,6 +893,5 @@ void hw_State_fstack_top_save(hw_State *hw, hw_code const *pc, hw_Var const *var
     f->pc = pc - m->code;
     f->var = var - hw->vstack->data;
 }
-
 
 
