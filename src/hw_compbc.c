@@ -203,10 +203,12 @@ void hw_ModuleObj_reset(hw_State *hw, hw_ModuleObj *mobj)
     hw_SymTable_reset(hw, args, tid, 1);
 
     for (size_t i = 0; i < mobj->knst->lenUsed; i++) {
-        HW_VAR_CALLEX(hw
+        if(hw_TypeSys_get_via_id(hw->ts, mobj->knst->tid[i])->is_obj) {
+            HW_VAR_CALLEX(hw
                     , mobj->knst->tid[i]
                     , mobj->knst->data[i]
                     , "delete", (), (), );
+        }
     }
 
     mobj->knst->lenUsed = 0;
@@ -373,7 +375,7 @@ hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj)
 }
 
 hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp 
-        , char const *source_name, hw_uint source_name_size)
+        , char *source_name, hw_uint source_name_size)
 {
     HW_ASSERT(source_name_size);
     HW_ASSERT(source_name);
@@ -387,9 +389,7 @@ hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp
     };
 
     comp->sname.len = source_name_size;
-    comp->sname.data = HW_THREAD_ALLOC(comp->vm_child, source_name_size);
-    memcpy(comp->sname.data, source_name, source_name_size);
-
+    comp->sname.data = (void *)source_name;
     comp->source.len = source_size;
     comp->source.data = source;
     
@@ -398,16 +398,13 @@ hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp
 }
 
 void hw_compbc_load_source_fromData(
-        hw_CompilerBC *comp, void const *source, hw_uint size)
+        hw_CompilerBC *comp, void *source, hw_uint size)
 {
     comp->sname.len = sizeof("<memory>");
-    comp->sname.data = HW_THREAD_ALLOC(comp->vm_child, comp->sname.len);
-    memcpy(comp->sname.data, "<memory>", sizeof("<memory>"));
+    comp->sname.data = (void*)"<memory>";
 
     comp->source.len = size;
-    comp->source.data = HW_THREAD_ALLOC(comp->vm_child, comp->source.len);
-    memcpy(comp->source.data, source, size);
-
+    comp->source.data = source;
     hw_Lexer_start(&comp->lexer, comp->source.data, comp->source.len);
 }
 
@@ -430,7 +427,6 @@ void hw_compbc_delete(hw_CompilerBC *comp)
     hw_FnObj_delete(comp);
     hw_ModuleObj_delete(comp->vm_child, comp->mobj);
 
-    HW_THREAD_FREE(comp->vm_child, comp->sname.data);
     HW_THREAD_FREE(comp->vm_child, comp->source.data);
 
     hw_State *child = comp->vm_child;
@@ -440,6 +436,7 @@ void hw_compbc_delete(hw_CompilerBC *comp)
 
 void hw_compbc_reset(hw_CompilerBC *comp)
 {
+    comp->sname.len = 0;
     hw_ModuleObj_reset(comp->vm_child, comp->mobj);
 }
 
@@ -1010,33 +1007,37 @@ hw_Module *hw_Module_combine(hw_State *hw, hw_u32 mod_count, hw_Module **mods, h
     return m;
 }
 
-static hw_String *_Transform_filename_to_modname(hw_State *hw, hw_byte const *file_name, hw_u32 file_namesize)
+hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
+                                            , hw_String **files
+                                            , hw_u32 count)
 {
-    hw_byte const* end = file_name + (file_namesize - 1);
-    hw_byte const* start = file_name;
-    hw_byte const* at = start;
-    while (at < end) {
-        if(*at == '/') { start = at+1; }
-        at += 1;
+    hw_ModuleArr *mods = *modarr;
+    hw_CompilerBC *comp = hw_compbc_new(hw);
+    for (hw_u32 i = 0; i < count; i++) {
+        hw_Module *mod = NULL;
+        if(files[i]->data[files[i]->lenUsed-1] == 'o') {
+            mod = hw_Module_loadFromFile(hw, (void *)files[i]->data);
+            HW_ASSERT(mod);
+        } else { 
+            if(!hw_compbc_load_source_fromFile(
+                    comp, (char *)files[i]->data, files[i]->lenUsed)) {
+                HW_ASSERTEX(0, "FILE NOT LOADED: %.*s"
+                        , files[i]->lenUsed, files[i]->data);
+            }
+            hw_compbc_compile_from_source(comp);
+            mod = hw_ModuleObj_to_Module(hw, comp->mobj);
+        }       
+        HW_ARR_PUSH(hw, mods, mod);
+        hw_compbc_reset(comp);
     }
-    at = end;
-    while (at > start && *at != '.') {
-        at -= 1;
-    }
-    end = at;
-    at = start;
-
-    hw_Var args[3] = { 
-          [1].as_cbyte_p = start
-        , [2].as_uint = end - start};
-    hw_byte tids[3];
-    hw_String_newFrom_data(hw, args, tids, 3);
-    return args[0].as_string;
+    *modarr = mods;
+    hw_compbc_delete(comp);
+    return 1;
 }
 
-hw_uint hw_compbc_compile_files_and_combine(hw_State *hw, hw_Module **out_mod, hw_u32 files, hw_String **filenames)
+static hw_uint hw_compbc_compile_files_and_combine(hw_State *hw, hw_Module **out_mod, hw_u32 files, hw_String **filenames)
 {
-    HW_ARR(hw_Module *) *mods;
+    hw_ModuleArr *mods;
     HW_ARR(hw_String *) *mod_names;
 
     HW_ARR_NEW(hw, mods, files);
@@ -1044,7 +1045,7 @@ hw_uint hw_compbc_compile_files_and_combine(hw_State *hw, hw_Module **out_mod, h
 
     for (size_t i = 0; i < files; i++) {
         hw_CompilerBC *comp = hw_compbc_new(hw);
-        hw_String *mod_name = _Transform_filename_to_modname(hw,
+        hw_String *mod_name = hw_stripfile_path_ext(hw,
                 filenames[i]->data, filenames[i]->lenUsed);
 
         HW_ARR_PUSH(hw, mod_names, mod_name);

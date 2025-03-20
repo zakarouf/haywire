@@ -320,6 +320,31 @@ hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size)
     return end - str;
 }
 
+hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
+                                             , hw_u32 file_namesize)
+{
+    hw_byte const* end = file_name + (file_namesize - 1);
+    hw_byte const* start = file_name;
+    hw_byte const* at = start;
+    while (at < end) {
+        if(*at == '/') { start = at+1; }
+        at += 1;
+    }
+    at = end;
+    while (at > start && *at != '.') {
+        at -= 1;
+    }
+    end = at;
+    at = start;
+
+    hw_Var args[3] = { 
+          [1].as_cbyte_p = start
+        , [2].as_uint = end - start};
+    hw_byte tids[3];
+    hw_String_newFrom_data(hw, args, tids, 3);
+    return args[0].as_string;
+}
+
 /**
  * Section: Array Macro
  */

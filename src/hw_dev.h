@@ -144,7 +144,8 @@ hw_i32 hw_strto_uint(hw_uint *ret, hw_byte const *str, hw_u32 size);
 hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size);
 hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size);
 void hw_String_trim(hw_String *str, hw_byte ch);
-
+hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
+                                             , hw_u32 file_namesize);
 /**
  * Section: Tokens
  */
@@ -626,15 +627,16 @@ hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
  */
 hw_CompilerBC *hw_compbc_new(hw_State *parent);
 void hw_compbc_load_source_fromData(
-        hw_CompilerBC *comp, void const *source, hw_uint size);
+        hw_CompilerBC *comp, void *source, hw_uint size);
 hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp 
-        , char const *source_name, hw_uint source_name_size);
+        , char *source_name, hw_uint source_name_size);
 
 void hw_compbc_delete(hw_CompilerBC *comp);
 
 void hw_compbc_compile_from_source(hw_CompilerBC *comp);
-hw_uint hw_compbc_compile_files_and_combine(hw_State *hw
-        , hw_Module **out_mod, hw_u32 files, hw_String **filenames);
+hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
+                                            , hw_String **files
+                                            , hw_u32 count);
 
 /**
  * Debug

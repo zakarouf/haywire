@@ -163,6 +163,17 @@ static hw_uint _argparse_mult_string(
     (void)args;
     (void)conf;
     (void)ARG;
+    #define argparse_start()\
+        hw_String *_arg = args->data[ARG].as_string; if(0) { }
+    #define argparse_end() else { hw_logp("Unknown args: %.*s"\
+                                    , _arg->lenUsed, _arg->data); }
+    #define argcheck(name) else if(hw_ptrcmp(_arg->data + 2             \
+                                             , _arg->lenUsed - 2        \
+                                             , name, sizeof(name)-1))
+    argparse_start()
+    argcheck("") {}
+    argparse_end()
+    
     return ARG + 1;
 }
 
@@ -182,6 +193,9 @@ hw_int hw_argparse(
             ARG = _argparse_mult_string(args, conf, ARG);
         } else {
             HW_ARR_PUSH(hw, conf->files, ARG());
+            HW_ARR_PUSH(hw, conf->namespaces
+                          , hw_stripfile_path_ext(hw, ARG()->data
+                                                    , ARG()->lenUsed));
         }
         arg = argnext(args, &ARG);
     }
@@ -194,29 +208,31 @@ void config_del(hw_State *hw, hw_Config *conf)
     hw_VarArr_delete(hw
         , (hw_Var[]){[0].as_arr = conf->args}, (hw_byte[]){hw_TypeID_array}, 1);
     HW_ARR_DELETE(hw, conf->files);
+    for (size_t i = 0; i < conf->namespaces->lenUsed; i++) {
+        if(conf->namespaces->data[i]) {
+            hw_String_delete(hw, (hw_Var[]){ [0].as_string = conf->namespaces->data[i]}
+                            , (hw_byte[]){ hw_TypeID_string }, 1);
+        }
+    }
     HW_ARR_DELETE(hw, conf->namespaces);
+
 }
 
 static hw_Module* _compile_files(
     hw_State *hw, hw_Config *conf, hw_uint *mod_id)
 {
-    hw_Module *mod;
-    *mod_id = hw_compbc_compile_files_and_combine(
-            hw, &mod, conf->files->lenUsed, conf->files->data);
-    return mod;
-}
+    hw_ModuleArr *mods;
+    HW_ARR_NEW(hw, mods, 8);
+    hw_compbc_compile_files(hw, &mods, conf->files->data, conf->files->lenUsed);
+    hw_Module *mod = hw_Module_combine(hw, mods->lenUsed
+                                         , mods->data
+                                         , conf->namespaces->data);
 
-static hw_Module* _compile_file(hw_State *hw, hw_Config *conf, hw_uint *mod_id)
-{
-    hw_Module *mod;
-    hw_CompilerBC *comp = hw_compbc_new(hw);
-    hw_compbc_load_source_fromFile(comp
-            , (void *)conf->files->data[0]->data, conf->files->data[0]->lenUsed);
-    hw_compbc_compile_from_source(comp);
-    mod = hw_ModuleObj_to_Module(hw, comp->mobj);
-
+    for (size_t i = 0; i < mods->lenUsed; i++) {
+        hw_Module_delete_detatch_knstobj(hw, mods->data[i]);
+    }
+    HW_ARR_DELETE(hw, mods);
     *mod_id = hw_Global_add_module((void *)hw->global, mod);
-    hw_compbc_delete(comp);
     return mod;
 }
 
@@ -239,11 +255,7 @@ int main(int argc, char *argv[])
     if(conf.files->lenUsed) {
         hw_Module *mod = NULL;
         hw_uint mod_id = 0;
-        if(conf.files->lenUsed == 1) {
-            mod = _compile_file(hw, &conf, &mod_id);
-        } else {
-            mod = _compile_files(hw, &conf, &mod_id);
-        }
+        mod = _compile_files(hw, &conf, &mod_id);
 
         if(conf.call != NULL) {
             hw_uint fn_id = 0;
@@ -264,8 +276,6 @@ int main(int argc, char *argv[])
 
             hw_Module_writetofile(hw, mod, (void *)conf.out_file->data);
         }
-
-
     }
 
     config_del(hw, &conf);

@@ -40,9 +40,6 @@ DISTCLEAN_LIST := $(OBJ) \
 CLEAN_LIST := $(TARGET) \
 			  $(TARGET_DEBUG) \
 			  $(DISTCLEAN_LIST)\
-			  $(BIN_PATH)\
-			  $(DBG_PATH)\
-			  $(OBJ_PATH)
 
 # default rule
 default: makedir all
