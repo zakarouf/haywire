@@ -387,6 +387,12 @@ enum hw_Inst {
   , INST(popex)   // pop top `B` variables
                   // , (optional) dup it to `A` list if C is set
 
+  /* Memory */
+  , INST(alloc)
+  , INST(allock)
+  , INST(realloc)
+  , INST(free)
+
   /* Gets */
   , INST(get_type)     // R(Ax) = @typeof(R(Bx))
   , INST(get_routine)  // R(Ax) = Thread(R(Bx) as uint)

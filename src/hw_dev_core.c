@@ -37,6 +37,19 @@ static struct hw_InstInfo const INSTRUCTION_INFO[] = {
                                 ", copy to stack variable a, if b is true")
   , ID(popex,   HW_FALSE, abc,  "")
 
+  /* Heap Memory */
+  , ID(alloc,   HW_FALSE, ax32,  "Allocate memory of size r(x32) on heap"
+                                ", set r(A) as the pointer")
+
+  , ID(allock,  HW_FALSE, ax32, "Allocate memory of size x32 on heap"
+                                ", set r(A) as the pointer")
+
+  , ID(realloc, HW_FALSE, ax32, "ReAllocate memory of ptr r(A)"
+                                "to size r(B) on heap"
+                                ", set r(A) as the pointer")
+
+  , ID(free,    HW_FALSE, x32,  "Free memory of ptr r(x32)")
+
   /* Gets */
   , ID(get_type,    HW_FALSE, ab, "R(Ax) = @typeof(R(Bx))") 
   , ID(get_routine, HW_FALSE, ab, "R(Ax) = Thread(R(Bx))")  // 
