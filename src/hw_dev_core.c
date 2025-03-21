@@ -57,11 +57,11 @@ static struct hw_InstInfo const INSTRUCTION_INFO[] = {
   , ID(get_vt,      HW_FALSE, ab, "")
 
   /* Call */
-  , ID(call,          HW_FALSE, x32,  "")
+  , ID(call,          HW_FALSE, x32,    "")
   , ID(call_mod,      HW_FALSE, ax32,   "")
-  , ID(call_native,   HW_FALSE, ax32,  "")
-  , ID(call_c,        HW_FALSE, ax32,  "")
-  , ID(call_sym,      HW_FALSE, ax32,  "")
+  , ID(call_native,   HW_FALSE, ax32,   "")
+  , ID(call_c,        HW_FALSE, ax32,   "")
+  , ID(call_sym,      HW_FALSE,  ax32,   "link knst[x32].as_string")
 
   // ------
   , ID(top,     HW_FALSE, ax32, "")
@@ -76,7 +76,6 @@ static struct hw_InstInfo const INSTRUCTION_INFO[] = {
   , ID(loadb32,     HW_FALSE, ax32, "")
   , ID(load,        HW_FALSE, ax32, "")
   , ID(loadknst,    HW_FALSE, ax32, "")
-  , ID(loadobj,     HW_FALSE, ax32, "")
 
   , ID(list,    HW_FALSE, abc, "")
   , ID(unlist,  HW_FALSE, abc, "")
@@ -241,6 +240,35 @@ void hw_String_trim(hw_String *str, hw_byte ch)
     }
 }
 
+hw_uint hw_str_calc_linecount(hw_byte const *str, hw_uint size)
+{
+    hw_uint line_count = 0;
+    for (size_t i = 0; i < size; i++) {
+        if(str[i] == '\n') line_count += 1;
+    }
+    return line_count;
+}
+
+hw_uint hw_str_calc_column(const hw_byte *at, const hw_byte *str)
+{
+    hw_uint col = 0;
+    while(at > str && *at != '\n') {
+        col += 1;
+        at -= 1;
+    }
+    return col;
+}
+
+hw_uint hw_str_calc_lineend(hw_byte const *at, hw_byte const *end)
+{
+    hw_uint line_end = 0;
+    while (at < end && *at != '\n') {
+        line_end += 1;
+        at += 1;
+    }
+    return line_end;
+}
+
 hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size)
 {
     hw_int result = 0;
@@ -359,7 +387,7 @@ hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
 }
 
 /**
- * Section: Array Macro
+ * Section: ALLOCATORS
  */
 
 

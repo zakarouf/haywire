@@ -43,29 +43,22 @@ static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
         , (int)comp->sname.len, comp->sname.data);
 
     
-    int line_part1_size = comp->lexer.token.start 
-                                - comp->lexer.token.line_start;
-    
-    int line_part2_size = HW_MIN(8, comp->lexer.end - (comp->lexer.token.start + comp->lexer.token.size));
-    
-    hw_uint column = line_part1_size;
+    hw_uint col = hw_Lexer_col(&comp->lexer);
+    hw_uint line = hw_Lexer_line(&comp->lexer);
+    hw_byte const *line_start = hw_Lexer_line_start(&comp->lexer)+1;
 
+    int l1_sz = comp->lexer.token.start - line_start;
+    int l2_sz = HW_MIN(80, hw_str_calc_lineend((comp->lexer.token.start 
+                                         + comp->lexer.token.size)
+                                        , comp->lexer.end));
     hw_loglnp("%"PRIu64":%"PRIu64"| "
                 "%.*s\x1b[0;31m%.*s\x1b[0m%.*s\n"
 //                "%d''%s ~~%d''%s~~ %d''%s\n"
-            , comp->lexer.token.line, column
-            , line_part1_size, comp->lexer.token.line_start
+            , line+1, col+1
+            , l1_sz, line_start
             , (int)comp->lexer.token.size, comp->lexer.token.start
-            , line_part2_size, comp->lexer.token.start + comp->lexer.token.size);
-        
-
-        HW_DEBUG(
-          //, (int)comp->lexer.token.size, comp->lexer.token.start
-         //   , (int)token_name.len, token_name.data);
-        )
-
-    
-    exit(-1);
+            , l2_sz, comp->lexer.token.start + comp->lexer.token.size);
+    abort();
 }
 
 
@@ -151,8 +144,7 @@ hw_ModuleObj* hw_ModuleObj_new(hw_State *hw)
 
     HW_ARR_NEW(hw, obj->data, 128);
     HW_ARR_NEW(hw, obj->code, 80);
-    HW_ARR_NEW(hw, obj->defer_fncall_pc, 16);
-    HW_ARR_NEW(hw, obj->defer_fncall_names, 16);
+    HW_ARR_NEW(hw, obj->defer_fncall, 16);
 
     hw_byte tid = hw_TypeID_symtable;
     hw_SymTable_new(hw, &arg, &tid, 1);
@@ -166,8 +158,7 @@ hw_ModuleObj* hw_ModuleObj_new(hw_State *hw)
 
 void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *obj)
 {
-    HW_ARR_DELETE(hw, obj->defer_fncall_names);
-    HW_ARR_DELETE(hw, obj->defer_fncall_pc);
+    HW_ARR_DELETE(hw, obj->defer_fncall);
 
     hw_VarList_delete(
         hw, &(hw_Var){.as_list = obj->knst}
@@ -190,10 +181,10 @@ void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *obj)
 
 void hw_ModuleObj_reset(hw_State *hw, hw_ModuleObj *mobj)
 {
+    mobj->fnpt->lenUsed = 0;
     mobj->code->lenUsed = 0;
     mobj->data->lenUsed = 0;
-    mobj->defer_fncall_names->lenUsed = 0;
-    mobj->defer_fncall_pc->lenUsed = 0;
+    mobj->defer_fncall->lenUsed = 0;
     
     hw_Var args[] = { [0].as_symtable = mobj->fntable };
     hw_byte tid[] = {hw_TypeID_symtable};
@@ -285,7 +276,12 @@ hw_uint hw_ModuleObj_knstcopy(hw_State *hw, hw_ModuleObj *mobj, hw_Var val, hw_b
 
 void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, hw_String *namespace)
 {
-    hw_uint code_start = hw_ModuleObj_inststream(
+    HW_DEBUG(HW_LOG("Added Mod:", "");
+             hw_debug_Module_disasm(hw, m);
+             HW_LOG("!!!DISASM END!!!", ""););
+
+    hw_uint code_start = mobj->code->lenUsed;
+    hw_ModuleObj_inststream(
             hw, mobj, m->code, m->code_len);
     hw_uint fnpt_start = mobj->fnpt->lenUsed;
     hw_uint knst_start = mobj->knst->lenUsed;
@@ -311,8 +307,9 @@ void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, h
             hw_String_fmt(hw, &buffer.as_string, "%.*s"
                 , finfo.name_size, finfo.name);
         }
-        HW_DEBUG(HW_LOG("FN NAMESPACE, %s", "");
-                hw_debug_print_var(hw, buffer, hw_TypeID_string));
+        HW_DEBUG(HW_LOG("FN NAMESPACE, %.*s (%u)", buffer.as_string->lenUsed
+                                            , buffer.as_string->data
+                                            , buffer.as_string->lenUsed));
         
         hw_uint data_at = hw_ModuleObj_fndata(hw, mobj
                 , buffer.as_string->data, finfo.types
@@ -339,6 +336,25 @@ void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, h
 
         }
     }
+}
+
+hw_bool hw_ModuleObj_resolve_localcalls(hw_ModuleObj *mobj)
+{
+    HW_DEBUG(HW_LOG("Resolving %"PRIu32" Local Function Calls"
+                , mobj->defer_fncall->lenUsed));
+    while (mobj->defer_fncall->lenUsed) {
+        hw_byte const* symb = HW_ARR_TOP(mobj->defer_fncall).symb;
+        hw_u32 symb_sz = HW_ARR_TOP(mobj->defer_fncall).symb_sz;
+        hw_u32 pc = HW_ARR_TOP(mobj->defer_fncall).pc;
+        hw_VarP result = _get_symbol(mobj->fntable, symb, symb_sz);
+        if (result.type == hw_TypeID_nil) {
+            return 0;
+        }
+        hw_code *inst = mobj->code->data + pc;
+        inst->getx.x32 = result.value.as_uint;
+        mobj->defer_fncall->lenUsed -= 1;
+    }
+    return 1;
 }
 
 hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj)
@@ -374,38 +390,13 @@ hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj)
     return mod;
 }
 
-hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp 
-        , char *source_name, hw_uint source_name_size)
+void hw_compbc_set_source(hw_CompilerBC *comp, hw_byte *source, hw_uint size
+                        , hw_byte *name, hw_uint name_size)
 {
-    HW_ASSERT(source_name_size);
-    HW_ASSERT(source_name);
-
-    hw_uint source_size = 0;
-    void *source = hw_loadfile(comp->vm_child, source_name, 1, &source_size);
-    HW_ASSERT(source_size < UINT32_MAX); // 4GB is Max File Size;
-                                         //
-    if(source == NULL) {
-        HW_DEBUG(HW_LOG("~~FAILED TO LOAD FILE: %s", source_name));
-    };
-
-    comp->sname.len = source_name_size;
-    comp->sname.data = (void *)source_name;
-    comp->source.len = source_size;
     comp->source.data = source;
-    
-    hw_Lexer_start(&comp->lexer, comp->source.data, comp->source.len);
-    return 1;
-}
-
-void hw_compbc_load_source_fromData(
-        hw_CompilerBC *comp, void *source, hw_uint size)
-{
-    comp->sname.len = sizeof("<memory>");
-    comp->sname.data = (void*)"<memory>";
-
     comp->source.len = size;
-    comp->source.data = source;
-    hw_Lexer_start(&comp->lexer, comp->source.data, comp->source.len);
+    comp->sname.data = name;
+    comp->sname.len = name_size;
 }
 
 hw_CompilerBC *hw_compbc_new(hw_State *parent)
@@ -426,8 +417,6 @@ void hw_compbc_delete(hw_CompilerBC *comp)
 {
     hw_FnObj_delete(comp);
     hw_ModuleObj_delete(comp->vm_child, comp->mobj);
-
-    HW_THREAD_FREE(comp->vm_child, comp->source.data);
 
     hw_State *child = comp->vm_child;
     HW_THREAD_FREE(comp->vm_child, comp);
@@ -509,6 +498,7 @@ static hw_uint hw_compbc_w_defn(
     return obj->fnpt->lenUsed - 1;
 }
 
+
 static void _compbc_resolve_lables(hw_CompilerBC *comp)
 {
     hw_FnObj *fnobj = comp->fnobj;
@@ -517,7 +507,8 @@ static void _compbc_resolve_lables(hw_CompilerBC *comp)
                 , (int)comp->fnobj->name_sizeUsed, comp->fnobj->name));
     while (fnobj->defer_lables->lenUsed) {
         hw_DeferInst defer = HW_ARR_TOP(fnobj->defer_lables);
-        hw_VarP result = _get_symbol(fnobj->lables, defer.symbol.start, defer.symbol.size);
+        hw_VarP result = _get_symbol(fnobj->lables, defer.symbol.start
+                                                  , defer.symbol.size);
         if (result.type == hw_TypeID_nil) {
             comp->lexer.token = defer.symbol;
             _ERROR("Lable Does not exist %d", 1);
@@ -594,11 +585,19 @@ static hw_uint hw_compbc_w_lable(
     return comp->mobj->code->lenUsed;
 }
 
-static void hw_compbc_defer_fncall(hw_CompilerBC *comp, hw_LexToken name, hw_uint inst)
+void hw_ModuleObj_add_deferfn(hw_State *hw, hw_ModuleObj *mobj
+                            , hw_byte const *symb, hw_u32 symb_sz, hw_u32 pc)
 {
-    hw_ModuleObj *obj = comp->mobj;
-    HW_ARR_PUSH(comp->vm_child, obj->defer_fncall_names, name);
-    HW_ARR_PUSH(comp->vm_child, obj->defer_fncall_pc, inst);
+    HW_ARR_PUSHINC(hw, mobj->defer_fncall);
+    HW_ARR_TOP(mobj->defer_fncall).symb     = symb;
+    HW_ARR_TOP(mobj->defer_fncall).symb_sz  = symb_sz;
+    HW_ARR_TOP(mobj->defer_fncall).pc       = pc;
+}
+
+static void hw_compbc_defer_fncall(hw_CompilerBC *comp, hw_LexToken name, hw_u32 pc)
+{
+    hw_ModuleObj_add_deferfn(comp->vm_child
+                           , comp->mobj, name.start, name.size, pc);
 }
 
 
@@ -742,13 +741,24 @@ static hw_int _compiler_next_eval_operand(hw_CompilerBC *comp)
                     hw_compbc_defer_lable(
                         comp, lex->token, comp->fnobj->operand);
                     operand = -1;
+                }else {
+                    operand = result.value
+                                    .as_uint - comp->mobj->code->lenUsed;
                 }
-                operand = result.value.as_uint - comp->mobj->code->lenUsed ;
         }
         break; case HW_LEXTOKEN_PERCENT:{
                 hw_compbc_lex_next_expect(comp, HW_LEXTOKEN_SYMBOL);
-                comp->lexer.token = _compiler_try_promote_symbol_todotted(comp);                
-                assign_operand(mobj->fntable, "Function", as_uint);
+                comp->lexer.token = _compiler_try_promote_symbol_todotted(comp);
+                hw_VarP result = _get_symbol(comp->mobj->fntable
+                        , lex->token.start
+                        , lex->token.size);
+                if( result.type == hw_TypeID_nil ) {
+                    hw_compbc_defer_fncall(
+                        comp, lex->token, comp->mobj->code->lenUsed);
+                    operand = -1;
+                } else {
+                    operand = result.value.as_uint;
+                }
         }
         break; case HW_LEXTOKEN_HASH: {
                 hw_compbc_lex_next_expect(comp, HW_LEXTOKEN_SYMBOL);
@@ -929,8 +939,6 @@ static void _compiler_atsym(hw_CompilerBC *comp)
 
     TOK_MATCH_END
 
-
-
     #undef TOK_MATCH_START
     #undef TOK_MATCH
     #undef TOK_MATCH_END
@@ -994,6 +1002,17 @@ void hw_compbc_compile_from_source(hw_CompilerBC *comp)
         isend = _compiler_top(comp);
         hw_compbc_lex_next_skipws(comp);
     }
+
+    if(!hw_ModuleObj_resolve_localcalls(comp->mobj)) {
+        hw_LexToken token = {
+            .start = HW_ARR_TOP(comp->mobj->defer_fncall).symb,
+            .size = HW_ARR_TOP(comp->mobj->defer_fncall).symb_sz,
+            .type = HW_LEXTOKEN_SYMBOL
+        };
+        comp->lexer.token = token;
+
+        _ERROR("Function Does not exist %d", 1);
+    }
 }
 
 hw_Module *hw_Module_combine(hw_State *hw, hw_u32 mod_count, hw_Module **mods, hw_String **namespaces)
@@ -1019,12 +1038,16 @@ hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
             mod = hw_Module_loadFromFile(hw, (void *)files[i]->data);
             HW_ASSERT(mod);
         } else { 
-            if(!hw_compbc_load_source_fromFile(
-                    comp, (char *)files[i]->data, files[i]->lenUsed)) {
+            hw_compbc_set_source(comp, NULL, 0
+                    , files[i]->data, files[i]->len);
+            comp->source.data = hw_loadfile(comp->vm_child
+                    , (char *)comp->sname.data, 1, &comp->source.len);
+            if(!comp->source.data || !comp->source.len) {
                 HW_ASSERTEX(0, "FILE NOT LOADED: %.*s"
                         , files[i]->lenUsed, files[i]->data);
             }
             hw_compbc_compile_from_source(comp);
+            HW_THREAD_FREE(comp->vm_child, comp->source.data);
             mod = hw_ModuleObj_to_Module(hw, comp->mobj);
         }       
         HW_ARR_PUSH(hw, mods, mod);
@@ -1033,54 +1056,6 @@ hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
     *modarr = mods;
     hw_compbc_delete(comp);
     return 1;
-}
-
-static hw_uint hw_compbc_compile_files_and_combine(hw_State *hw, hw_Module **out_mod, hw_u32 files, hw_String **filenames)
-{
-    hw_ModuleArr *mods;
-    HW_ARR(hw_String *) *mod_names;
-
-    HW_ARR_NEW(hw, mods, files);
-    HW_ARR_NEW(hw, mod_names, files);
-
-    for (size_t i = 0; i < files; i++) {
-        hw_CompilerBC *comp = hw_compbc_new(hw);
-        hw_String *mod_name = hw_stripfile_path_ext(hw,
-                filenames[i]->data, filenames[i]->lenUsed);
-
-        HW_ARR_PUSH(hw, mod_names, mod_name);
-
-        hw_Module *mod = NULL;
-        if(filenames[i]->data[filenames[i]->lenUsed-1] == 'o') {
-            mod = hw_Module_loadFromFile(hw, (void *)filenames[i]->data);
-            HW_ASSERT(mod);
-        } else { 
-            if(!hw_compbc_load_source_fromFile(
-                    comp, (char *)filenames[i]->data, filenames[i]->lenUsed)) {
-                HW_ASSERTEX(0, "FILE NOT LOADED: %.*s"
-                        , filenames[i]->lenUsed, filenames[i]->data);
-            }
-            hw_compbc_compile_from_source(comp);
-            mod = hw_ModuleObj_to_Module(hw, comp->mobj);
-        }
-
-        HW_ARR_PUSH(hw, mods, mod);
-        hw_compbc_delete(comp);
-    }
-
-    hw_Module *out = hw_Module_combine(
-            hw, mods->lenUsed, mods->data, mod_names->data);
-
-    for (size_t i = 0; i < files; i++) {
-        hw_Module_delete_detatch_knstobj(hw, mods->data[i]);
-        hw_String_delete(hw, (hw_Var[]){ [0].as_string = mod_names->data[i]}
-                            , (hw_byte[]){ hw_TypeID_string }, 1);
-    }
-    HW_ARR_DELETE(hw, mod_names);
-    HW_ARR_DELETE(hw, mods);
-    
-    *out_mod = out;
-    return hw_Global_add_module((void *)hw->global, out);
 }
 
 void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[])

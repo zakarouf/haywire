@@ -321,9 +321,7 @@ struct hw_Arena {
 /*************************************************************/
 struct hw_LexToken {
     hw_byte const   *start;
-    hw_byte const   *line_start;
     hw_uint         size;
-    hw_uint         line;
     hw_byte         type;
 };
 
@@ -722,9 +720,11 @@ typedef struct hw_FnObj hw_FnObj;
 struct hw_ModuleObj {
     hw_uintArr      *fnpt;
     hw_SymTable     *fntable;
-
-    hw_LexTokenArr  *defer_fncall_names;
-    hw_uintArr      *defer_fncall_pc;
+    
+    HW_ARR(struct { hw_byte const *symb;
+                    hw_u32 symb_sz; 
+                    hw_u32 pc; 
+            }) *defer_fncall;
     
     hw_codeArr      *code;
     hw_byteArr      *data;
@@ -734,12 +734,12 @@ struct hw_ModuleObj {
 };
 
 struct hw_VarInfo {
-    hw_byte type;
     hw_Var  value;
+    hw_uint unique_reff;
     hw_byte is_mut:1
           , is_unique:1
           , is_val_tracked:1;
-    hw_uint unique_reff;
+    hw_byte type;
 };
 
 struct hw_VarInfoArr {

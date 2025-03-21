@@ -122,6 +122,7 @@ struct hw_Config {
         hw_byte run:1
               , disasm:1
               , print_inst_info:1
+              , no_namespace: 1
               ;
     } flags;
 };
@@ -150,6 +151,7 @@ static hw_uint _argparse_single_char_conf(hw_State *hw,
                case 'd': conf->flags.disasm = 1;
         break; case 'r': conf->flags.run = 1;
         break; case 'i': conf->flags.print_inst_info = 1;
+        break; case 'n': conf->flags.no_namespace = 1;
         break; case 'c': conf->call = argnext(args, &ARG);
         break; case 'o': conf->out_file = argnext(args, &ARG);
         break; default: hw_loglnp("Unknown command '-%c'", ch);
@@ -193,9 +195,13 @@ hw_int hw_argparse(
             ARG = _argparse_mult_string(args, conf, ARG);
         } else {
             HW_ARR_PUSH(hw, conf->files, ARG());
-            HW_ARR_PUSH(hw, conf->namespaces
+            if(conf->flags.no_namespace) {
+                HW_ARR_PUSH(hw, conf->namespaces, NULL);
+            } else {
+                HW_ARR_PUSH(hw, conf->namespaces
                           , hw_stripfile_path_ext(hw, ARG()->data
                                                     , ARG()->lenUsed));
+            }
         }
         arg = argnext(args, &ARG);
     }

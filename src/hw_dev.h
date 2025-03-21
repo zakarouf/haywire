@@ -146,6 +146,9 @@ hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size);
 void hw_String_trim(hw_String *str, hw_byte ch);
 hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
                                              , hw_u32 file_namesize);
+hw_uint hw_str_calc_linecount(hw_byte const *str, hw_uint size);
+hw_uint hw_str_calc_column(hw_byte const *at, hw_byte const *str);
+hw_uint hw_str_calc_lineend(hw_byte const *at, hw_byte const *end);
 /**
  * Section: Tokens
  */
@@ -230,6 +233,9 @@ void hw_Lexer_next_until(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_next_expect(hw_Lexer *lex, enum hw_LexTokenType type);
 hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size);
 
+hw_uint hw_Lexer_line(hw_Lexer const *l);
+hw_uint hw_Lexer_col(hw_Lexer const *l);
+hw_byte const *hw_Lexer_line_start(hw_Lexer const *l);
 
 /**
  * Memory Allocators 
@@ -422,8 +428,6 @@ enum hw_Inst {
 
   , INST(load)      // R(Ax) = data(x32)
   , INST(loadknst)  // R(Ax) = knst(x32)
-  , INST(loadobj)   // R(Ax).type = data(x32).type
-                    // R(Ax).@call load, (data(x32)+1)
 
   , INST(list)      // Make list R(Ax) with R(Bx)..R(Cx)
   , INST(unlist)    // Unroll list R(Ax) to R(Bx)..R(Cx)
@@ -632,13 +636,9 @@ hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
  * Byte Code Compiler
  */
 hw_CompilerBC *hw_compbc_new(hw_State *parent);
-void hw_compbc_load_source_fromData(
-        hw_CompilerBC *comp, void *source, hw_uint size);
-hw_bool hw_compbc_load_source_fromFile(hw_CompilerBC *comp 
-        , char *source_name, hw_uint source_name_size);
-
+void hw_compbc_set_source(hw_CompilerBC *comp, hw_byte *source, hw_uint size
+                        , hw_byte *name, hw_uint name_size);
 void hw_compbc_delete(hw_CompilerBC *comp);
-
 void hw_compbc_compile_from_source(hw_CompilerBC *comp);
 hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
                                             , hw_String **files

@@ -149,8 +149,6 @@ static int _check_if_char(hw_Lexer *lex)
         _match(' ', SPACE);
         _match('\t', TABSPACE);
         case '\n': {
-            lex->token.line += 1; 
-            lex->token.line_start = lex->at;
             _make_token(lex, TOKEN(NEWLINE));
             return 1;
         } break;
@@ -245,9 +243,7 @@ void hw_Lexer_start(hw_Lexer* lex, const hw_byte *string_data, hw_uint size)
     lex->at = string_data;
     lex->end = string_data + size;
     lex->token.start = lex->at;
-    lex->token.line_start = lex->at;
     lex->token.size = 0;
-    lex->token.line = 1;
     lex->token.type = HW_LEXTOKEN_UNKNOWN;
 }
 
@@ -313,5 +309,20 @@ hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size)
         return !memcmp(lex->token.start, string, string_size);
     }
     return 0;
+}
+
+inline hw_uint hw_Lexer_line(hw_Lexer const *l)
+{
+    return hw_str_calc_linecount(l->begin, l->token.start - l->begin);
+}
+
+inline hw_uint hw_Lexer_col(hw_Lexer const *l)
+{
+    return hw_str_calc_column(l->token.start, l->begin);
+}
+
+inline hw_byte const *hw_Lexer_line_start(hw_Lexer const *l)
+{
+    return l->token.start - hw_Lexer_col(l);    
 }
 
