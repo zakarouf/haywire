@@ -1,8 +1,5 @@
-//#include <ctime>
-#include <inttypes.h>
-#include <string.h>
-#include "hw.h"
-#include "hw_dev.h"
+#include "dev.h"
+#include "cstd.h"
 
 /**********************************************************************
  *                            Public

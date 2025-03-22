@@ -1,7 +1,5 @@
-#include "hw.h"
-#include "hw_dev.h"
-#include <ctype.h>
-#include <string.h>
+#include "dev.h"
+#include "cstd.h"
 
 #define TOKEN(x) [HW_LEXTOKEN_##x] = { .data = (void *)#x, .len = (sizeof(#x) -1) }
 static hw_CStr const hw_TOKEN_NAMES[HW_LEXTOKEN_TOTAL+1] = {
@@ -247,7 +245,6 @@ void hw_Lexer_start(hw_Lexer* lex, const hw_byte *string_data, hw_uint size)
     lex->token.type = HW_LEXTOKEN_UNKNOWN;
 }
 
-#include <stdio.h>
 static void _print_token(hw_Lexer *lex)
 {
     HW_ASSERT(lex->token.type < HW_LEXTOKEN_TOTAL);

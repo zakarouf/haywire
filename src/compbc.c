@@ -1,10 +1,5 @@
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <inttypes.h>
-
-#include "hw.h"
-#include "hw_dev.h"
+#include "dev.h"
+#include "cstd.h"
 
 hw_CStr hw_get_token_name(hw_uint token_type);
 
@@ -300,11 +295,11 @@ void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, h
         
         buffer.as_string->lenUsed = 0;
         if(namespace) {
-            hw_String_fmt(hw, &buffer.as_string, "%.*s.%.*s"
+            hw_String_append_fmt(hw, &buffer.as_string, "%.*s.%.*s"
                 , namespace->lenUsed, namespace->data
                 , finfo.name_size, finfo.name);
         } else {
-            hw_String_fmt(hw, &buffer.as_string, "%.*s"
+            hw_String_append_fmt(hw, &buffer.as_string, "%.*s"
                 , finfo.name_size, finfo.name);
         }
         HW_DEBUG(HW_LOG("FN NAMESPACE, %.*s (%u)", buffer.as_string->lenUsed

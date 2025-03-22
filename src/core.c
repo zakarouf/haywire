@@ -1,13 +1,5 @@
-#include "hw.h"
-#include "hw_dev.h"
-
-#include <inttypes.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <threads.h>
+#include "dev.h"
+#include "cstd.h"
 
 /**
  * Section: Pre-Processor

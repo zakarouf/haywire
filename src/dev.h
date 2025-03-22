@@ -1,7 +1,7 @@
 #ifndef ZAKAROUF_HAYWIRE_DEV_H
 #define ZAKAROUF_HAYWIRE_DEV_H
 
-#include "hw.h"
+#include "def.h"
 
 /**
  * Section: Pre-Processor
@@ -315,7 +315,7 @@ DEFN(hw_String, newFrom_data);
 DEFN(hw_String, newFrom_file);
 DEFN(hw_String, newFrom_fmt);
 DEFN(hw_String, append_bytes);
-void hw_String_fmt(hw_State *hw, hw_String **buffer
+void hw_String_append_fmt(hw_State *hw, hw_String **buffer
         , char const *restrict format, ...);
 
 /* List */

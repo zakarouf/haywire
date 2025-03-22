@@ -1,6 +1,4 @@
-#include "hw.h"
-#include "hw_dev.h"
-
+#include "dev.h"
 
 /**
  *  Tok List

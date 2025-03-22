@@ -1,10 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <inttypes.h>
-#include <string.h>
-
-#include "hw.h"
-#include "hw_dev.h"
+#include "dev.h"
+#include "cstd.h"
 
 #ifdef HW_COMPILE_SINGLE
 #include "hw_debug.c"

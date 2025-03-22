@@ -1,8 +1,5 @@
-#include "hw.h"
-#include "hw_dev.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <inttypes.h>
+#include "dev.h"
+#include "cstd.h"
 
 void hw_debug_print_inst(hw_State *hw)
 {

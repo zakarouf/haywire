@@ -1,12 +1,5 @@
-#include "hw.h"
-#include "hw_dev.h"
-#include <limits.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <inttypes.h>
+#include "dev.h"
+#include "cstd.h"
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator)
 {
@@ -376,7 +369,7 @@ hw_String* _String_newFrom_dataRaw(
     return self;
 }
 
-void hw_String_fmt(hw_State *hw, hw_String **buffer, char const *restrict format, ...)
+void hw_String_append_fmt(hw_State *hw, hw_String **buffer, char const *restrict format, ...)
 {
     va_list vargs;
     va_start(vargs, format);
