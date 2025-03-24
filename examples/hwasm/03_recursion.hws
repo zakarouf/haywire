@@ -7,30 +7,48 @@
 ; fib(x)
 ;   if(x == 1) return 1
 ;   return fib(x - 1) + f(x - 2)
+
+@const fib_val 35
+@const msg "Value of fib\n"
+
+@defn fib2(x: uint)
+    @defvar result2: uint
+    @defvar result:  uint
+    
+    i_kles x 1
+        jk &return
+    i_ksub result x 1
+    call %fib2 ; store: result = fib(n-1)
+    dup result2 result
+    i_ksub result x 2
+    call %fib2
+    i_add x result2 result
+    :return
+    @endfn
+
 @defn fib (x: uint)
     @defvar cmp: uint
     @defvar res1: uint
     
     i_kle cmp x 1
     jtk cmp &return
-    
     i_ksub res1 x 1
         call %fib
-
     dup cmp res1
-
     i_ksub res1 x 2
         call %fib
-    
     i_add x cmp res1
-    
     :return
     @endfn
 
 @defn main ()
+    @defvar msg: string
+    loadknst msg #msg
     @defvar x: uint
-    loada32 x 35
-    call %fib
+    loadknst x #fib_val
+
+    call %fib2
+    prnt msg
     prnt x
     @endfn
 

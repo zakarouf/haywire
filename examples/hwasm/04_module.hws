@@ -1,0 +1,14 @@
+; Module
+
+@const x 10
+@const shi 53
+
+@defn math.add(res: uint | x: uint, y:uint)
+    i_add res x y
+    @endfn
+
+@defn main()
+    @defvar tar: uint
+    loadknst tar #shi
+    prnt tar
+    @endfn
