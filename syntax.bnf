@@ -1,0 +1,28 @@
+<baseExpr> ::= <decl_symbol>+
+
+<ws> ::= " "+
+<number> ::= "-"? [0-9]+
+<symbol> ::= ("_" | [a-z] | [A-Z]) ( "_" | [a-z] | [A-Z] | [0-9])
+
+<fn_arg> ::= ("mut" | "mut*")? <symbol> ":" <symbol>
+<fn_args> ::= <fn_arg> | "," <fn_arg>
+<fn> ::= "fn" "(" <fn_args> ")" "{" <stmt>+ "}"
+
+<callfn> ::= <symbol> "(" <expr> ( "," <expr> )* ")"
+
+<binary_op> ::= <expr> ("+" | "-" | "/" | "*" | "%" ) <expr>
+
+<assign> ::= <symbol> (":" <symbol>)? "=" <expr>
+<decl_symbol> ::= "symb" <ws> <assign>
+<decl_var> ::= "var" <ws> <assign>
+
+<expr> ::= <number>
+     | <symbol>
+     | <binary_op>
+     | <fn>
+     | <callfn>
+
+<stmt> ::= (<decl_var>
+     | <decl_symbol>
+     | <assign>)
+
