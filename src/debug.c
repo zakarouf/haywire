@@ -1,5 +1,8 @@
+#include "def.h"
 #include "dev.h"
 #include "cstd.h"
+#include <stdatomic.h>
+#include <stdio.h>
 
 void hw_debug_print_inst(hw_State *hw)
 {
@@ -13,6 +16,29 @@ void hw_debug_print_inst(hw_State *hw)
                 , i, instinfo->name_size, instinfo->name
                 , instinfo->brief_size, instinfo->brief);
         instinfo += 1;
+    }
+}
+
+void hw_debug_print_symtable_ord(hw_State *hw, hw_SymTableOrd *table)
+{
+    fprintf(stdout, "symtable:\n"
+                    "  len:        %"PRIu32 "\n" 
+                    "  lenUsed:    %"PRIu32 "\n"
+                    "  vlen:       %"PRIu32 "\n"
+                    "  vlenUsed:   %"PRIu32 "\n",
+                    table->len,
+                    table->lenUsed,
+                    table->vlen,
+                    table->vlenUsed);
+    for (hw_u32 i = 0; i < table->vlenUsed; i++) {
+        hw_Type *T = hw_TypeSys_get_via_id(hw->ts, table->valT[i]);
+        fprintf(stdout, "    [%u] = \"%.*s\":%.*s\n", 
+                i, table->key_size[i], table->keys[i]
+                , T->name_size, T->name);
+    }
+    fprintf(stdout, "INDICES::");
+    for (hw_u32 i = 0; i < table->len; i++) {
+        fprintf(stdout, " - [%u] = %i\n", i, table->indices[i]);
     }
 }
 
@@ -232,9 +258,11 @@ void hw_debug_State_trace(hw_State *hw)
     _debug_State_trace_print_last_values(hw, vtrace_count);
     
     hw_FnState *f = hw_State_fstack_top(hw);
-    HW_LOG("Top Stack Start: %"PRIu64, f->var);
+    HW_LOG("Top Stack Start: %"PRIu32, f->var);
 
-    hw_Module const *m = hw_Global_get_module(hw->global, f->mod);
+    HW_ASSERT(hw->global->symbols->valT[f->mod] == hw_TypeID_module);
+    hw_Module const *m = hw_Global_get_symb_via_id(hw->global, f->mod)
+                                .as_module;
     hw_FnInfo finfo;
     hw_Module_get_FnInfo(m, f->fn, &finfo);
 

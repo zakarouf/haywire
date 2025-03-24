@@ -111,6 +111,8 @@ typedef struct  hw_SymTable hw_SymTable; // (STRING:ANY)
 typedef struct  hw_KaTable  hw_KaTable;  // (K:ANY)
 typedef struct  hw_KvTable  hw_KvTable;  // (K:V)
 
+typedef struct hw_SymTableOrd hw_SymTableOrd; // [ORDERED](STRING: ANY)
+
 typedef struct  hw_String   hw_String;
 typedef struct  hw_CStr     hw_CStr;
 typedef struct  hw_u32Arr   hw_u32Arr;
@@ -431,6 +433,18 @@ struct hw_SymTable {
     hw_uint     lenUsed;
 };
 
+struct hw_SymTableOrd {
+    hw_u32  *indices;
+
+    hw_byte **keys;
+    hw_u32  *key_size;
+    hw_Var  *vals;
+    hw_byte *valT;
+
+    hw_u32  len, vlen;
+    hw_u32  lenUsed, vlenUsed;
+};
+
 struct hw_KaTable {
     hw_Var      *key;
     hw_Var      *val;
@@ -571,10 +585,10 @@ struct hw_codeArr {
 };
 
 struct hw_FnState {
-    hw_uint     fn;
-    hw_uint     mod;
-    hw_uint     pc;
-    hw_uint     var;
+    hw_u32     fn;
+    hw_u32     mod;
+    hw_u32     pc;
+    hw_u32     var;
 };
 
 struct hw_FnStateArr {
@@ -650,7 +664,7 @@ enum hw_ThreadStatus {
 };
 
 struct hw_State {
-    hw_uint                 id;
+    pid_t                   id;
     hw_byte                 name[128];
 
     hw_VarList              *vstack;
@@ -667,25 +681,14 @@ struct hw_State {
     enum hw_ThreadStatus    status;
 };
 
-
-typedef struct hw_ModulePack hw_ModulePack;
-struct hw_ModulePack {
-    hw_ModuleArr    *loaded;
-    hw_VarTable     *table;
-};
-
 struct hw_Global {
     hw_CStr         name;
     hw_uint         pid;
 
     pthread_mutex_t mutex;
 
-    hw_ModulePack   modules;
     hw_State        *parent;
-    hw_VarList      *constants;
-
-    hw_VarFnArr     *builtin;
-    hw_SymTable     *builtin_names;
+    hw_SymTableOrd  *symbols;
 
     hw_TypeSys      *tsys;
     hw_InstInfo     const *insts;
@@ -794,6 +797,80 @@ struct hw_CompilerBC {
     hw_CStr         source;
     hw_CStr         out_name;
 };
+
+
+/**
+ *  Section: Bit Field
+ *  Taken form https://github.com/zakarouf/z_
+ */
+
+/**
+ * Set the corresponding bit as 1 or True.
+ * If the bit was already set as 1 or True, nothing happens.
+ */
+#define HW_BIT_SET(b, offset)       b |= 1 << (offset)
+
+/**
+ * Set the corresponding bit as 0 or False.
+ * If the bit was already set as 0 or False, nothing happens.
+ */
+#define HW_BIT_CLEAR(b, offset)     b &= ~(1 << (offset))
+
+/**
+ * Toggle the corresponding bit value;
+ * If the value is True, set it to False and vice versa.
+ */
+#define HW_BIT_TOGGLE(b, offset)    b ^= 1 << (offset)
+
+/**
+ * Get the value of the number as a whole with only the offset bit set to 1,
+ * if the corresponding bit is set to True.
+ */
+#define HW_BIT_IS(b, offset)        b & (1 << (offset))
+
+/**
+ * Check if the corresponding bit is set to True.
+ */
+#define HW_BIT_HAS(b, offset)       (((b) >> (offset)) & 1)
+
+/**
+ * Check if value of bit in a given offset is that of the offset itself.
+ */
+#define HW_BIT_ISEQ(b, offset)      ((b)&(offset) == offset)
+
+
+/** Bitf Interface **/
+
+
+/**
+ * Set the corresponding bit as 1 or True.
+ * If the bit was already set as 1 or True, nothing happens.
+ */
+#define HW_BITF_SET(x, bit_num)\
+    HW_BIT_SET(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+
+/**
+ * Toggle the corresponding bit value;
+ * If the value is True, set it to False and vice versa.
+ */
+#define HW_BITF_TOGGLE(x, bit_num)\
+    HW_BIT_TOGGLE(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+/**
+ * Set the corresponding bit as 0 or False.
+ * If the bit was already set as 0 or False, nothing happens.
+ */
+#define HW_BITF_CLEAR(x, bit_num)\
+    HW_BIT_clear(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+#define HW_BITF_UNSET(x, bit_num) HW_BITF_CLEAR(x, bit_num)
+
+/**
+ * Check if the corresponding bit is set to True.
+ */
+#define HW_BITF_HAS(x, bit_num)\
+    HW_BIT_HAS(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
+
+#define hw_PRIV__BITMAKE_U8IDX(x, bit_num)\
+    *(HW_CAST(hw_byte *, x) + (bit_num >> 3))
 
 #define HW_STATIC_ASSERT(exp)\
     ((void)(char[(exp)? 1:-1]){0})

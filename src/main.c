@@ -1,5 +1,9 @@
+#include "def.h"
 #include "dev.h"
 #include "cstd.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef HW_COMPILE_SINGLE
 #include "hw_debug.c"
@@ -233,8 +237,32 @@ static hw_Module* _compile_files(
         hw_Module_delete_detatch_knstobj(hw, mods->data[i]);
     }
     HW_ARR_DELETE(hw, mods);
-    *mod_id = hw_Global_add_module((void *)hw->global, mod);
+    *mod_id = hw_Global_add_anonsymb(
+            (void *)hw->global, (hw_Var){.as_module = mod}, hw_TypeID_module);
     return mod;
+}
+
+
+void hw_test_check_symtableord(hw_State *hw, hw_u32 count)
+{
+    hw_SymTableOrd *table = hw_SymTableOrd_new_r(hw, 64);
+    char buffer[64] = {[63] = 0};
+    for (size_t i = 0; i < count; i++) {
+        snprintf(buffer, 63, "symbols_%lu", i);
+        hw_SymTableOrd_set_r(hw, table,(hw_byte*)buffer, strnlen(buffer, 63), (hw_Var){.as_uint = i}, hw_TypeID_int);
+    }
+    hw_bool *instances = HW_THREAD_ALLOC(hw, sizeof(hw_bool) * count);
+    memset(instances, 0, sizeof(*instances) * count);
+    for (size_t i = 0; i < table->len; i++) {
+        hw_u32 index = table->indices[i];
+        if(index < table->vlenUsed) {
+            HW_ASSERT(instances[index] == 0);
+            instances[index] = 1;
+        }
+    }
+    for (size_t i = 0; i < count; i++) {
+        HW_ASSERT(instances[i]);
+    }
 }
 
 #ifdef HAYWIRE_LIBRARY_IMPLEMENTATION
@@ -248,7 +276,6 @@ int main(int argc, char *argv[])
     _check_vm_inst(hw);
     hw_Config conf = {0};
     HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
-    
 
     if(conf.flags.print_inst_info) {
         hw_debug_print_inst(hw);

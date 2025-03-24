@@ -10,7 +10,8 @@ inline hw_FnState *hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_i
     hw_State_fstack_push(hw, mod_id, fn_id);
     hw_FnState *f = hw_State_fstack_top(hw);
     hw_FnInfo info;
-    hw_Module const *mod = hw_Global_get_module(hw->global, f->mod);
+    hw_Module const *mod = hw_Global_get_symb_via_id(hw->global, f->mod)
+                                .as_module;
     hw_Module_get_FnInfo(mod, f->fn, &info);
     f->pc = mod->fnpt[f->fn];
 
@@ -53,7 +54,7 @@ void hw_vm_prepare_ret(hw_State *hw)
 {
     hw_FnState *f = hw_State_fstack_top(hw);
     hw_FnInfo info;
-    hw_Module const *mod = hw_Global_get_module(hw->global, f->mod);
+    hw_Module const *mod = hw->global->symbols->vals[f->mod].as_module;
     hw_Module_get_FnInfo(mod, f->fn, &info);
     f->var += info.mut_count;
     hw_uint const count = hw->vstack->lenUsed - f->var;
@@ -83,7 +84,8 @@ void hw_vm(hw_State *hw)
     hw_FnState const *f = hw_State_fstack_top(hw);
 
     //_L_Call: {}
-    hw_Module const *mod = hw_Global_get_module(hw->global, f->mod);
+    hw_Module const *mod = hw_Global_get_symb_via_id(hw->global, f->mod)
+                            .as_module;
 
     _L_LocalCall: {}
     register hw_code const *pc = mod->code + f->pc;
@@ -121,6 +123,7 @@ void hw_vm(hw_State *hw)
                       vm_debug(hw, mod, pc, vars);    \
                       switch (pc->get.opcode) {
 
+
     #define top(x) hw->vstack->data[hw->vstack->lenUsed-(x)-1]
     #define topt(x) hw->vstack->tid[hw->vstack->lenUsed-(x)-1]
 
@@ -128,6 +131,7 @@ void hw_vm(hw_State *hw)
   
     pc++;
     _L_Start:
+
     START()
         ON_INST(nop);
         ON_INST(defn);
@@ -194,9 +198,10 @@ void hw_vm(hw_State *hw)
        ON_INST(i_kadd) r(A).as_int = r(B).as_int + a(C);
        ON_INST(i_ksub) r(A).as_int = r(B).as_int - a(C);
        ON_INST(i_kmul) r(A).as_int = r(B).as_int * a(C);
+       ON_INST(i_keq)  r(A).as_int = r(B).as_int == a(C);
        ON_INST(i_klt)  r(A).as_int = r(B).as_int < a(C);
        ON_INST(i_kle)  r(A).as_int = r(B).as_int <= a(C);
-       ON_INST(i_keq)  r(A).as_int = r(B).as_int == a(C);
+       ON_INST(i_kles) if(!(r(A).as_int <= s(s32))) pc++;
 
       /* Maths (floats) */
        ON_INST(f_add) r(A).as_float = r(B).as_float + r(C).as_float;

@@ -1,3 +1,4 @@
+#include "def.h"
 #include "dev.h"
 #include "cstd.h"
 
@@ -43,30 +44,32 @@ static struct hw_InstInfo const INSTRUCTION_INFO[] = {
   , ID(free,    HW_FALSE, x32,  "Free memory of ptr r(x32)")
 
   /* Gets */
-  , ID(get_type,    HW_FALSE, ab, "R(Ax) = @typeof(R(Bx))") 
-  , ID(get_routine, HW_FALSE, ab, "R(Ax) = Thread(R(Bx))")  // 
+  , ID(get_type,    HW_FALSE, ab, "r(A) = @typeof(r(B))") 
+  , ID(get_routine, HW_FALSE, ab, "r(A) = Thread(r(B))")  // 
   , ID(get_native,  HW_FALSE, ab, "")
   , ID(get_vt,      HW_FALSE, ab, "")
 
   /* Call */
-  , ID(call,          HW_FALSE, x32,    "")
+  , ID(call,          HW_FALSE, x32,    "call local function in module"
+                                        ", fnid = x32")
   , ID(call_mod,      HW_FALSE, ax32,   "")
   , ID(call_native,   HW_FALSE, ax32,   "")
   , ID(call_c,        HW_FALSE, ax32,   "")
   , ID(call_sym,      HW_FALSE,  ax32,   "link knst[x32].as_string")
 
   // ------
-  , ID(top,     HW_FALSE, ax32, "")
-  , ID(dup,     HW_FALSE, ab,   "")
-  , ID(dups,    HW_FALSE, abc,  "")
-  , ID(type,    HW_FALSE, ab,   "")
+  , ID(top,     HW_FALSE, ax32, "r(A) = vstack[top - x32]")
+  , ID(dup,     HW_FALSE, ab,   "r(A) = r(B)")
+  , ID(dups,    HW_FALSE, abc,  "r(A..C) = r(B..C)")
+  , ID(type,    HW_FALSE, ab,   "t(A) = t(B)")
 
-  , ID(reff,    HW_FALSE, ab,   "")
-  , ID(dreff,   HW_FALSE, ab,   "")
+  , ID(reff,    HW_FALSE, ab,   "r(A) = reff(r(B)), r(B) should be on stack")
+  , ID(dreff,   HW_FALSE, ab,   "r(A) = dereff(r(B)), r(B) should be on stack")
 
-  , ID(loada32,     HW_FALSE, ax32, "")
-  , ID(loadb32,     HW_FALSE, ax32, "")
-  , ID(load,        HW_FALSE, ax32, "")
+  , ID(loada32,     HW_FALSE, ax32, "r(A) &= 0xffffffff00000000"
+                                    "r(A) |= x32")
+  , ID(loadb32,     HW_FALSE, ax32, "r(A) &= 0x00000000ffffffff"
+                                    "r(A) |= x32<<32")
   , ID(loadknst,    HW_FALSE, ax32, "")
 
   , ID(list,    HW_FALSE, abc, "")
@@ -96,9 +99,15 @@ static struct hw_InstInfo const INSTRUCTION_INFO[] = {
   , ID(i_kmul,  HW_FALSE, abc, "")
   , ID(i_kdiv,  HW_FALSE, abc, "")
   , ID(i_kmod,  HW_FALSE, abc, "")
+  , ID(i_keq,  HW_FALSE, abc, "")
   , ID(i_klt,  HW_FALSE, abc, "")
   , ID(i_kle,  HW_FALSE, abc, "")
-  , ID(i_keq,  HW_FALSE, abc, "")
+  , ID(i_keqs, HW_FALSE, ax32, "Perform r(A) == x32, skip the next instruction"
+                               " if fails")
+  , ID(i_klts, HW_FALSE, ax32, "Perform r(A) <  x32, skip the next instruction"
+                               " if fails")
+  , ID(i_kles, HW_FALSE, ax32, "Perform r(A) <= x32, skip the next instruction"
+                               " if fails")
 
   /* Maths (floats) */
   , ID(f_add,  HW_FALSE, abc, "")
@@ -619,7 +628,7 @@ hw_State *hw_new(void)
     hw_Allocator_default(&allocator);
     hw_State *self = allocator.alloc(&allocator, sizeof(*self));
   
-    hw_TypeSys *ts = hw_TypeSys_default_with_allocator(allocator);
+    hw_TypeSys *ts = hw_TypeSys_default_with_allocator(Allocator);
 
     memset(self, 0, sizeof(*self));
 
@@ -747,79 +756,22 @@ hw_Global *hw_Global_new(hw_State *parent)
 {
     hw_Global *g = HW_THREAD_ALLOC(parent, sizeof(*g));
 
-    hw_Var vlist;
-    hw_VarList_new(parent, &vlist, (hw_byte[]){hw_TypeID_list}, 1);
-    g->constants = vlist.as_list;
-
     g->insts = INSTRUCTION_INFO;
     g->insts_count = hw_Inst_TOTAL;
-
+    
+    g->symbols = hw_SymTableOrd_new_r(parent, 64);
     g->tsys = hw_TypeSys_new_default(&parent->allocator);
     g->parent = parent;
-
-    HW_ARR_NEW(parent, g->builtin, 8);
-
-//    hw_SymTable_new(parent, &vlist, (hw_byte[]){hw_TypeID_symtable}, 1);
-//    g->builtin_names = vlist.as_symtable;
-
-    HW_ARR_NEW(parent, g->modules.loaded, 8);
 
     return g;
 }
 
 void hw_Global_delete(hw_Global *g, hw_State *parent)
 {
-    hw_VarList_delete(g->parent, (hw_Var[]){ [0].as_list = g->constants }
-            , (hw_byte[]){hw_TypeID_list}, 1);
-    for (size_t i = 0; i < g->modules.loaded->lenUsed; i++) {
-        hw_Module_delete(g->parent, g->modules.loaded->data[i]);
-    }
-    HW_ARR_DELETE(g->parent, g->modules.loaded);
-    
-    HW_ARR_DELETE(g->parent, g->builtin);
-//    hw_SymTable_delete(g->parent, &(hw_Var){ 
-//        .as_symtable = g->builtin_names}, (hw_byte[]){hw_TypeID_symtable}, 1);
-  
+    hw_SymTableOrd_delete_r(parent, g->symbols);
     /** Always delete the type sys at the end **/
     hw_TypeSys_delete(g->tsys, &parent->allocator);
     HW_THREAD_FREE(parent, g);
-}
-
-hw_uint hw_Global_add_module(hw_Global *g, hw_Module *mod)
-{
-    HW_DEBUG(HW_LOG("MUTEX NOT IMPLEMENTED%s", ""));
-    HW_ARR_PUSH(g->parent, g->modules.loaded, mod);
-    return g->modules.loaded->lenUsed -1;
-}
-
-hw_Module* hw_Global_get_module(hw_Global const *g, hw_uint mod_id)
-{
-   return g->modules.loaded->data[mod_id];
-}
-
-hw_Module* hw_Global_get_module_from_name(
-    hw_Global const *g, hw_byte const *name, hw_uint const name_size)
-{
-    (void)g;
-    (void)name;
-    (void)name_size;
-    HW_ASSERT(0 && "NOT IMPLEMENTED, HINT: USE HASHTABLE, MOD NAMES ARE DECOUPLED");
-    return NULL;
-}
-
-hw_uint hw_Global_set_builtin(hw_Global *g, hw_VarFn fn, hw_CStr const name)
-{
-    hw_SymTable_set__wrap(
-        g->parent, &g->builtin_names, name.data, name.len
-        , (hw_Var){.as_uint = g->builtin->lenUsed}, hw_TypeID_uint); 
-    HW_ARR_PUSH(g->parent, g->builtin, fn);
-    return g->builtin->lenUsed-1;
-}
-
-hw_VarFn hw_Global_get_builtin(hw_Global *g, hw_CStr const name)
-{
-    hw_uint index = hw_SymTable_index(g->builtin_names, name.data, name.len);
-    return g->builtin_names->key[index] == NULL? hw_VarFn_UNREACHABLE: g->builtin->data[index];
 }
 
 hw_State *hw_State_new_default(hw_State *parent)
@@ -851,7 +803,6 @@ hw_State *hw_State_new_default(hw_State *parent)
     return s;
 }
 
-
 void hw_State_delete(hw_State *s)
 {
     hw_VarList_delete(s, (hw_Var[]){[0].as_list = s->vstack}
@@ -865,7 +816,7 @@ void hw_State_delete(hw_State *s)
     allocator.delete(&allocator);
 }
 
-void hw_State_vstack_reserve(hw_State *hw, hw_uint const by)
+void hw_State_vstack_reserve(hw_State *hw, hw_u32 const by)
 {
     hw_Var args[2] = { [0].as_list = hw->vstack, [1].as_uint = by };
     hw_byte tid[2] = {hw_TypeID_list, hw_TypeID_uint};
@@ -873,7 +824,7 @@ void hw_State_vstack_reserve(hw_State *hw, hw_uint const by)
     hw->vstack = args[0].as_list;
 }
 
-hw_uint hw_State_vstack_push_mult(hw_State *hw, const hw_uint by)
+hw_u32 hw_State_vstack_push_mult(hw_State *hw, const hw_u32 by)
 {
     if((hw->vstack->lenUsed + by) >= hw->vstack->len) {
         hw_Var args[2] = { [0].as_list = hw->vstack, [1].as_uint = by };
@@ -885,7 +836,7 @@ hw_uint hw_State_vstack_push_mult(hw_State *hw, const hw_uint by)
     return hw->vstack->lenUsed - by - 1;
 }
 
-hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid)
+hw_u32 hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid)
 {
     hw_Var args[2] = { [0].as_list = hw->vstack, [1] = v };
     hw_byte tids[2] = {hw_TypeID_list, tid};
@@ -894,9 +845,9 @@ hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid)
     return hw->vstack->lenUsed - 1;
 }
 
-void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by)
+void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_u32 by)
 {
-    HW_DEBUG(HW_ASSERT_OP(by, <=, hw->vstack->lenUsed, PRIu64, PRIu32));
+    HW_DEBUG(HW_ASSERT_OP(by, <=, hw->vstack->lenUsed, PRIu32, PRIu32));
     hw->vstack->lenUsed -= by;
 
     hw_Var *vars = hw->vstack->data + hw->vstack->lenUsed;
@@ -906,7 +857,7 @@ void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by)
         HW_DEBUG(HW_ASSERTEX(tid[i] < hw_TypeID_TOTAL
               , "var %"PRIu64 "\n"
                 "iteration %"PRIu64 "\n"
-                "by %"PRIu64 "\n"
+                "by %"PRIu32 "\n"
                 "tid %"PRIu8
               , hw->vstack->lenUsed - by + i
               , i, by, tid[i]));
@@ -915,41 +866,6 @@ void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by)
             f(hw, vars + i, tid + i, 1);
         }
     }
-}
-
-inline void hw_State_vstack_pop_mult(hw_State *hw, const hw_uint by)
-{
-    hw->vstack->lenUsed -= by;
-}
-
-inline void hw_State_fstack_push(
-    hw_State *s, hw_uint const mod_id, hw_uint const fn_id)
-{
-    HW_ARR_PUSH(s, s->fstack, ((hw_FnState){
-                                    .fn = fn_id
-                                  , .mod = mod_id
-                                  , .pc = 0
-                                  , .var = s->vstack->lenUsed
-                                }));
-}
-
-void hw_State_fstack_pop(hw_State *hw)
-{
-    HW_DEBUG(HW_ASSERT(hw->fstack->lenUsed));
-    hw->fstack->lenUsed -= 1;
-}
-
-hw_FnState* hw_State_fstack_top(hw_State *hw)
-{
-    return hw->fstack->data +(hw->fstack->lenUsed-1);
-}
-
-void hw_State_fstack_top_save(hw_State *hw, hw_code const *pc, hw_Var const *var)
-{
-    hw_FnState *f = hw_State_fstack_top(hw);
-    hw_Module const *m = hw_Global_get_module(hw->global, f->mod);
-    f->pc = pc - m->code;
-    f->var = var - hw->vstack->data;
 }
 
 

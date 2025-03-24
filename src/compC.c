@@ -29,7 +29,6 @@ void hw_compc_delete(hw_CompilerC *c)
     HW_THREAD_FREE(c->vm_child, c);
     hw_State *child = c->vm_child;
     hw_State_delete(child);
-
 }
 
 static void _append_string(hw_CompilerC *c, hw_String *s)

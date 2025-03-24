@@ -347,6 +347,16 @@ DEFN(hw_SymTable, set);
 DEFN(hw_SymTable, get);
 DEFN(hw_SymTable, reset);
 
+/* SymTableOrd */
+hw_SymTableOrd *hw_SymTableOrd_new_r(hw_State *hw, hw_u32 len);
+void hw_SymTableOrd_delete_r(hw_State *hw, hw_SymTableOrd *table);
+hw_u32 hw_SymTableOrd_get_index(hw_SymTableOrd *table, hw_byte const *key
+                                                     , hw_u32 key_size);
+hw_u32 hw_SymTableOrd_push_r(hw_State *hw, hw_SymTableOrd *table
+                , hw_Var v, hw_byte vtid);
+hw_bool hw_SymTableOrd_set_r(hw_State *hw, hw_SymTableOrd *table
+                           , hw_byte const *key, hw_u32 keysize
+                           , hw_Var v, hw_byte vtid);
 /* ByteArr */
 DEFN(hw_byteArr, new);
 DEFN(hw_byteArr, delete);
@@ -372,8 +382,6 @@ hw_Var hw_SymTable_get__wrap(hw_State *hw, hw_SymTable *s, hw_CStr key);
 hw_uint hw_SymTable_index(
     hw_SymTable *sym, hw_byte const *key, hw_uint key_size);
 
-void hw_Module_delete(hw_State *hw, hw_Module *m);
-void hw_Module_delete_detatch_knstobj(hw_State *hw, hw_Module *m);
 /**
  * INSTS
  */
@@ -425,46 +433,51 @@ enum hw_Inst {
                     //  ...     u32[0] |= x32;
   , INST(loadb32)   // R(Ax).as.u32[1] = 0;
                     // R(Ax).as.u32[1] |= x32;
-
-  , INST(load)      // R(Ax) = data(x32)
   , INST(loadknst)  // R(Ax) = knst(x32)
 
   , INST(list)      // Make list R(Ax) with R(Bx)..R(Cx)
   , INST(unlist)    // Unroll list R(Ax) to R(Bx)..R(Cx)
 
   /* Jump */
-  , INST(jmp) // pc += R(Ax)
-  , INST(jk) // pc += s48
-  , INST(jt) // if(R(Ax)) pc += R(Bx)
-  , INST(jtk) // if(R(Ax)) pc += s32
+  , INST(jmp)           // pc += R(Ax)
+  , INST(jk)            // pc += s48
+  , INST(jt)            // if(R(Ax)) pc += R(Bx)
+  , INST(jtk)           // if(R(Ax)) pc += s32
   
   /* Type Comaparism */
-  , INST(typeq) // R(Ax) = (T(Bx) == T(Cx))
-  , INST(tideq) // R(Ax) = (T(Bx) == Cx)
+  , INST(typeq)         // R(Ax) = (T(Bx) == T(Cx))
+  , INST(tideq)         // R(Ax) = (T(Bx) == Cx)
 
   /* Maths (int) */
-  , INST(i_add)  // R(Ax) = R(Bx) + R(Cx)
-  , INST(i_sub)  // R(Ax) = R(Bx) - R(Cx)
-  , INST(i_mul)  // R(Ax) = R(Bx) * R(Cx)
-  , INST(i_div)  // R(Ax) = R(Bx) / R(Cx)
-  , INST(i_mod)  // R(Ax) = R(Bx) % R(Cx)
-  , INST(i_eq)  // R(Ax) = R(Bx) == R(Cx)
-  , INST(i_lt)  // R(Ax) = R(Bx) <  R(Cx)
-  , INST(i_le)  // R(Ax) = R(Bx) <= R(Cx)
+  , INST(i_add)     // R(Ax) = R(Bx) + R(Cx)
+  , INST(i_sub)     // R(Ax) = R(Bx) - R(Cx)
+  , INST(i_mul)     // R(Ax) = R(Bx) * R(Cx)
+  , INST(i_div)     // R(Ax) = R(Bx) / R(Cx)
+  , INST(i_mod)     // R(Ax) = R(Bx) % R(Cx)
 
-  , INST(i_kadd)  // R(Ax) = R(Bx) + Cx
-  , INST(i_ksub)  // R(Ax) = R(Bx) - Cx
-  , INST(i_kmul)  // R(Ax) = R(Bx) * Cx
-  , INST(i_kdiv)  // R(Ax) = R(Bx) / Cx
-  , INST(i_kmod)  // R(Ax) = R(Bx) % Cx
-  , INST(i_keq)  // R(Ax) = R(Bx) == Cx
-  , INST(i_klt)  // R(Ax) = R(Bx) <  Cx
-  , INST(i_kle)  // R(Ax) = R(Bx) <= Cx
+  , INST(i_eq)      // R(Ax) = R(Bx) == R(Cx)
+  , INST(i_lt)      // R(Ax) = R(Bx) <  R(Cx)
+  , INST(i_le)      // R(Ax) = R(Bx) <= R(Cx)
+
+  , INST(i_kadd)    // R(Ax) = R(Bx) + Cx
+  , INST(i_ksub)    // R(Ax) = R(Bx) - Cx
+  , INST(i_kmul)    // R(Ax) = R(Bx) * Cx
+  , INST(i_kdiv)    // R(Ax) = R(Bx) / Cx
+  , INST(i_kmod)    // R(Ax) = R(Bx) % Cx
+
+  , INST(i_keq)     // R(Ax) = R(Bx) == Cx
+  , INST(i_klt)     // R(Ax) = R(Bx) <  Cx
+  , INST(i_kle)     // R(Ax) = R(Bx) <= Cx
+
+  , INST(i_keqs)    // if((R(Ax) == s32) == false) pc++;
+  , INST(i_klts)    // if((R(Ax) <  s32) == false) pc++;
+  , INST(i_kles)    // if((R(Ax) <= s32) == false) pc++;
+ 
                  
   /* Maths (floats) */
-  , INST(f_add)
-  , INST(f_mul)
-  , INST(f_lt)
+  , INST(f_add)     // R(Ax) = R(Bx) + R(Cx)
+  , INST(f_mul)     // R(Ax) = R(Bx) - R(Cx)
+  , INST(f_lt)      // R(Ax) = R(Bx) * R(Cx)
 
   , INST(prnt)
 
@@ -474,80 +487,9 @@ enum hw_Inst {
 
 #undef INST
 
-/**
- *  Section: Bit Field
- *  Taken form https://github.com/zakarouf/z_
- */
-
-/**
- * Set the corresponding bit as 1 or True.
- * If the bit was already set as 1 or True, nothing happens.
- */
-#define HW_BIT_SET(b, offset)       b |= 1 << (offset)
-
-/**
- * Set the corresponding bit as 0 or False.
- * If the bit was already set as 0 or False, nothing happens.
- */
-#define HW_BIT_CLEAR(b, offset)     b &= ~(1 << (offset))
-
-/**
- * Toggle the corresponding bit value;
- * If the value is True, set it to False and vice versa.
- */
-#define HW_BIT_TOGGLE(b, offset)    b ^= 1 << (offset)
-
-/**
- * Get the value of the number as a whole with only the offset bit set to 1,
- * if the corresponding bit is set to True.
- */
-#define HW_BIT_IS(b, offset)        b & (1 << (offset))
-
-/**
- * Check if the corresponding bit is set to True.
- */
-#define HW_BIT_HAS(b, offset)       (((b) >> (offset)) & 1)
-
-/**
- * Check if value of bit in a given offset is that of the offset itself.
- */
-#define HW_BIT_ISEQ(b, offset)      ((b)&(offset) == offset)
-
-
-/** Bitf Interface **/
-
-
-/**
- * Set the corresponding bit as 1 or True.
- * If the bit was already set as 1 or True, nothing happens.
- */
-#define HW_BITF_SET(x, bit_num)\
-    HW_BIT_SET(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
-
-/**
- * Toggle the corresponding bit value;
- * If the value is True, set it to False and vice versa.
- */
-#define HW_BITF_TOGGLE(x, bit_num)\
-    HW_BIT_TOGGLE(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
-/**
- * Set the corresponding bit as 0 or False.
- * If the bit was already set as 0 or False, nothing happens.
- */
-#define HW_BITF_CLEAR(x, bit_num)\
-    HW_BIT_clear(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
-#define HW_BITF_UNSET(x, bit_num) HW_BITF_CLEAR(x, bit_num)
-
-/**
- * Check if the corresponding bit is set to True.
- */
-#define HW_BITF_HAS(x, bit_num)\
-    HW_BIT_HAS(hw_PRIV__BITMAKE_U8IDX(x, bit_num), bit_num & 7)
-
-#define hw_PRIV__BITMAKE_U8IDX(x, bit_num)\
-    *(HW_CAST(hw_byte *, x) + (bit_num >> 3))
-
-
+/************************************************************************
+ *                               Module                                 *
+ ************************************************************************/
 void hw_Module_get_FnInfo(hw_Module const *mod
         , hw_uint fn_id, hw_FnInfo *info);
 hw_code const *hw_Module_get_fnpc(hw_Module const *m, hw_uint fn_id);
@@ -558,31 +500,83 @@ hw_Module *hw_Module_newblank(
     hw_State *hw, hw_u32 fn_count, hw_u32 code_len
   , hw_u32 data_size, hw_u32 knst_count, hw_bool set_0);
 
-/**
- * VM;
- */
+void hw_Module_delete(hw_State *hw, hw_Module *m);
+void hw_Module_delete_detatch_knstobj(hw_State *hw, hw_Module *m);
+
+
+/************************************************************************
+ *                                  VM                                  *
+ ************************************************************************/
 hw_Global *hw_Global_new(hw_State *parent);
 void hw_Global_delete(hw_Global *g, hw_State *parent);
 
-hw_uint hw_Global_add_module(hw_Global *g, hw_Module *mod);
-hw_Module* hw_Global_get_module_from_name(
-    hw_Global const *g, hw_byte const *name, hw_uint const name_size);
-hw_Module* hw_Global_get_module(hw_Global const *g, hw_uint mod_id);
+inline hw_u32 hw_Global_add_anonsymb(hw_Global *g, hw_Var v, hw_byte vtid) {
+    return hw_SymTableOrd_push_r(g->parent, g->symbols, v, vtid); }
 
+inline hw_bool hw_Global_add_symb(hw_Global *g, hw_byte const *name
+                                              , hw_u32 namesize
+                                              , hw_Var v, hw_byte vtid) {
+    return hw_SymTableOrd_set_r(g->parent, g->symbols
+                              , name, namesize, v, vtid); }
+
+inline hw_Var hw_Global_get_symb(hw_Global const *g, hw_byte const *symb_name
+                                            , hw_u32 symb_name_size) {
+    hw_u32 id = g->symbols->indices[
+      hw_SymTableOrd_get_index(g->symbols, symb_name, symb_name_size)];
+    if(id > g->symbols->vlenUsed) {
+        return g->symbols->vals[id];
+    }
+    return (hw_Var){0}; }
+
+inline hw_Var hw_Global_get_symb_via_id(hw_Global const *g, hw_u32 id) {
+    return g->symbols->vals[id]; }
+
+/************************************************************************
+ *                              State                                   *
+ ************************************************************************/
 hw_State *hw_State_new_default(hw_State *parent);
 void hw_State_delete(hw_State *s);
 
-void hw_State_fstack_push(
-    hw_State *s, hw_uint const mod_id, hw_uint const fn_id);
-void hw_State_fstack_pop(hw_State *hw);
-hw_FnState* hw_State_fstack_top(hw_State *hw);
-void hw_State_fstack_top_save(hw_State *hw, hw_code const *pc, hw_Var const *var);
+/************************************************************************
+ *                          [State::FnStack]                            *
+ ************************************************************************/
 
-void hw_State_vstack_reserve(hw_State *hw, hw_uint const by);
-hw_uint hw_State_vstack_push_mult(hw_State *hw, const hw_uint by);
-hw_uint hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
-void hw_State_vstack_pop_mult_dtor(hw_State *hw, const hw_uint by);
-void hw_State_vstack_pop_mult(hw_State *hw, const hw_uint by);
+inline void hw_State_fstack_push(
+    hw_State *s, hw_u32 const mod_id, hw_u32 const fn_id) {
+    HW_ARR_PUSH(s, s->fstack, ((hw_FnState){
+                                    .fn = fn_id
+                                  , .mod = mod_id
+                                  , .pc = 0
+                                  , .var = s->vstack->lenUsed
+                                })); }
+
+inline void hw_State_fstack_pop(hw_State *hw) {
+    HW_DEBUG(HW_ASSERT(hw->fstack->lenUsed));
+    hw->fstack->lenUsed -= 1; }
+
+inline hw_FnState* hw_State_fstack_top(hw_State *hw) {
+    return hw->fstack->data +(hw->fstack->lenUsed-1); }
+
+inline void hw_State_fstack_top_save(hw_State *hw, hw_code const *pc
+                                                 , hw_Var const *var) {
+    hw_FnState *f = hw_State_fstack_top(hw);
+    hw_Module const *m = hw_Global_get_symb_via_id(hw->global, f->mod)
+                            .as_module;
+    f->pc = pc - m->code;
+    f->var = var - hw->vstack->data; }
+
+
+/************************************************************************
+ *                          [Stack::VStack]                             *
+ ************************************************************************/
+
+void hw_State_vstack_reserve(hw_State *hw, hw_u32 const by);
+hw_u32 hw_State_vstack_push_mult(hw_State *hw, hw_u32 const by);
+hw_u32 hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
+void hw_State_vstack_pop_mult_dtor(hw_State *hw, hw_u32 const by);
+
+inline void hw_State_vstack_pop_mult(hw_State *hw, const hw_u32 by) {
+    hw->vstack->lenUsed -= by; }
 
 /**
  * VM
@@ -590,9 +584,10 @@ void hw_State_vstack_pop_mult(hw_State *hw, const hw_uint by);
 void hw_vm(hw_State *hw);
 hw_FnState* hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
 
-/***
- * Module Object
- **/
+
+/************************************************************************
+ *                           Module Object                              *
+ ************************************************************************/
 hw_ModuleObj* hw_ModuleObj_new(hw_State *hw);
 void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *mobj);
 void hw_ModuleObj_reset(hw_State *hw, hw_ModuleObj *mobj);
@@ -632,9 +627,9 @@ void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj
 hw_Module* hw_ModuleObj_to_Module(hw_State *hw, hw_ModuleObj *mobj);
 
 
-/***
- * Byte Code Compiler
- */
+/************************************************************************
+ *                          Byte Code Compiler                          *
+ ************************************************************************/
 hw_CompilerBC *hw_compbc_new(hw_State *parent);
 void hw_compbc_set_source(hw_CompilerBC *comp, hw_byte *source, hw_uint size
                         , hw_byte *name, hw_uint name_size);
@@ -644,9 +639,9 @@ hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
                                             , hw_String **files
                                             , hw_u32 count);
 
-/**
- * Debug
- */
+/************************************************************************
+ *                              Debug                                   *
+ ************************************************************************/
 void hw_debug_Module_disasm(hw_State *hw, hw_Module const *m);
 void hw_debug_code_disasm(hw_State const *hw, hw_code code);
 void hw_debug_State_trace(hw_State *hw);
@@ -658,6 +653,7 @@ void hw_debug_print_inst(hw_State *hw);
 void hw_debug_print_fnobj(hw_CompilerBC const *comp);
 void hw_debug_print_mobj(hw_CompilerBC const *comp);
 void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t);
+void hw_debug_print_symtable_ord(hw_State *hw, hw_SymTableOrd *table);
 
 /**
  * Section: Undef

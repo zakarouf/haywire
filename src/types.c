@@ -1,5 +1,7 @@
+#include "def.h"
 #include "dev.h"
 #include "cstd.h"
+#include <string.h>
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator)
 {
@@ -1183,6 +1185,156 @@ DEFN(hw_SymTable_get) {
 }
 
 /**
+ * SymTableOrd
+ */
+
+hw_SymTableOrd *hw_SymTableOrd_new_r(hw_State *hw, hw_u32 len)
+{
+    hw_SymTableOrd *table = _ALLOC(sizeof(*table));
+
+    table->indices  = _ALLOC(sizeof(*table->indices) * len); 
+    table->keys     = _ALLOC(sizeof(*table->keys) * len);
+    table->key_size = _ALLOC(sizeof(*table->key_size) * len);
+    table->vals     = _ALLOC(sizeof(*table->vals) * len);
+    table->valT     = _ALLOC(sizeof(*table->valT) * len);
+
+    memset(table->key_size, 0, sizeof(*table->key_size) * len);
+    memset(table->indices, -1, sizeof(*table->indices) * len);
+
+    table->len = len;
+    table->vlen = len;
+    table->lenUsed = 0;
+    table->vlenUsed = 0;
+
+    return table;
+}
+
+void hw_SymTableOrd_delete_r(hw_State *hw, hw_SymTableOrd *table)
+{
+    for (size_t i = 0; i < table->lenUsed; i++) {
+        _FREE(table->keys[i]);
+        hw_Type *T = hw_TypeSys_get_via_id(hw->ts, table->valT[i]);
+        if (T->is_obj) {
+            HW_VAR_CALLEX(hw, table->valT[i], table->vals[i]
+                    , "delete", (), (),);
+        }
+    }
+    _FREE(table->valT);
+    _FREE(table->vals);
+    _FREE(table->keys);
+    _FREE(table->key_size);
+    _FREE(table);
+}
+
+static void _SymTableOrd_expand_indices(hw_State *hw, hw_SymTableOrd *table, hw_u32 by)
+{
+    _FREE(table->indices);
+    table->len += by;
+    table->indices =_ALLOC((sizeof(*table->indices) * table->len)); 
+    memset(table->indices, -1, sizeof(*table->indices) * table->len);
+
+    for (size_t i = 0; i < table->lenUsed; i++) {
+        table->indices[hw_SymTableOrd_get_index(table
+                , table->keys[i]
+                , table->key_size[i])] = i;
+    }
+}
+
+static void _SymTableOrd_expand_data(hw_State *hw, hw_SymTableOrd *table, hw_u32 by)
+{
+    table->vlen += by;
+    table->keys =       _REALLOC(table->keys, sizeof(*table->keys) * table->vlen);
+    table->key_size =   _REALLOC(table->key_size, sizeof(*table->key_size) * table->vlen);
+    table->vals =       _REALLOC(table->vals, sizeof(*table->vals) * table->vlen);
+    table->valT =       _REALLOC(table->valT, sizeof(*table->valT) * table->vlen);
+
+    memset(table->key_size + table->vlen-by, 0, sizeof(*table->key_size) * by);
+}
+
+hw_u32 hw_SymTableOrd_get_index(hw_SymTableOrd *table, hw_byte const *str, hw_u32 len)
+{
+    hw_u32 i = hw_hash_string_fnv(str, len) % (hw_uint)table->len;
+    HW_LOG("HASH(%.*s) = %u", len, str, i);
+    hw_u32 id = table->indices[i];
+    while (id < table->vlenUsed) {
+        HW_LOG("ID(%u) < %u, %u", id, table->vlenUsed, i);
+        if(table->key_size[id] == len
+        && 0 == memcmp(table->keys[id], str, len)) { 
+            HW_LOG("DUP KEY @ %u", id);
+            return i; 
+        }
+        i = i + 1;
+        if(i > table->len) { i = 0; }
+        id = table->indices[i];
+    }
+
+    return i;
+}
+
+hw_u32 hw_SymTableOrd_push_r(hw_State *hw, hw_SymTableOrd *table
+                , hw_Var v, hw_byte vtid)
+{
+    if(table->vlenUsed >= table->vlen) {
+        _SymTableOrd_expand_data(hw, table, table->vlen);
+    }
+    
+    hw_u32 top = table->vlenUsed;
+    table->vlenUsed += 1;
+
+    table->vals[top] = v;
+    table->valT[top] = vtid;
+    return top;
+}
+
+hw_bool hw_SymTableOrd_setkey_r(hw_State *hw, hw_SymTableOrd *table
+                            , hw_byte const *key, hw_u32 keysize, hw_u32 id)
+{
+    HW_DEBUG(
+        if(id >= table->vlenUsed ) { HW_LOG("ID POISON %"PRIu32, id);  
+                                 return 0; }
+    )
+    if(table->key_size[id]) { return 0; }
+    hw_u32 index = hw_SymTableOrd_get_index(table, key, keysize);
+    if(table->indices[index] < table->vlenUsed) return 0;
+
+    table->key_size[id] = keysize;
+    table->keys[id] = _ALLOC(keysize);
+    memcpy(table->keys[id], key, keysize);
+
+    if(table->lenUsed >= table->len >> 1) {
+        _SymTableOrd_expand_indices(hw, table, table->len);
+    }
+    table->lenUsed +=1;
+    return 1;
+}
+
+hw_bool hw_SymTableOrd_set_r(hw_State *hw, hw_SymTableOrd *table
+                           , hw_byte const *key, hw_u32 keysize
+                           , hw_Var v, hw_byte vtid)
+{
+    if(table->lenUsed >= table->len >> 1) {
+        _SymTableOrd_expand_indices(hw, table, table->len);
+    }
+                    // return either id, where key is matched and id < vlenUsed
+                    //        or id = 0xFFFFFFFF
+    hw_u32 index = hw_SymTableOrd_get_index(table, key, keysize);
+    hw_u32 id = table->indices[index];
+
+    if(table->vlenUsed < id) { // true if new key
+        id = hw_SymTableOrd_push_r(hw, table, v, vtid);
+        table->indices[index] = id;
+        table->key_size[id] = keysize;
+        table->keys[id] = _ALLOC(keysize);
+        memcpy(table->keys[id], key, keysize);
+        table->lenUsed += 1;
+    }
+
+    table->vals[id] = v;
+    table->valT[id] = vtid;
+    return 0;
+}
+
+/**
  * ByteArr
  */
 DEFN(hw_byteArr_new) {
@@ -1287,6 +1439,11 @@ DEFN(hw_Module_to_serialize) // &self, &bytearray
     
     _SET_ARG(0, as_bytearr, buffer);
     _GET_SELF().as_module = m;
+    return HW_VARP_NIL();
+}
+
+static DEFN(_Module_del) {
+    hw_Module_delete(hw, _GET_SELF().as_module);
     return HW_VARP_NIL();
 }
 
