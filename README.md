@@ -9,7 +9,7 @@ A small register based Programmable VM made to be fast and modular.
 * `hw_compbc.c`: Haywire Byte Code Compiler.
 * `hw_debug.c`: Debug Utilities (i.e. Decompiler, Stack Trace etc.)
 * `hw_vm.c`: HayWire Virtual Machine.
-* `hw_dev_...`: All Utility functions and modules for haywire.
+* `hw_...`: All Utility functions and modules for haywire.
 
 # Roadmap
 * [x] VM
@@ -42,12 +42,12 @@ A small language implementation written in C.
 * Fast & Small VM
 * Static Typed
 * Modular Code design, can be easily improved upon and mutted to comply the user need
-* Multi-purpose language; Can be used as a -> Data File Loader, Configure File or A Programming Language
+* Multi-purpose language; Can be used as a -> Data File Loader, Configure File or as A stand-alone Programming Language
 * Built-in bytecode compiler is a VM itself which can evaluate code as it compiles.
 * No Macros, instead usage of compile-time called functions to generate code
 * Exhaustive Type system which can be easily used to implement user defined types.
 
-## Installation
+## Building & Installation
 
 ```
 make -j
@@ -74,7 +74,7 @@ The Virtual Machine is fully implemented and ready. Along side the bytecode comp
 ```
 Save the file, run it.
 ```text 
-$ hw -c hello_world.main hello_world.hws
+$ hw -n -c main hello_world.hws
 Hello, World!
 ```
 > See more in `./examples/hwasm`
