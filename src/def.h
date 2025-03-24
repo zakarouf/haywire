@@ -173,7 +173,7 @@ typedef struct  hw_Global       hw_Global;
  *      If `var` is mutated in anyway, such as allocating memory on heap and
  *      assigning ptr to var; results in memory leak
  */
-typedef hw_VarP (*hw_VarFn)
+typedef void (*hw_VarFn)
         (hw_State *state, hw_Var *args, hw_byte *tid, hw_uint const count);
 
 /************************************************************/

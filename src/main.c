@@ -1,6 +1,7 @@
 #include "def.h"
 #include "dev.h"
 #include "cstd.h"
+#include "hwfn.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,28 +37,20 @@ static hw_VarArr *_wrap_args(hw_State *s, int argc, char *argv[])
                 {0}
               , (hw_Var){.as_uint = hw_TypeID_string} };
 
-    hw_VarArr_newFrom_conf( s, args 
+    hwfn_VarArr_newFrom_conf( s, args 
       , (hw_byte[]){hw_TypeID_array, hw_TypeID_uint}, 2);
     arr = args[0];
 
     for (int i = 0; i < argc; i++) {
-        hw_Var string;
-
-        args[1].as_ptr = argv[i];
-        args[2].as_uint = strlen(argv[i]) + 1;
-        hw_String_newFrom_data(s, args
-            , (hw_byte[]){
-            hw_TypeID_nil, 
-            hw_TypeID_ptr, 
-            hw_TypeID_uint}, 3);
-
-        string = args[0];
+        hw_Var string = { .as_string = hw_String_newFrom_data(
+                                              s, (void *)argv[i]
+                                            , strlen(argv[i]) + 1) };
         string.as_string->lenUsed -= 1;
         string.as_string->data[string.as_string->lenUsed] = '\0';
       
         args[0] = arr;
         args[1] = string;
-        hw_VarArr_push(s, args, (hw_byte[]){
+        hwfn_VarArr_push(s, args, (hw_byte[]){
               hw_TypeID_array,
               hw_TypeID_string}, 2);
 
@@ -210,12 +203,12 @@ hw_int hw_argparse(
 
 void config_del(hw_State *hw, hw_Config *conf)
 {
-    hw_VarArr_delete(hw
+    hwfn_VarArr_delete(hw
         , (hw_Var[]){[0].as_arr = conf->args}, (hw_byte[]){hw_TypeID_array}, 1);
     HW_ARR_DELETE(hw, conf->files);
     for (size_t i = 0; i < conf->namespaces->lenUsed; i++) {
         if(conf->namespaces->data[i]) {
-            hw_String_delete(hw, (hw_Var[]){ [0].as_string = conf->namespaces->data[i]}
+            hwfn_String_delete(hw, (hw_Var[]){ [0].as_string = conf->namespaces->data[i]}
                             , (hw_byte[]){ hw_TypeID_string }, 1);
         }
     }
@@ -245,11 +238,12 @@ static hw_Module* _compile_files(
 
 void hw_test_check_symtableord(hw_State *hw, hw_u32 count)
 {
-    hw_SymTableOrd *table = hw_SymTableOrd_new_r(hw, 64);
+    hw_SymTableOrd *table = hw_SymTableOrd_new(hw, 64);
     char buffer[64] = {[63] = 0};
     for (size_t i = 0; i < count; i++) {
         snprintf(buffer, 63, "symbols_%lu", i);
-        hw_SymTableOrd_set_r(hw, table,(hw_byte*)buffer, strnlen(buffer, 63), (hw_Var){.as_uint = i}, hw_TypeID_int);
+        hw_SymTableOrd_set(hw, table,(hw_byte*)buffer, strnlen(buffer, 63)
+                            , (hw_Var){.as_uint = i}, hw_TypeID_int);
     }
     hw_bool *instances = HW_THREAD_ALLOC(hw, sizeof(hw_bool) * count);
     memset(instances, 0, sizeof(*instances) * count);
@@ -295,7 +289,7 @@ int main(int argc, char *argv[])
             hw_debug_Module_disasm(hw, mod);
         }
         if(conf.out_file) {
-            HW_VARFN(hw, hw_String_append_bytes
+            HW_VARFN(hw, hwfn_String_append_bytes
                 , (     [0].as_string = conf.out_file
                       , [1].as_byte_p = (void *)".hwo"
                       , [2].as_uint   = 4)

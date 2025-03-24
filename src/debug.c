@@ -1,6 +1,7 @@
 #include "def.h"
 #include "dev.h"
 #include "cstd.h"
+#include "hwfn.h"
 #include <stdatomic.h>
 #include <stdio.h>
 
@@ -130,7 +131,7 @@ void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t)
     hw_Var argv[2];
     hw_byte type[2];
     
-    hw_String_new(hw, argv, type, 1);
+    hwfn_String_new(hw, argv, type, 1);
     argv[1] = argv[0];
     argv[0] = v;
     type[0] = t;
@@ -145,7 +146,7 @@ void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t)
     } else {
         hw_logp("(NILTYPE)");
     }
-    hw_String_delete(hw, argv+1, type+1, 1);
+    hwfn_String_delete(hw, argv+1, type+1, 1);
 }
 
 static void _mod_print_constant(hw_State *hw, hw_Module const *m)

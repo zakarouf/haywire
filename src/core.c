@@ -1,7 +1,7 @@
 #include "def.h"
 #include "dev.h"
 #include "cstd.h"
-
+#include "hwfn.h"
 /**
  * Section: Pre-Processor
  */
@@ -383,7 +383,7 @@ hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
           [1].as_cbyte_p = start
         , [2].as_uint = end - start};
     hw_byte tids[3];
-    hw_String_newFrom_data(hw, args, tids, 3);
+    hwfn_String_newFrom_data(hw, args, tids, 3);
     return args[0].as_string;
 }
 
@@ -655,6 +655,83 @@ void hw_delete(hw_State *self)
 }
 #endif
 
+hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator)
+{
+    const hw_uint size = sizeof(hw_TypeSys) 
+                        + ( sizeof(hw_Type) * type_count );
+    hw_TypeSys *tsys = allocator->alloc(allocator, size);
+    memset(tsys, 0, size);
+    
+    tsys->types = (void *)(tsys + 1);
+    tsys->types_total = type_count;
+    tsys->types_used = 0;
+    return tsys;
+}
+
+void hw_TypeSys_delete(hw_TypeSys *t, hw_Allocator *allocator)
+{
+    void (*_free)(hw_Allocator *self, void *) = allocator->free;
+    _free(allocator, t);
+}
+
+hw_Type *hw_TypeSys_set(hw_TypeSys *ts, hw_Type const *type)
+{
+    if(type->id >= ts->types_total) { return NULL; }
+    hw_Type *dest = &ts->types[type->id];
+
+    HW_DEBUG(
+        if(dest->name_size) {
+            HW_LOG("RE SET OF TypeSys Type %s", dest->name);
+        }
+    )
+
+    memcpy(dest, type, sizeof(*type));
+    return dest;
+}
+
+hw_Type *hw_TypeSys_get(hw_TypeSys const *ts, char const *key, hw_uint key_size)
+{
+    for (size_t i = 0; i < ts->types_total; i++) {
+        hw_Type *T = ts->types + i;
+        if(key_size == T->name_size
+        && 0 == memcmp(T->name, key, key_size)) {
+            return T;
+        }
+    }
+    return NULL;
+}
+
+hw_Type *hw_TypeSys_get_via_id(hw_TypeSys const *ts, hw_uint typeid)
+{
+    if(typeid >= hw_TypeID_TOTAL) {
+        HW_DEBUG(HW_LOG("Requested Type for ID %"PRIu64", ID OVERFLOW", typeid);)
+        return NULL;
+    }
+    HW_DEBUG(HW_LOG("Type Requested '%.*s'", ts->types[typeid].name_size, ts->types[typeid].name));
+    return ts->types + typeid;
+}
+
+hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
+{
+    HW_DEBUG(HW_LOG("Requested VT:%.*s for TYPE:%.*s (id:%"PRIu64")"
+            , (int)name_size, name, (int)T->name_size, T->name, T->id);)
+    
+    for (size_t i = 0; i < T->vt_count; i++) {
+        if(T->vtinfo[i].name_size == name_size) {
+            if(!memcmp(T->vtinfo[i].name, name, name_size)) {
+                return T->vt[i];
+            }
+        }
+    }
+
+    HW_DEBUG(
+        HW_LOG("No function exist '%.*s' for type: '%.*s'"
+            , (int)name_size, name, (int)T->name_size, T->name);
+    );
+    return NULL;
+}
+
+
 
 inline hw_uint hw_Module_calcsize(hw_Module *m)
 {
@@ -759,7 +836,7 @@ hw_Global *hw_Global_new(hw_State *parent)
     g->insts = INSTRUCTION_INFO;
     g->insts_count = hw_Inst_TOTAL;
     
-    g->symbols = hw_SymTableOrd_new_r(parent, 64);
+    g->symbols = hw_SymTableOrd_new(parent, 64);
     g->tsys = hw_TypeSys_new_default(&parent->allocator);
     g->parent = parent;
 
@@ -768,7 +845,7 @@ hw_Global *hw_Global_new(hw_State *parent)
 
 void hw_Global_delete(hw_Global *g, hw_State *parent)
 {
-    hw_SymTableOrd_delete_r(parent, g->symbols);
+    hw_SymTableOrd_delete(parent, g->symbols);
     /** Always delete the type sys at the end **/
     hw_TypeSys_delete(g->tsys, &parent->allocator);
     HW_THREAD_FREE(parent, g);
@@ -794,18 +871,14 @@ hw_State *hw_State_new_default(hw_State *parent)
     }
 
     HW_ARR_NEW(s, s->fstack, 16);
-
-    hw_Var args[1];
-    hw_byte tid[1] = {hw_TypeID_list};
-    hw_VarList_new(s, args, tid, 1);
-    s->vstack = args[0].as_list;
+    s->vstack = hw_VarList_new(s, 256);
 
     return s;
 }
 
 void hw_State_delete(hw_State *s)
 {
-    hw_VarList_delete(s, (hw_Var[]){[0].as_list = s->vstack}
+    hwfn_VarList_delete(s, (hw_Var[]){[0].as_list = s->vstack}
                        , (hw_byte[]){hw_TypeID_list}, 1);
     if(s->global->parent == s) {
         hw_Global_delete((void *)s->global, s);
@@ -820,7 +893,7 @@ void hw_State_vstack_reserve(hw_State *hw, hw_u32 const by)
 {
     hw_Var args[2] = { [0].as_list = hw->vstack, [1].as_uint = by };
     hw_byte tid[2] = {hw_TypeID_list, hw_TypeID_uint};
-    hw_VarList_reserve(hw, args, tid, 2);
+    hwfn_VarList_reserve(hw, args, tid, 2);
     hw->vstack = args[0].as_list;
 }
 
@@ -829,7 +902,7 @@ hw_u32 hw_State_vstack_push_mult(hw_State *hw, const hw_u32 by)
     if((hw->vstack->lenUsed + by) >= hw->vstack->len) {
         hw_Var args[2] = { [0].as_list = hw->vstack, [1].as_uint = by };
         hw_byte tid[2] = {hw_TypeID_list, hw_TypeID_uint};
-        hw_VarList_expand(hw, args, tid, 2);
+        hwfn_VarList_expand(hw, args, tid, 2);
         hw->vstack = args[0].as_list;
     }
     hw->vstack->lenUsed += by;
@@ -840,7 +913,7 @@ hw_u32 hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid)
 {
     hw_Var args[2] = { [0].as_list = hw->vstack, [1] = v };
     hw_byte tids[2] = {hw_TypeID_list, tid};
-    hw_VarList_push_shallow(hw, args, tids, 2);
+    hwfn_VarList_push_shallow(hw, args, tids, 2);
     hw->vstack = args[0].as_list;
     return hw->vstack->lenUsed - 1;
 }

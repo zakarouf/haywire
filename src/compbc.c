@@ -1,5 +1,7 @@
+#include "def.h"
 #include "dev.h"
 #include "cstd.h"
+#include "hwfn.h"
 
 hw_CStr hw_get_token_name(hw_uint token_type);
 
@@ -65,14 +67,10 @@ static void hw_FnObj_new(hw_CompilerBC *comp)
     HW_ARR_NEW(comp->vm_child, fnobj->var_infos, 8);
     HW_ARR_NEW(comp->vm_child, fnobj->defer_lables, 16);
 
-    hw_VarP symtable;
-
-    hw_SymTable_new(comp->vm_child, &symtable.value, &symtable.type, 1);
-    fnobj->vartable = symtable.value.as_symtable;
+    fnobj->vartable = hw_SymTable_new(comp->vm_child, 16);
     HW_DEBUG(HW_LOG("vartable %p", (void *)fnobj->vartable));
 
-    hw_SymTable_new(comp->vm_child, &symtable.value, &symtable.type, 1);
-    fnobj->lables = symtable.value.as_symtable;
+    fnobj->lables =hw_SymTable_new(comp->vm_child, 16); 
     HW_DEBUG(HW_LOG("lables %p", (void *)fnobj->lables));
 
     fnobj->name_size = 32;
@@ -93,9 +91,9 @@ static void hw_FnObj_delete(hw_CompilerBC *comp)
     HW_ARR_DELETE(comp->vm_child, fnobj->var_infos);
 
     hw_VarP symtable = {.value.as_symtable = fnobj->lables, .type = hw_TypeID_symtable};
-    hw_SymTable_delete(comp->vm_child, &symtable.value, &symtable.type, 1);
+    hwfn_SymTable_delete(comp->vm_child, &symtable.value, &symtable.type, 1);
     symtable.value.as_symtable = fnobj->vartable;
-    hw_SymTable_delete(comp->vm_child, &symtable.value, &symtable.type, 1);
+    hwfn_SymTable_delete(comp->vm_child, &symtable.value, &symtable.type, 1);
 
     HW_ARR_DELETE(comp->vm_child, fnobj->defer_lables);
     HW_THREAD_FREE(comp->vm_child, fnobj->name);
@@ -109,9 +107,9 @@ static void hw_FnObj_start(hw_CompilerBC *comp, hw_byte const *name, hw_uint nam
     fnobj->lock = 1;
 
     hw_VarP symtable = {.value.as_symtable = fnobj->lables, .type = hw_TypeID_symtable};
-    hw_SymTable_reset(comp->vm_child, &symtable.value, &symtable.type, 1);
+    hwfn_SymTable_reset(comp->vm_child, &symtable.value, &symtable.type, 1);
     symtable.value.as_symtable = fnobj->vartable;
-    hw_SymTable_reset(comp->vm_child, &symtable.value, &symtable.type, 1);
+    hwfn_SymTable_reset(comp->vm_child, &symtable.value, &symtable.type, 1);
 
     fnobj->var_infos->lenUsed = 0;
     fnobj->defer_lables->lenUsed = 0;
@@ -132,21 +130,14 @@ hw_ModuleObj* hw_ModuleObj_new(hw_State *hw)
     memset(obj, 0, sizeof(*obj));
     HW_ARR_NEW(hw, obj->fnpt, 16);
 
-    hw_Var arg = {0};
-    hw_VarList_new(
-        hw, &arg
-      , (hw_byte[1]){hw_TypeID_nil}, 1); obj->knst = arg.as_list;
+    obj->knst = hw_VarList_new(hw, 16);
 
     HW_ARR_NEW(hw, obj->data, 128);
     HW_ARR_NEW(hw, obj->code, 80);
     HW_ARR_NEW(hw, obj->defer_fncall, 16);
 
-    hw_byte tid = hw_TypeID_symtable;
-    hw_SymTable_new(hw, &arg, &tid, 1);
-    obj->fntable = arg.as_symtable;
-
-    hw_SymTable_new(hw, &arg, &tid, 1);
-    obj->knsttable = arg.as_symtable;
+    obj->fntable = hw_SymTable_new(hw, 16);
+    obj->knsttable = hw_SymTable_new(hw, 16);
 
     return obj;
 }
@@ -155,7 +146,7 @@ void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *obj)
 {
     HW_ARR_DELETE(hw, obj->defer_fncall);
 
-    hw_VarList_delete(
+    hwfn_VarList_delete(
         hw, &(hw_Var){.as_list = obj->knst}
         , (hw_byte[1]){hw_TypeID_list}, 1);
 
@@ -166,10 +157,10 @@ void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *obj)
 
     hw_Var arg = { .as_symtable = obj->fntable };
     hw_byte tid = hw_TypeID_symtable;
-    hw_SymTable_delete(hw, &arg, &tid, 1);
+    hwfn_SymTable_delete(hw, &arg, &tid, 1);
 
     arg.as_symtable = obj->knsttable;
-    hw_SymTable_delete(hw, &arg, &tid, 1);
+    hwfn_SymTable_delete(hw, &arg, &tid, 1);
 
     HW_THREAD_FREE(hw, obj);
 }
@@ -183,10 +174,10 @@ void hw_ModuleObj_reset(hw_State *hw, hw_ModuleObj *mobj)
     
     hw_Var args[] = { [0].as_symtable = mobj->fntable };
     hw_byte tid[] = {hw_TypeID_symtable};
-    hw_SymTable_reset(hw, args, tid, 1);
+    hwfn_SymTable_reset(hw, args, tid, 1);
 
     args[0].as_symtable = mobj->knsttable;
-    hw_SymTable_reset(hw, args, tid, 1);
+    hwfn_SymTable_reset(hw, args, tid, 1);
 
     for (size_t i = 0; i < mobj->knst->lenUsed; i++) {
         if(hw_TypeSys_get_via_id(hw->ts, mobj->knst->tid[i])->is_obj) {
@@ -243,7 +234,7 @@ hw_uint hw_ModuleObj_knst(hw_State *hw, hw_ModuleObj *mobj, hw_Var val, hw_byte 
         [1] = val
     };
     hw_byte tid[2] = { hw_TypeID_list, val_tid };
-    hw_VarList_push_shallow(hw, args, tid, 2);
+    hwfn_VarList_push_shallow(hw, args, tid, 2);
     mobj->knst = args[0].as_list;
     return mobj->knst->lenUsed-1;
 }
@@ -264,16 +255,16 @@ hw_uint hw_ModuleObj_knstcopy(hw_State *hw, hw_ModuleObj *mobj, hw_Var val, hw_b
         newFrom_copy(hw, copy_args, copy_args_tid, 2);
         val = copy_args[0];
     }
-    hw_VarList_push_shallow(hw, args, tid, 2);
+    hwfn_VarList_push_shallow(hw, args, tid, 2);
     mobj->knst = args[0].as_list;
     return mobj->knst->lenUsed-1;
 }
 
 void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, hw_String *namespace)
 {
-    HW_DEBUG(HW_LOG("Added Mod:", "");
+    HW_DEBUG(HW_LOG("Added Mod:%s", "");
              hw_debug_Module_disasm(hw, m);
-             HW_LOG("!!!DISASM END!!!", ""););
+             HW_LOG("!!!DISASM END!!!%s", ""););
 
     hw_uint code_start = mobj->code->lenUsed;
     hw_ModuleObj_inststream(
@@ -283,8 +274,7 @@ void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, h
 
     HW_ARR_PUSHSTREAM(hw, mobj->fnpt, m->fnpt, m->fn_count);
 
-    hw_Var buffer;
-    hw_String_new(hw, &buffer, (hw_byte[]){hw_TypeID_nil}, 1);
+    hw_String* buffer = hw_String_new(hw, 128);
 
     //hw_uint data_start = mobj->data->lenUsed;
     for (size_t i = 0; i < m->fn_count; i++) {
@@ -293,28 +283,30 @@ void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, h
         hw_FnInfo finfo;
         hw_Module_get_FnInfo(m, i, &finfo);
         
-        buffer.as_string->lenUsed = 0;
+        buffer->lenUsed = 0;
         if(namespace) {
-            hw_String_append_fmt(hw, &buffer.as_string, "%.*s.%.*s"
+            hw_String_append_fmt(hw, &buffer, "%.*s.%.*s"
                 , namespace->lenUsed, namespace->data
                 , finfo.name_size, finfo.name);
         } else {
-            hw_String_append_fmt(hw, &buffer.as_string, "%.*s"
+            hw_String_append_fmt(hw, &buffer, "%.*s"
                 , finfo.name_size, finfo.name);
         }
-        HW_DEBUG(HW_LOG("FN NAMESPACE, %.*s (%u)", buffer.as_string->lenUsed
-                                            , buffer.as_string->data
-                                            , buffer.as_string->lenUsed));
+        HW_DEBUG(HW_LOG("FN NAMESPACE, %.*s (%u)", buffer->lenUsed
+                                            , buffer->data
+                                            , buffer->lenUsed));
         
         hw_uint data_at = hw_ModuleObj_fndata(hw, mobj
-                , buffer.as_string->data, finfo.types
-                , buffer.as_string->lenUsed
+                , buffer->data, finfo.types
+                , buffer->lenUsed
                 , finfo.mut_count, finfo.arg_count, finfo.stack_sz);
         
         HW_ASSERT(mobj->code->data[*fnpt].get.opcode == hw_Inst_defn);
         mobj->code->data[*fnpt].getx.x32 = data_at;
     }
-    hw_String_delete(hw, &buffer, (hw_byte[]){hw_TypeID_nil}, 1);
+
+    hwfn_String_delete(hw, (hw_Var[]){[0].as_string = buffer}
+                         , (hw_byte[]){hw_TypeID_nil}, 1);
 
     for (size_t i = 0; i < m->k_count; i++) {
         hw_ModuleObj_knst(hw, mobj, m->knst[i], m->knst_t[i]);
@@ -434,7 +426,7 @@ static hw_uint hw_compbc_defknst(
         "Constant :%.*s already set", (int)name_size, knst_name);
     
     hw_uint id = hw_ModuleObj_knst(comp->vm_child, comp->mobj, val, tid);
-    hw_SymTable_set__wrap(
+    hw_SymTable_set(
                comp->vm_child, &obj->knsttable
             , knst_name, name_size
             , (hw_Var){ .as_uint = id }, hw_TypeID_uint);
@@ -451,7 +443,7 @@ int hw_compbc_deflocalvar(hw_CompilerBC *comp
         "Variable :%.*s already set", (int)name_size, var_name);
 
     HW_ARR_PUSH(comp->vm_child, fnobj->var_infos, vinf);
-    hw_SymTable_set__wrap(
+    hw_SymTable_set(
         comp->vm_child, &fnobj->vartable, var_name, name_size
       , (hw_Var){.as_uint = fnobj->var_infos->lenUsed-1}, hw_TypeID_uint);
     return HW_TRUE;
@@ -471,7 +463,7 @@ static hw_uint hw_compbc_w_defn(
         !obj->fntable->key[hw_SymTable_index(obj->fntable, name, name_size)],
         "%.*s function already exist", (int)name_size, name);
 
-    hw_SymTable_set__wrap(comp->vm_child, &obj->fntable, name, name_size
+    hw_SymTable_set(comp->vm_child, &obj->fntable, name, name_size
             , (hw_Var){.as_uint = obj->fnpt->lenUsed}, hw_TypeID_uint);
 
     fnobj->defn_pc = obj->code->lenUsed;
@@ -572,7 +564,7 @@ static hw_uint hw_compbc_w_lable(
     hw_CompilerBC *comp, hw_byte const *name, hw_uint name_size)
 {
     hw_FnObj *fnobj = comp->fnobj;
-    hw_SymTable_set__wrap(
+    hw_SymTable_set(
         comp->vm_child, &fnobj->lables
       , name, name_size
       , (hw_Var){ .as_uint = comp->mobj->code->lenUsed }
@@ -1064,7 +1056,7 @@ void hw_Module_writetofile(hw_State *hw, hw_Module *m, char const path[])
     hw_byte tid[2] = { [0] = hw_TypeID_module
                      , [1] = hw_TypeID_bytearr };
 
-    hw_Module_to_serialize(hw, args, tid, 2);
+    hwfn_Module_to_serialize(hw, args, tid, 2);
     buffer = args[1].as_bytearr;
 
     FILE *fp = fopen(path, "wb");
@@ -1079,7 +1071,7 @@ hw_Module *hw_Module_loadFromFile(hw_State *hw, char const path[])
     hw_byteArr *file = hw_byteArr_newloadfile(hw, path);
     hw_Var args[3] = { [1].as_uint = 0, [2].as_bytearr = file };
     hw_byte tid[3] = {0};
-    hw_Module_newFrom_deserialize(hw, args, tid, 3);
+    hwfn_Module_newFrom_deserialize(hw, args, tid, 3);
     HW_ARR_DELETE(hw, file);
     return args[0].as_module;
 }

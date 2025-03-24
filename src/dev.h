@@ -280,107 +280,62 @@ hw_uint hw_ptrcmp(void const* lhs, hw_uint lhs_size
         , void const* rhs, hw_uint rhs_size);
 hw_bool hw_writefile(char const path[], void *data, hw_u32 unitsize, hw_u32 len);
 hw_byteArr *hw_byteArr_newloadfile(hw_State *hw, const char path[]);
-/**
- * Section: Var Interface Call
- */
-#define HW_VAR_CALL(tid, thread, interface, ...)               \
-        { HW_DEBUG(HW_ASSERT(tid < hw_TypeID_TOTAL);)          \
-        (thread)->ts->types[tid].interface(thread, __VA_ARGS__); }
 
-/**
- * Section ARR_EXPORT
- */
-#define DEFN(T, NAME)\
-    hw_VarP CAT2(T, NAME) (     \
-        hw_State   *th          \
-      , hw_Var      *args     \
-      , hw_byte     *tid      \
-      , hw_uint const count)
+/************************************************************************
+ *                              Types
+ ************************************************************************/
 
+/*--------------------- SymTableOrd ------------------------*/
+hw_SymTableOrd *hw_SymTableOrd_new(hw_State *hw, hw_u32 len);
+void hw_SymTableOrd_delete(hw_State *hw, hw_SymTableOrd *table);
+hw_u32 hw_SymTableOrd_get_index(hw_SymTableOrd *table, hw_byte const *key
+                                                     , hw_u32 key_size);
+hw_u32 hw_SymTableOrd_push(hw_State *hw, hw_SymTableOrd *table
+                , hw_Var v, hw_byte vtid);
+hw_bool hw_SymTableOrd_set(hw_State *hw, hw_SymTableOrd *table
+                           , hw_byte const *key, hw_u32 keysize
+                           , hw_Var v, hw_byte vtid);
+
+/*--------------------- String ------------------------*/
+
+hw_String *hw_String_new(hw_State *hw, hw_u32 _len);
+hw_String *hw_String_newFrom_data(
+    hw_State *hw, hw_byte const *data, hw_u32 _len);
+hw_bool hw_String_expand(hw_State *hw, hw_String **selfp, hw_u32 const by);
+void hw_String_append_data(
+    hw_State *hw, hw_String **selfp, hw_byte const *data, hw_u32 _len);
+void hw_String_push(hw_State *hw, hw_String **selfp, hw_byte ch);
+void hw_String_push_hexchar(hw_State *hw, hw_String **selfp, hw_byte n1, hw_byte n2);
+hw_String* hw_String_newFrom_dataRaw(
+    hw_State *hw, hw_byte const *data, hw_u32 _len);
+void hw_String_append_fmt(hw_State *hw, hw_String **buffer
+        , char const *restrict format, ...);
+void hw_String_append_data(
+    hw_State *hw, hw_String **selfp, hw_byte const *data, hw_u32 _len);
+
+/*--------------------- VarParse ------------------------*/
+hw_uint hw_Var_parse(hw_State *state, hw_Var *result, hw_Lexer *l);
+
+/*--------------------- SymTable ------------------------*/
+hw_SymTable *hw_SymTable_new(hw_State *hw, hw_uint len);
+void hw_SymTable_set(
+    hw_State *hw, hw_SymTable **t
+  , hw_byte const *key, hw_uint key_size
+  , hw_Var value, hw_byte value_t);
+hw_Var hw_SymTable_get(hw_State *hw, hw_SymTable *s, hw_CStr key);
+
+hw_uint hw_SymTable_index(
+    hw_SymTable *sym, hw_byte const *key, hw_uint key_size);
+
+/*--------------------- Array ------------------------*/
 #define HW_ARR_FOREACH(T, iterator, arr, from, upto, step)\
     for(T iterator = (arr).data + from  \
        ;iterator < (arr).data + upto    \
        ;iterator += step)               \
 
-/**
- * DECLARATION
- */
-/**/
-DEFN(hw_VarFn, UNREACHABLE); // Raise an error;
 
-/* String */
-DEFN(hw_String, new);
-DEFN(hw_String, delete);
-DEFN(hw_String, newFrom_data);
-DEFN(hw_String, newFrom_file);
-DEFN(hw_String, newFrom_fmt);
-DEFN(hw_String, append_bytes);
-void hw_String_append_fmt(hw_State *hw, hw_String **buffer
-        , char const *restrict format, ...);
-
-/* List */
-DEFN(hw_VarList, new);
-DEFN(hw_VarList, newFrom_fmt);
-DEFN(hw_VarList, delete);
-DEFN(hw_VarList, reserve);
-DEFN(hw_VarList, expand);
-DEFN(hw_VarList, push_shallow);
-
-/* Array */
-DEFN(hw_VarArr, newFrom_conf);
-DEFN(hw_VarArr, delete);
-DEFN(hw_VarArr, push);
-DEFN(hw_VarArr, get);
-
-/* SArr */
-DEFN(hw_SArr, newFrom_conf);
-DEFN(hw_SArr, delete);
-DEFN(hw_SArr, push);
-DEFN(hw_SArr, pop);
-DEFN(hw_SArr, get);
-
-/* Symtable */
-DEFN(hw_SymTable, new);
-DEFN(hw_SymTable, newFrom_fmt);
-DEFN(hw_SymTable, delete);
-DEFN(hw_SymTable, set);
-DEFN(hw_SymTable, get);
-DEFN(hw_SymTable, reset);
-
-/* SymTableOrd */
-hw_SymTableOrd *hw_SymTableOrd_new_r(hw_State *hw, hw_u32 len);
-void hw_SymTableOrd_delete_r(hw_State *hw, hw_SymTableOrd *table);
-hw_u32 hw_SymTableOrd_get_index(hw_SymTableOrd *table, hw_byte const *key
-                                                     , hw_u32 key_size);
-hw_u32 hw_SymTableOrd_push_r(hw_State *hw, hw_SymTableOrd *table
-                , hw_Var v, hw_byte vtid);
-hw_bool hw_SymTableOrd_set_r(hw_State *hw, hw_SymTableOrd *table
-                           , hw_byte const *key, hw_u32 keysize
-                           , hw_Var v, hw_byte vtid);
-/* ByteArr */
-DEFN(hw_byteArr, new);
-DEFN(hw_byteArr, delete);
-DEFN(hw_byteArr, pushstr);
-
-/* Module */
-DEFN(hw_Module, newFrom_deserialize); // &self, &index, bytearr
-DEFN(hw_Module, to_serialize); // &self, &bytearray
-
-#undef DEFN
-
-hw_uint hw_Var_parse(hw_State *state, hw_Var *result, hw_Lexer *l);
-
-/**
- * Wrappers
- */
-void hw_SymTable_set__wrap(
-    hw_State *hw, hw_SymTable **t
-  , hw_byte const *key, hw_uint key_size
-  , hw_Var value, hw_byte value_t);
-hw_Var hw_SymTable_get__wrap(hw_State *hw, hw_SymTable *s, hw_CStr key);
-
-hw_uint hw_SymTable_index(
-    hw_SymTable *sym, hw_byte const *key, hw_uint key_size);
+/*------------------------------- VarList --------------------------------*/
+hw_VarList *hw_VarList_new(hw_State *hw, hw_u32 len);
 
 /**
  * INSTS
@@ -511,12 +466,12 @@ hw_Global *hw_Global_new(hw_State *parent);
 void hw_Global_delete(hw_Global *g, hw_State *parent);
 
 inline hw_u32 hw_Global_add_anonsymb(hw_Global *g, hw_Var v, hw_byte vtid) {
-    return hw_SymTableOrd_push_r(g->parent, g->symbols, v, vtid); }
+    return hw_SymTableOrd_push(g->parent, g->symbols, v, vtid); }
 
 inline hw_bool hw_Global_add_symb(hw_Global *g, hw_byte const *name
                                               , hw_u32 namesize
                                               , hw_Var v, hw_byte vtid) {
-    return hw_SymTableOrd_set_r(g->parent, g->symbols
+    return hw_SymTableOrd_set(g->parent, g->symbols
                               , name, namesize, v, vtid); }
 
 inline hw_Var hw_Global_get_symb(hw_Global const *g, hw_byte const *symb_name

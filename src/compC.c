@@ -1,5 +1,6 @@
 #include "dev.h"
 #include "cstd.h"
+#include "hwfn.h"
 
 typedef struct hw_CompilerC hw_CompilerC;
 struct hw_CompilerC {
@@ -15,14 +16,13 @@ hw_CompilerC *hw_compc_new(hw_State *parent)
     hw_CompilerC *c = HW_THREAD_ALLOC(child, sizeof(*c));
     c->vm_child = child;
     c->vm_parent = parent;
-    HW_VARFN(c->vm_child, hw_String_new, ([0].as_string = 0), (hw_TypeID_string)
-            , c->out = __args[0].as_string;);
+    c->out = hw_String_new(child, 256);
     return c;
 }
 
 void hw_compc_delete(hw_CompilerC *c)
 {
-    HW_VARFN(c->vm_child, hw_String_delete
+    HW_VARFN(c->vm_child, hwfn_String_delete
             , ([0].as_string = c->out)
             , (hw_TypeID_string),);
 
