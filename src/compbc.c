@@ -287,10 +287,10 @@ void hw_ModuleObj_addmod(hw_State *hw, hw_ModuleObj *mobj, hw_Module const *m, h
         if(namespace) {
             hw_String_append_fmt(hw, &buffer, "%.*s.%.*s"
                 , namespace->lenUsed, namespace->data
-                , finfo.name_size, finfo.name);
+                , (int)finfo.name_size, finfo.name);
         } else {
             hw_String_append_fmt(hw, &buffer, "%.*s"
-                , finfo.name_size, finfo.name);
+                , (int)finfo.name_size, finfo.name);
         }
         HW_DEBUG(HW_LOG("FN NAMESPACE, %.*s (%u)", buffer->lenUsed
                                             , buffer->data

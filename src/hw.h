@@ -4,5 +4,6 @@
 #include "cstd.h"
 #include "def.h"
 #include "dev.h"
+#include "hwfn.h"
 
 #endif

@@ -2,6 +2,7 @@
 #define ZAKAROUF_HAYWIRE_DEV_H
 
 #include "def.h"
+#include <sys/cdefs.h>
 
 /**
  * Section: Pre-Processor
@@ -309,7 +310,7 @@ void hw_String_push_hexchar(hw_State *hw, hw_String **selfp, hw_byte n1, hw_byte
 hw_String* hw_String_newFrom_dataRaw(
     hw_State *hw, hw_byte const *data, hw_u32 _len);
 void hw_String_append_fmt(hw_State *hw, hw_String **buffer
-        , char const *restrict format, ...);
+        , char const *restrict format, ...) __printflike(3, 4);
 void hw_String_append_data(
     hw_State *hw, hw_String **selfp, hw_byte const *data, hw_u32 _len);
 
@@ -593,6 +594,12 @@ void hw_compbc_compile_from_source(hw_CompilerBC *comp);
 hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
                                             , hw_String **files
                                             , hw_u32 count);
+
+
+/************************************************************************
+ *                          ByteCode to C Transpiler                    *
+ ************************************************************************/
+hw_String* hw_compc_mod_to_c(hw_State *hw, hw_Module const *m);
 
 /************************************************************************
  *                              Debug                                   *

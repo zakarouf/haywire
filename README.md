@@ -24,6 +24,9 @@ A small register based Programmable VM made to be fast and modular.
 * [x] Byte Code Compiler
     - [x] Interlope with VM
     - [x] Haywire ByteCode IR
+    - [x] Local Functions
+    - [x] Local Constants
+    - [x] Namespacing
 * [ ] Module System
     - [x] Module Structure 
     - [ ] Import & Export
@@ -31,7 +34,13 @@ A small register based Programmable VM made to be fast and modular.
     - [ ] Compile Time Linking
     - [ ] Module Pack
 * [ ] Haywire Language Compiler
-* [ ] C Transpiler
+* [x] C Transpiler (5% done)
+    - [x] Translation Unit for modules
+    - [x] Backend Implementation
+    - [ ] Foreign Compiler Calls
+    - [ ] Complete Type System Support
+    - [ ] Instructions Support (15%)
+    - [ ] C Code Optimaizer
 * [ ] JIT
 
 # Prospectus

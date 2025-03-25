@@ -103,12 +103,13 @@ void hw_String_append_data(
     hw_State *hw, hw_String **selfp, hw_byte const *data, hw_u32 _len)
 {
     hw_String *self = *selfp;
-    if((self->len - self->lenUsed) < _len) {
+    if((self->len) < (self->lenUsed + _len)) {
         hw_String_expand(hw, &self, _len + 1);
-        *selfp = self;
     }
+
     memcpy(self->data + self->lenUsed, data, _len);
     self->lenUsed += _len;
+    *selfp = self;
 }
 
 void hw_String_push(hw_State *hw, hw_String **selfp, hw_byte ch)

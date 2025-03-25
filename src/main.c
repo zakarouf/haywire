@@ -115,6 +115,8 @@ struct hw_Config {
               , disasm:1
               , print_inst_info:1
               , no_namespace: 1
+              , transpile: 1
+              , runtrans: 1
               ;
     } flags;
 };
@@ -146,6 +148,7 @@ static hw_uint _argparse_single_char_conf(hw_State *hw,
         break; case 'n': conf->flags.no_namespace = 1;
         break; case 'c': conf->call = argnext(args, &ARG);
         break; case 'o': conf->out_file = argnext(args, &ARG);
+        break; case 't': conf->flags.transpile = 1;
         break; default: hw_loglnp("Unknown command '-%c'", ch);
     }
     return ARG;
@@ -271,6 +274,7 @@ int main(int argc, char *argv[])
     hw_Config conf = {0};
     HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
 
+
     if(conf.flags.print_inst_info) {
         hw_debug_print_inst(hw);
     }
@@ -297,6 +301,14 @@ int main(int argc, char *argv[])
                 , conf.out_file = __args[0].as_string );
 
             hw_Module_writetofile(hw, mod, (void *)conf.out_file->data);
+        }
+        if(conf.flags.transpile) {
+            hw_String *c_code = hw_compc_mod_to_c(hw, mod);
+            hw_debug_print_var(hw, (hw_Var){.as_string = c_code}, hw_TypeID_string);
+            HW_THREAD_FREE(hw, c_code);
+
+                void _1(hw_State *hw, hw_Var *args, hw_byte *argTs, hw_u32 argc);
+                _1(hw, NULL, NULL, 1);
         }
     }
 
