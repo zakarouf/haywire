@@ -157,6 +157,7 @@ typedef struct  hw_FnStateArr   hw_FnStateArr;
 
 typedef struct  hw_Module       hw_Module;
 typedef struct  hw_ModuleArr    hw_ModuleArr;
+typedef struct  hw_CModule      hw_CModule;
 typedef struct  hw_State        hw_State;
 typedef struct  hw_Global       hw_Global;
 
@@ -504,6 +505,19 @@ struct hw_VarFnArr {
     hw_VarFn        *data;
     hw_uint         len;
     hw_uint         lenUsed;
+};
+
+struct hw_CModule {
+    hw_ptr    *lib;
+
+    hw_VarFn  *fn;
+    hw_CStr   **fn_name;
+
+    hw_Var    *knst;
+    hw_byte   *knst_t;
+
+    hw_u32    fn_count;
+    hw_u32    k_count;
 };
 
 struct hw_Type {
