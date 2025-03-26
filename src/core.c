@@ -387,8 +387,74 @@ hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
     return args[0].as_string;
 }
 
+
 /**
- * Section: ALLOCATORS
+ * Section: C Module
+ */
+#include <dlfcn.h>
+
+hw_CModule *hw_CModule_newblank(hw_State *hw, hw_u32 const fn_count
+                                            , hw_u32 const k_count)
+{
+    hw_CModule *cmod = HW_THREAD_ALLOC(hw,
+                          (sizeof(*cmod))
+                          + (sizeof(*cmod->knst)    * k_count)
+                          + (sizeof(*cmod->knst_t)  * k_count)
+                          + (sizeof(*cmod->fn)      * fn_count)
+                          + (sizeof(*cmod->fn_name) * fn_count)
+                        );
+
+    cmod->fn_count = fn_count;
+    cmod->k_count = k_count;
+
+    cmod->fn      = HW_CAST(void *, cmod + 1);
+    cmod->fn_name = HW_CAST(void *, cmod->fn + fn_count);
+    cmod->knst    = HW_CAST(void *, cmod->knst + k_count);
+    cmod->knst_t  = HW_CAST(void *, cmod->knst + k_count);
+
+    cmod->lib = NULL;
+    return cmod;
+}
+
+hw_CModule *hw_CModule_newFrom_file(
+    hw_State *hw, hw_byte const *path_nullterm)
+{
+    hw_ptr *lib = dlopen((void *)path_nullterm
+        // Gotta use RTLD_GLOBAL, for the library to invoke calls to function
+        // from the host binary; functions from here.
+        // Note: use -rdynamic flag while compiling the binary
+        , RTLD_NOW | RTLD_GLOBAL);
+
+    if(lib == NULL) return NULL;
+
+    hw_CModule* (*hwfn_init)(hw_State *hw) 
+          = HW_CAST(hw_CModule *(*)(hw_State *)
+              , dlsym(lib, "_hwfn_init"));
+    if(hwfn_init == NULL) return NULL;
+
+    hw_CModule *cmod = hwfn_init(hw);
+    cmod->lib = lib;
+    return cmod;
+}
+
+hw_VarFn hw_CModule_getfn(hw_CModule *cmod, hw_byte const *name, hw_u32 name_size)
+{
+    for (hw_u32 i = 0; i < cmod->fn_count; i++) {
+        if(0 == hw_ptrcmp(
+                cmod->fn_name[i]->data, cmod->fn_name[i]->len
+              , name, name_size)) { return cmod->fn[i]; }
+    }
+    return hwfn_VarFn_UNREACHABLE;
+}
+
+void hw_CModule_delete(hw_State *hw, hw_CModule *cmod)
+{
+    if(cmod->lib) {
+        dlclose(cmod->lib);
+    } else {
+        HW_THREAD_FREE(hw, cmod);
+    }
+}
 
 /**
  * Access: Command line & Sub-process
