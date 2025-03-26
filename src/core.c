@@ -2,11 +2,10 @@
 #include "dev.h"
 #include "cstd.h"
 #include "hwfn.h"
+
 /**
- * Section: Pre-Processor
+ * Section: Instruction Info
  */
-
-
 #define INST(x) hw_Inst_##x
 #define ID(_name, dret, it, _brief)     \
     [INST(_name)] = {                   \
@@ -387,6 +386,15 @@ hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
     return args[0].as_string;
 }
 
+hw_byte const *hw_get_file_extension(hw_byte const *str, hw_u32 str_size, hw_u32 *size)
+{
+    hw_byte const* at = str + (str_size - 1);
+    while (at > str && *at != '.') {
+        at -= 1;
+    }
+    *size = (str + str_size-1) - at;
+    return at;
+}
 
 /**
  * Section: C Module
