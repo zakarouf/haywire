@@ -1,10 +1,12 @@
 # tool macros
 CXX := gcc
 
-CXXFLAGS := -std=c99 -Oz -O3 -flto\
+CXXFLAGS := -std=c99 -Oz -O3\
 			-Wall -Wextra -Wpedantic -Wshadow -Winline -Wswitch\
+			-rdynamic\
 			-Wfatal-errors\
-			-Wno-unused-parameter
+			-Wno-unused-parameter\
+			-Wno-unused-command-line-argument
 
 PRFFLAGS := -std=c99\
 			-O3\

@@ -36,8 +36,9 @@ A small register based Programmable VM made to be fast and modular.
 * [ ] Haywire Language Compiler
 * [x] C Transpiler (5% done)
     - [x] Translation Unit for modules
+    - [x] Creating CModules
     - [x] Backend Implementation
-    - [ ] Foreign Compiler Calls
+    - [x] Foreign Compiler Calls
     - [ ] Complete Type System Support
     - [ ] Instructions Support (15%)
     - [ ] C Code Optimaizer
