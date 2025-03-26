@@ -99,7 +99,7 @@ static hw_u32 _comp_fn_inst(hw_CompilerC *comp, hw_code const *instp)
                     , inst.get.A, inst.get.B, inst.get.A, inst.get.B);
 
         inst(loada32, "vars[%u].as_uint = %u;", inst.getx.A, inst.getx.x32);
-        inst(loadknst, "vars[%u] = _k%u;", inst.getx.A, inst.getx.x32);
+        inst(loadknst, "vars[%u] = _knst[%u];", inst.getx.A, inst.getx.x32);
 
         inst(i_ksub, "vars[%u].as_int = vars[%u].as_int - %i;"
                         , inst.get.A, inst.get.B, inst.get.C);
@@ -153,12 +153,17 @@ static void _comp_fn_set_types(hw_CompilerC *comp, hw_FnInfo const *info)
 static hw_bool _comp_fn(hw_CompilerC *comp, hw_u32 fn_id)
 {
     set_indent(0);
-    appendln_fmt("static void _%u(hw_State *hw, hw_Var *args, hw_byte *argTs, hw_u32 argc) {", fn_id);
+    appendln_fmt("static void _%u(hw_State *hw, hw_Var *args, hw_byte *argTs, hw_uint argc) {", fn_id);
 
     set_indent(1);
 
     hw_FnInfo fn_info;
     hw_Module_get_FnInfo(comp->source, fn_id, &fn_info);
+
+    appendln_fmt("(void)hw%c", ';');
+    appendln_fmt("(void)args%c", ';');
+    appendln_fmt("(void)argTs%c", ';');
+    appendln_fmt("(void)argc%c", ';');
 
     appendln_fmt("#define STACK_SZ (%u)", (hw_u32)fn_info.stack_sz);
     appendln_fmt("hw_Var vars[STACK_SZ] = {0}%c", ';');
@@ -195,6 +200,69 @@ static hw_bool _comp_fn(hw_CompilerC *comp, hw_u32 fn_id)
     return 1;
 }
 
+static void _comp_add__hwfn_info(hw_CompilerC *comp)
+{
+    set_indent(0);
+    appendln_fmt("void __hwfn_info(hw_u32 *fn, hw_u32 *k)%c", '{');
+    set_indent(1);
+    appendln_fmt("*fn = %u;", (hw_u32)comp->source->fn_count);
+    appendln_fmt("*k = %u;", (hw_u32)comp->source->k_count);
+    set_indent(0);
+    appendln_fmt("%c", '}');
+}
+
+static void _comp_add__hwfn_init(hw_CompilerC *comp)
+{
+    set_indent(0);
+    appendln_fmt("static hw_CModule _cmod = %c", '{');
+
+    set_indent(1);
+
+    appendln_fmt("  .fn_count = %u", (hw_u32)comp->source->fn_count);
+    appendln_fmt(", .k_count = %u", (hw_u32)comp->source->k_count);
+
+    if(comp->source->fn_count) {
+        appendln_fmt(", .fn = (hw_VarFn[]){%c", ' ');
+        set_indent(3);
+        for (hw_u32 i = 0; i < comp->source->fn_count; i++) {
+            appendln_fmt("_%u,", i);
+        }
+
+        set_indent(1);
+        appendln_fmt("}%c", ' ');
+
+
+        appendln_fmt(", .fn_name = (hw_CStr*[]){%c", ' ');
+        set_indent(3);
+        for (hw_u32 i = 0; i < comp->source->fn_count; i++) {
+            hw_FnInfo info; 
+            hw_Module_get_FnInfo(comp->source, i, &info);
+            appendln_fmt("&(hw_CStr){.data = (void *)\"%.*s\", .len = %u},"
+                    , (int)info.name_size, info.name
+                    , (int)info.name_size);
+        }
+        set_indent(1);
+        appendln_fmt("}%c", ' ');
+    }
+
+    if(comp->source->k_count) {
+        appendln_fmt(", .knst = _knst%c", ' ');
+    }
+
+    
+
+    // Done
+    set_indent(0);
+    appendln_fmt("%c;\n", '}');   
+
+    set_indent(0);
+    appendln_fmt("HWAPI hw_CModule* _hwfn_init(hw_State *hw)%c", '{');
+    set_indent(1);
+    appendln_fmt("(void)hw%c", ';');
+    appendln_fmt("return &_cmod%c", ';');
+    set_indent(0);
+    appendln_fmt("%c", '}');   
+}
 
 hw_String* hw_compc_mod_to_c(hw_State *hw, hw_Module const *m) {
     hw_CompilerC *comp = hw_compc_new(hw);
@@ -203,17 +271,21 @@ hw_String* hw_compc_mod_to_c(hw_State *hw, hw_Module const *m) {
     appendln_fmt("#include %s", "\"src/hw.h\"");
    
     // Const Decl
+    appendln_fmt("static hw_Var _knst[%u+1] = {", (hw_u32) m->k_count);
+    set_indent(1);
     for (hw_u32 i = 0; i < m->k_count; i++) {
         hw_Type const *T = hw_TypeSys_get_via_id(comp->vm_child->ts, m->knst_t[i]);
         if(!T->is_obj) {
-            appendln_fmt("static hw_Var _k%u = { .as_uint = %"PRIu64" };"
+            appendln_fmt("[%u].as_uint = %"PRIu64","
                     , i, m->knst[i].as_uint);
         }
     }
+    set_indent(0);
+    appendln_fmt("};%s", "");
 
     // Forward Decl
     for (hw_u32 i = 0; i < m->fn_count; i++) {
-        appendln_fmt("static void _%u(hw_State *, hw_Var*, hw_byte*, hw_u32);", i)
+        appendln_fmt("static void _%u(hw_State *, hw_Var*, hw_byte*, hw_uint);", i)
     }
     appendln_fmt("%c", '\n');
 
@@ -225,8 +297,12 @@ hw_String* hw_compc_mod_to_c(hw_State *hw, hw_Module const *m) {
         }
     }
 
+    _comp_add__hwfn_init(comp);
+    _comp_add__hwfn_info(comp);
+
     hw_String *out = hw_String_newFrom_data(hw, comp->out->data
                                          , comp->out->lenUsed);
+
     hw_compc_delete(comp);
     return out;
 }

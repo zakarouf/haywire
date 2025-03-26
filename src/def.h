@@ -5,6 +5,28 @@
 #include <float.h>
 #include <pthread.h>
 
+// Function specifiers in case library is build/used as a shared library
+// NOTE: Microsoft specifiers to tell compiler that symbols are imported/exported from a .dll
+// NOTE: visibility("default") attribute makes symbols "visible" when compiled with -fvisibility=hidden
+#if defined(_WIN32)
+    #if defined(__TINYC__)
+        #define __declspec(x) __attribute__((x))
+    #endif
+    #if defined(BUILD_LIBTYPE_SHARED)
+        #define HWAPI __declspec(dllexport)     // We are building the library as a Win32 shared library (.dll)
+    #elif defined(USE_LIBTYPE_SHARED)
+        #define HWAPI __declspec(dllimport)     // We are using the library as a Win32 shared library (.dll)
+    #endif
+#else
+    #if defined(BUILD_LIBTYPE_SHARED)
+        #define HWAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
+    #endif
+#endif
+
+#ifndef HWAPI
+    #define HWAPI       // Functions defined as 'extern' by default (implicit specifiers)
+#endif
+
 /**
  * Generic Array
  */
@@ -889,7 +911,7 @@ struct hw_CompilerBC {
 #define HW_STATIC_ASSERT(exp)\
     ((void)(char[(exp)? 1:-1]){0})
 
-#define hw_CStr_LIT(s)     ((hw_CStr){.data = (void*) #s, .len = sizeof(#s) - 1})
+#define hw_CStr_LIT(s)     ((hw_CStr){.data = (void*) s, .len = sizeof(#s) - 1})
 
 #define HW_VAR(_value, _as_)\
     ((hw_Var){._as_ = _value})
@@ -909,6 +931,8 @@ struct hw_CompilerBC {
 
 #define HW_FALSE 0
 #define HW_TRUE (!HW_FALSE)
+
+#define HW_NULLTERM_ARRAY(...) HW_CAST(void *, ((void*[]){__VA_ARGS__, NULL}))
 
 #define HW_VARP_NIL()       HW_VARP(0, nil)
 #define HW_VARP_INT(v)      HW_VARP(v, int)

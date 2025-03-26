@@ -303,3 +303,12 @@ void hw_debug_vm_step(
     _L_end:
     return ;
 }
+
+
+void hw_debug_print_cmod(hw_State *hw, hw_CModule* cmod)
+{
+    fprintf(hw->stdout, "CModule(details):\n");
+    fprintf(hw->stdout, "   fn:%u\n", cmod->fn_count);
+    fprintf(hw->stdout, "   k:%u\n", cmod->k_count);
+}
+

@@ -3,6 +3,7 @@
 
 #include "def.h"
 #include <sys/cdefs.h>
+#include <sys/types.h>
 
 /**
  * Section: Pre-Processor
@@ -116,44 +117,6 @@ void hw_logstr(const char *msg, size_t const);
             , (type_id, HW_MACRO_EXPAND argt), __VA_ARGS__)         \
     }
 
-
-/**
- * Section: hw_char
- */
-#define hw_char_is_ws(x) ((x) == ' ' | (x) == '\n' | (x) == '\t')
-#define hw_char_is_num(x) ((x) >= '0' && (x) <= '9')
-#define hw_char_is_lower(x) ((x) >= 'a' && (x) <= 'z')
-#define hw_char_is_upper(x) ((x) >= 'A' && (x) <= 'Z')
-#define hw_char_is_alpha(x) (hw_char_is_lower(x) || hw_char_is_upper(x))
-#define hw_char_is_alnum(x) (hw_char_is_alpha(x) || hw_char_is_num(x))
-
-#define hw_char_is_hex(ch) ( hw_char_is_num(ch) || ( ch >= 'A' && ch <= 'F' ) \
-                                                || ( ch >= 'a' && ch <= 'f' ) )
-
-#define hw_char_hex_to_num(ch)\
-    ( hw_char_is_num(ch)?\
-        (ch - '0'): \
-     ((ch) >= 'a' && (ch) <= 'f')? \
-        (ch - 'a'):\
-     ((ch) >= 'A' && (ch) <= 'F')? (ch - 'A'):0 )
-
-/**
- * Section: c-string
- * ASCII string utility
- */
-hw_i32 hw_strto_uint(hw_uint *ret, hw_byte const *str, hw_u32 size);
-hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size);
-hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size);
-void hw_String_trim(hw_String *str, hw_byte ch);
-hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
-                                             , hw_u32 file_namesize);
-hw_uint hw_str_calc_linecount(hw_byte const *str, hw_uint size);
-hw_uint hw_str_calc_column(hw_byte const *at, hw_byte const *str);
-hw_uint hw_str_calc_lineend(hw_byte const *at, hw_byte const *end);
-/**
- * Section: Tokens
- */
-
 #define TOKEN(x) CAT2(HW_LEXTOKEN, x)
 enum hw_LexTokenType {
     /* Unknown Token */
@@ -211,9 +174,8 @@ enum hw_LexTokenType {
                                                         
     /* Total number of defined tokens */                
     , TOKEN(TOTAL)
+      #undef TOKEN
 };
-
-#undef TOKEN
 
 #define hw_LexToken_is(t, s) ((t).type == s)
 #define hw_LexToken_is_not(t, s) (!hw_LexToken_is(t, s))
@@ -227,6 +189,59 @@ enum hw_LexTokenType {
 
 #define hw_LexToken_is_not_ws(t) (!hw_LexToken_is_ws(t))
 
+
+
+/**
+ * Section: hw_char
+ */
+#define hw_char_is_ws(x) ((x) == ' ' | (x) == '\n' | (x) == '\t')
+#define hw_char_is_num(x) ((x) >= '0' && (x) <= '9')
+#define hw_char_is_lower(x) ((x) >= 'a' && (x) <= 'z')
+#define hw_char_is_upper(x) ((x) >= 'A' && (x) <= 'Z')
+#define hw_char_is_alpha(x) (hw_char_is_lower(x) || hw_char_is_upper(x))
+#define hw_char_is_alnum(x) (hw_char_is_alpha(x) || hw_char_is_num(x))
+
+#define hw_char_is_hex(ch) ( hw_char_is_num(ch) || ( ch >= 'A' && ch <= 'F' ) \
+                                                || ( ch >= 'a' && ch <= 'f' ) )
+
+#define hw_char_hex_to_num(ch)\
+    ( hw_char_is_num(ch)?\
+        (ch - '0'): \
+     ((ch) >= 'a' && (ch) <= 'f')? \
+        (ch - 'a'):\
+     ((ch) >= 'A' && (ch) <= 'F')? (ch - 'A'):0 )
+
+/**
+ * Section: c-string
+ * ASCII string utility
+ */
+hw_i32 hw_strto_uint(hw_uint *ret, hw_byte const *str, hw_u32 size);
+hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size);
+hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size);
+void hw_String_trim(hw_String *str, hw_byte ch);
+hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
+                                             , hw_u32 file_namesize);
+hw_byte const *hw_str_file_extension(hw_byte const *str, hw_u32 str_size, hw_u32 *size);
+
+hw_uint hw_str_calc_linecount(hw_byte const *str, hw_uint size);
+hw_uint hw_str_calc_column(hw_byte const *at, hw_byte const *str);
+hw_uint hw_str_calc_lineend(hw_byte const *at, hw_byte const *end);
+
+/**
+ * Command Line & Subprocess
+ */
+char** hw_getenv(void);
+
+int hw_fork(const char *command);
+pid_t hw_spawn(char const *exec_path, char * const *argv);
+pid_t hw_cmd(char * const cmd_nullterm);
+
+int hw_spawn_lock(char const *exec_path, char * const *argv);
+int hw_cmd_lock(char * const cmd_nullterm);
+
+/**
+ * Section: Tokens
+ */
 void hw_Lexer_start(hw_Lexer *lex, hw_byte const *data, hw_uint size);
 void hw_Lexer_next(hw_Lexer *lex);
 void hw_Lexer_next_skipws(hw_Lexer *lex);
@@ -459,6 +474,16 @@ hw_Module *hw_Module_newblank(
 void hw_Module_delete(hw_State *hw, hw_Module *m);
 void hw_Module_delete_detatch_knstobj(hw_State *hw, hw_Module *m);
 
+/*
+ *
+ */
+hw_CModule *hw_CModule_newblank(hw_State *hw, hw_u32 const fn_count
+                                            , hw_u32 const k_count);
+hw_CModule *hw_CModule_newFrom_file(hw_State *hw
+                                  , hw_byte const *path_nullterm);
+void hw_CModule_delete(hw_State *hw, hw_CModule *cmod);
+hw_VarFn hw_CModule_getfn(hw_CModule *cmod
+        , hw_byte const *name, hw_u32 name_size);
 
 /************************************************************************
  *                                  VM                                  *
@@ -616,6 +641,7 @@ void hw_debug_print_fnobj(hw_CompilerBC const *comp);
 void hw_debug_print_mobj(hw_CompilerBC const *comp);
 void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t);
 void hw_debug_print_symtable_ord(hw_State *hw, hw_SymTableOrd *table);
+void hw_debug_print_cmod(hw_State *hw, hw_CModule* cmod);
 
 /**
  * Section: Undef

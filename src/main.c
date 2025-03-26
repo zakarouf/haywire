@@ -148,6 +148,8 @@ struct hw_Config {
     HW_ARR(hw_String *) *namespaces;
     hw_String *out_file;
     hw_String *call;
+    hw_String *cmod_so;
+    hw_String *cmod_call;
     hw_VarArr *args;
     struct hw_ConfigFlags {
         hw_byte help:1
@@ -155,7 +157,8 @@ struct hw_Config {
               , print_inst_info:1
               , no_namespace: 1
               , transpile: 1
-              , runtrans: 1
+              , cmod_run:1
+              , cmod_source_print:1
               ;
     } flags;
 };
@@ -177,18 +180,22 @@ inline static hw_String *argnext(hw_VarArr *args, hw_uint *arg_i)
     return args->data[*arg_i].as_string;
 }
 
-static hw_uint _argparse_single_char_conf(hw_State *hw,
+inline static hw_String *argnext_req(hw_VarArr *args, hw_uint *arg_i)
+{
+    hw_String *arg = argnext(args, arg_i);
+    if(arg == NULL) hw_exit(-1, HW_STR("insufficiant argument"));
+    return arg;
+}
+
+static hw_uint _argparse_single_char_conf(
     hw_VarArr *args, hw_Config *conf, hw_byte ch, hw_uint ARG)
 {
     switch (ch) {
                case 'd': conf->flags.disasm = 1;
-        break; case 'r': conf->flags.run = 1;
-        break; case 'i': conf->flags.print_inst_info = 1;
         break; case 'h': conf->flags.help = 1;
         break; case 'n': conf->flags.no_namespace = 1;
-        break; case 'c': conf->call = argnext(args, &ARG);
-        break; case 'o': conf->out_file = argnext(args, &ARG);
-        break; case 't': conf->flags.transpile = 1;
+        break; case 'c': conf->call = argnext_req(args, &ARG);
+        break; case 'o': conf->out_file = argnext_req(args, &ARG);
         break; default: hw_loglnp("Unknown command '-%c'", ch);
     }
     return ARG;
@@ -201,23 +208,37 @@ static hw_uint _argparse_mult_string(
     (void)conf;
     (void)ARG;
     #define argparse_start()\
-        hw_String *_arg = args->data[ARG].as_string; if(0) { }
-    #define argparse_end() else { hw_logp("Unknown args: %.*s"\
+        hw_String *_arg = args->data[ARG].as_string;\
+        if(0) { printf("Unreachabke"); }
+
+    #define argparse_end() else { hw_logp("Unknown args: `%.*s`\n"\
                                     , _arg->lenUsed, _arg->data); }
-    #define argcheck(name) else if(hw_ptrcmp(_arg->data + 2             \
+
+    #define argcheck(name) else if(0 == hw_ptrcmp(_arg->data + 2 \
                                              , _arg->lenUsed - 2        \
                                              , name, sizeof(name)-1))
+
     argparse_start()
-    argcheck("") {}
+    argcheck("help")        { conf->flags.help = 1; }
+    argcheck("cmd")         { hw_cmd((void*)argnext_req(args, &ARG)->data); }
+    argcheck("disasm")      { conf->flags.disasm = 1; }
+    argcheck("print_inst")  { conf->flags.print_inst_info = 1; }
+    argcheck("call")        { conf->call = argnext_req(args, &ARG); }
+    argcheck("ct")          { conf->flags.transpile = 1; }
+    argcheck("ct-print")    { conf->flags.cmod_source_print = 1; }
+    argcheck("ct-compile")  { conf->cmod_so = argnext_req(args, &ARG); }
+    argcheck("ct-call")     { conf->cmod_call = argnext_req(args, &ARG); }
     argparse_end()
     
-    return ARG + 1;
+    return ARG;
 }
 
 hw_int hw_argparse(
     hw_State *hw, hw_Config *conf, int argc, char *argv[]) {
     HW_ARR_NEW(hw, conf->files, 8);
     HW_ARR_NEW(hw, conf->namespaces, 8);
+    conf->cmod_so = NULL;
+    conf->cmod_call = NULL;
     hw_VarArr *args = _wrap_args(hw, argc, argv);
     conf->args = args;
     hw_uint ARG = 0;
@@ -225,7 +246,7 @@ hw_int hw_argparse(
     while(arg) {
         hw_byte argtype = _argparse_is_arg(arg);
         if(argtype == 1) {
-            ARG = _argparse_single_char_conf(hw, args, conf, ARG()->data[1], ARG);
+            ARG = _argparse_single_char_conf(args, conf, ARG()->data[1], ARG);
         } else if(argtype == 2) {
             ARG = _argparse_mult_string(args, conf, ARG);
         } else {
@@ -302,6 +323,7 @@ void hw_test_check_symtableord(hw_State *hw, hw_u32 count)
     }
 }
 
+
 #ifdef HAYWIRE_LIBRARY_IMPLEMENTATION
 int hw_main(int argc, char *argv[])
 #else
@@ -346,18 +368,50 @@ int main(int argc, char *argv[])
 
             hw_Module_writetofile(hw, mod, (void *)conf.out_file->data);
         }
+
         if(conf.flags.transpile) {
             hw_String *c_code = hw_compc_mod_to_c(hw, mod);
-            hw_debug_print_var(hw, (hw_Var){.as_string = c_code}, hw_TypeID_string);
+
+            if(conf.flags.cmod_source_print) {
+                hw_debug_print_var(hw, (hw_Var){.as_string = c_code}
+                                     , hw_TypeID_string);
+            }
+
+            if(conf.cmod_so) {
+                char const *file = "tmp-xyW2.c"; 
+                FILE *fp = fopen(file, "wb");
+                fwrite(c_code->data, c_code->lenUsed, 1, fp);
+                fflush(fp);
+                fclose(fp);
+
+                hw_String *cmd = hw_String_new(hw, 64);
+                hw_String_append_fmt(hw, &cmd, 
+                        "clang -std=c99 -O3 -Wall -Wextra -fPIC -shared %s -o %.*s"
+                        , file, conf.cmod_so->lenUsed, conf.cmod_so->data);
+                hw_String_push(hw, &cmd, '\0'); cmd->lenUsed -= 1;
+                hw_cmd_lock((void *)cmd->data);
+
+                if(conf.cmod_call) {
+                    hw_CModule *cmod = hw_CModule_newFrom_file(
+                            hw, (void*) conf.cmod_so->data);
+                    hw_VarFn fn = hw_CModule_getfn(cmod, conf.cmod_call->data
+                                                , conf.cmod_call->lenUsed);
+                    HW_DEBUG(HW_LOG("NO ARGS%s", ""));
+                    fn(hw, NULL, NULL, 0);
+                    //hw_debug_print_cmod(hw, cmod);
+                }
+            }
+
             HW_THREAD_FREE(hw, c_code);
 
-                void _1(hw_State *hw, hw_Var *args, hw_byte *argTs, hw_u32 argc);
-                _1(hw, NULL, NULL, 1);
         }
     }
 
+
+    _L_early_exit:
     config_del(hw, &conf);
     hw_State_delete(hw);
     
     return EXIT_SUCCESS;
 }
+
