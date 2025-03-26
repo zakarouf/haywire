@@ -15,6 +15,45 @@
 #include "hw_vm.c"
 #endif
 
+
+#define line(s) s "\n"
+const hw_CStr HELP_TXT = hw_CStr_LIT(
+line("A Small VM with an in-build Programing Language")
+line("")
+line("Usage: hw [OPTIONS] [file]... -- [vmargs]")
+line("")
+line("Arguments:")
+line("    [file]...")
+line("    The files which are to be loaded")
+line("")
+line("Options:")
+line("    -h, --help")
+line("            Show this message")
+line("")
+line("    -d, --disasm")
+line("            Disasmble the loaded file and print it to `stdout`")
+line("")
+line("    -o [modname]")
+line("            Write the compiled bytecode into a mod file")
+line("")
+line("    --ct")
+line("            Enable C-Transpiler")
+line("")
+line("        --ct-print")
+line("            Print the transpiled c code to `stdout`")
+line("")
+line("        --ct-compile [file]")
+line("            Compile and write a shared object [file], requires c compiler")
+line("")
+line("        --ct-cc [bin]")
+line("            Set the c compiler,")
+line("            default is gcc or clang if gcc not available")
+line("")
+line("    --ct")
+);
+#undef line
+
+
 static void _check_vm_inst(hw_State const *hw)
 {
     hw_Global const *global = hw->global;
@@ -111,7 +150,7 @@ struct hw_Config {
     hw_String *call;
     hw_VarArr *args;
     struct hw_ConfigFlags {
-        hw_byte run:1
+        hw_byte help:1
               , disasm:1
               , print_inst_info:1
               , no_namespace: 1
@@ -145,6 +184,7 @@ static hw_uint _argparse_single_char_conf(hw_State *hw,
                case 'd': conf->flags.disasm = 1;
         break; case 'r': conf->flags.run = 1;
         break; case 'i': conf->flags.print_inst_info = 1;
+        break; case 'h': conf->flags.help = 1;
         break; case 'n': conf->flags.no_namespace = 1;
         break; case 'c': conf->call = argnext(args, &ARG);
         break; case 'o': conf->out_file = argnext(args, &ARG);
@@ -274,6 +314,10 @@ int main(int argc, char *argv[])
     hw_Config conf = {0};
     HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
 
+    if(conf.flags.help) {
+        fputs((void *)HELP_TXT.data, hw->stdout);
+        goto _L_early_exit;
+    }
 
     if(conf.flags.print_inst_info) {
         hw_debug_print_inst(hw);
@@ -317,4 +361,3 @@ int main(int argc, char *argv[])
     
     return EXIT_SUCCESS;
 }
-
