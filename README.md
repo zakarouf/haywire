@@ -46,8 +46,8 @@ A small register based Programmable VM made to be fast and modular.
 # Prospectus
 
 ## About
-A small language implementation written in C.
-* Very Small Binary Size (100K)
+A Small Language + VM Implementation.
+* Small Binary Size
 * Fast & Small VM
 * Static Typed
 * Modular Code design, can be easily improved upon and mutted to comply the user need
