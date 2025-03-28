@@ -145,8 +145,7 @@ void print_tokens(hw_Lexer lexer)
 typedef struct hw_Config hw_Config;
 struct hw_Config {
     HW_ARR(hw_String *) *files;
-    HW_ARR(hw_String *) *namespaces;
-    hw_String *out_file;
+    hw_String *mod_name;
     hw_String *call;
     hw_String *cmod_so;
     hw_String *cmod_call;
@@ -159,6 +158,7 @@ struct hw_Config {
               , transpile: 1
               , cmod_run:1
               , cmod_source_print:1
+              , write_to_file: 1
               ;
     } flags;
 };
@@ -194,8 +194,9 @@ static hw_uint _argparse_single_char_conf(
                case 'd': conf->flags.disasm = 1;
         break; case 'h': conf->flags.help = 1;
         break; case 'n': conf->flags.no_namespace = 1;
+        break; case 'o': conf->flags.write_to_file = 1;
         break; case 'c': conf->call = argnext_req(args, &ARG);
-        break; case 'o': conf->out_file = argnext_req(args, &ARG);
+        break; case 'm': conf->mod_name = argnext_req(args, &ARG);
         break; default: hw_loglnp("Unknown command '-%c'", ch);
     }
     return ARG;
@@ -236,7 +237,6 @@ static hw_uint _argparse_mult_string(
 hw_int hw_argparse(
     hw_State *hw, hw_Config *conf, int argc, char *argv[]) {
     HW_ARR_NEW(hw, conf->files, 8);
-    HW_ARR_NEW(hw, conf->namespaces, 8);
     conf->cmod_so = NULL;
     conf->cmod_call = NULL;
     hw_VarArr *args = _wrap_args(hw, argc, argv);
@@ -251,13 +251,6 @@ hw_int hw_argparse(
             ARG = _argparse_mult_string(args, conf, ARG);
         } else {
             HW_ARR_PUSH(hw, conf->files, ARG());
-            if(conf->flags.no_namespace) {
-                HW_ARR_PUSH(hw, conf->namespaces, NULL);
-            } else {
-                HW_ARR_PUSH(hw, conf->namespaces
-                          , hw_stripfile_path_ext(hw, ARG()->data
-                                                    , ARG()->lenUsed));
-            }
         }
         arg = argnext(args, &ARG);
     }
@@ -270,35 +263,84 @@ void config_del(hw_State *hw, hw_Config *conf)
     hwfn_VarArr_delete(hw
         , (hw_Var[]){[0].as_arr = conf->args}, (hw_byte[]){hw_TypeID_array}, 1);
     HW_ARR_DELETE(hw, conf->files);
-    for (size_t i = 0; i < conf->namespaces->lenUsed; i++) {
-        if(conf->namespaces->data[i]) {
-            hwfn_String_delete(hw, (hw_Var[]){ [0].as_string = conf->namespaces->data[i]}
-                            , (hw_byte[]){ hw_TypeID_string }, 1);
-        }
-    }
-    HW_ARR_DELETE(hw, conf->namespaces);
-
 }
 
-static hw_Module* _compile_files(
-    hw_State *hw, hw_Config *conf, hw_uint *mod_id)
+static int _load_files(hw_State *hw, hw_Config *conf)
 {
     hw_ModuleArr *mods;
+    HW_ARR(hw_String *) *mod_files;
+    HW_ARR(hw_String *) *source_files;
+    HW_ARR(hw_String *) *cmod_files;
+    HW_ARR(hw_String *) *mod_namespace;
+    
     HW_ARR_NEW(hw, mods, 8);
-    hw_compbc_compile_files(hw, &mods, conf->files->data, conf->files->lenUsed);
-    hw_Module *mod = hw_Module_combine(hw, mods->lenUsed
-                                         , mods->data
-                                         , conf->namespaces->data);
+    HW_ARR_NEW(hw, mod_files, 8);
+    HW_ARR_NEW(hw, source_files, 8);
+    HW_ARR_NEW(hw, cmod_files, 8);
+    HW_ARR_NEW(hw, mod_namespace, 8);
 
-    for (size_t i = 0; i < mods->lenUsed; i++) {
-        hw_Module_delete_detatch_knstobj(hw, mods->data[i]);
+    for (hw_u32 i = 0; i < conf->files->lenUsed; i++) {
+        hw_u32 ext_len = 0;
+        hw_String *file = conf->files->data[i];
+
+        hw_byte const *ext = hw_str_file_extension(file->data
+                                                 , file->lenUsed
+                                                 , &ext_len);
+        #define check_ext(x) (0 == hw_ptrcmp(x, sizeof(x)-1, ext, ext_len))
+        if(check_ext("hw")) {
+            HW_ASSERT(0 && ".hw NOT IMPLEMENTED ");
+            HW_ARR_PUSH(hw, source_files, file);
+            HW_ARR_PUSH(hw, mod_namespace, hw_stripfile_path_ext(hw, file->data
+                                                             , file->lenUsed));
+        } else if(check_ext("hwo")) {
+            HW_ARR_PUSH(hw, mod_files, file);
+            HW_ARR_PUSH(hw, mod_namespace, conf->flags.no_namespace? NULL:
+                    hw_stripfile_path_ext(hw, file->data, file->lenUsed));
+        } else if(check_ext("hws")) {
+            HW_ARR_PUSH(hw, mod_files, file);
+            HW_ARR_PUSH(hw, mod_namespace, conf->flags.no_namespace? NULL:
+                    hw_stripfile_path_ext(hw, file->data, file->lenUsed));
+        } else if(check_ext("hwco")) {
+            HW_ARR_PUSH(hw, cmod_files, file);
+        } else {
+            hw_loglnp("Unknown: filetype '%.*s', file: '%*.s'", ext_len, ext
+                           , file->lenUsed
+                           , file->data);
+            hw_exit(-1, HW_STR("filetype error"));
+        }
     }
-    HW_ARR_DELETE(hw, mods);
-    *mod_id = hw_Global_add_anonsymb(
-            (void *)hw->global, (hw_Var){.as_module = mod}, hw_TypeID_module);
-    return mod;
-}
 
+    int compile = (mod_files->lenUsed > 0 && conf->mod_name);
+
+    if(compile) {
+        hw_compbc_compile_files(hw, &mods, mod_files->data, mod_files->lenUsed);
+        hw_Module *mod = hw_Module_combine(hw, mods->lenUsed, mods->data
+                                         , mod_namespace->data);
+    
+        for (hw_u32 i = 0; i < mods->lenUsed; i++) {
+            hw_Module_delete_detatch_knstobj(hw, mods->data[i]);
+        }
+
+        hw_Global_add_symb((void *)hw->global, conf->mod_name->data
+        , conf->mod_name->lenUsed, (hw_Var){.as_module = mod}, hw_TypeID_module);
+    }
+    
+
+    HW_ARR_DELETE(hw, mods);
+
+    HW_ARR_DELETE(hw, mod_files);
+    HW_ARR_DELETE(hw, source_files);
+    HW_ARR_DELETE(hw, cmod_files);
+
+    for (hw_u32 i = 0; i < mod_namespace->lenUsed; i++) {
+        HW_VARFN(hw, hwfn_String_delete, ([0].as_string = mod_namespace->data[i])
+                , (hw_TypeID_string),);
+    }
+
+    HW_ARR_DELETE(hw, mod_namespace);
+
+    return compile;
+}
 
 void hw_test_check_symtableord(hw_State *hw, hw_u32 count)
 {
@@ -344,29 +386,31 @@ int main(int argc, char *argv[])
     if(conf.flags.print_inst_info) {
         hw_debug_print_inst(hw);
     }
-    if(conf.files->lenUsed) {
-        hw_Module *mod = NULL;
-        hw_uint mod_id = 0;
-        mod = _compile_files(hw, &conf, &mod_id);
-
+    if(conf.files->lenUsed && _load_files(hw, &conf)) {
+        HW_ASSERT(conf.mod_name);
+        
+        hw_u32 mod_id = hw_Global_get_symb_id(hw->global, conf.mod_name->data, conf.mod_name->lenUsed);
+        hw_Module *mod = hw_Global_get_symb_via_id(hw->global, mod_id).as_module;
+        HW_ASSERT(mod);
         if(conf.call != NULL) {
             hw_uint fn_id = 0;
             HW_ASSERT(hw_Module_get_fn(mod, conf.call->data, conf.call->lenUsed, &fn_id));
             hw_vm_prepare_call(hw, mod_id, fn_id);
             hw_vm(hw);       
         }
+
         if(conf.flags.disasm) {
             hw_debug_Module_disasm(hw, mod);
         }
-        if(conf.out_file) {
-            HW_VARFN(hw, hwfn_String_append_bytes
-                , (     [0].as_string = conf.out_file
-                      , [1].as_byte_p = (void *)".hwo"
-                      , [2].as_uint   = 4)
-                , (hw_TypeID_string)
-                , conf.out_file = __args[0].as_string );
 
-            hw_Module_writetofile(hw, mod, (void *)conf.out_file->data);
+        if(conf.flags.write_to_file) {
+            
+            hw_String *outfile = hw_String_new(hw, conf.mod_name->lenUsed + 5);
+            hw_String_append_fmt(hw, &outfile, "%.*s.hwo", conf.mod_name->lenUsed
+                                                         , conf.mod_name->data);
+            hw_String_nullterm(hw, &outfile);
+            hw_Module_writetofile(hw, mod, (void *)outfile->data);
+            hw_String_delete(hw, outfile);
         }
 
         if(conf.flags.transpile) {
@@ -378,16 +422,17 @@ int main(int argc, char *argv[])
             }
 
             if(conf.cmod_so) {
-                char const *file = "tmp-xyW2.c"; 
-                FILE *fp = fopen(file, "wb");
-                fwrite(c_code->data, c_code->lenUsed, 1, fp);
-                fflush(fp);
-                fclose(fp);
+                hw_String *cfile = hw_String_new(hw, conf.mod_name->lenUsed + 3);
+                hw_String_append_fmt(hw, &cfile, "%.*s.c"
+                        , cfile->lenUsed, cfile->data); hw_String_nullterm(hw, &cfile);
+                hw_writefile((void *)cfile->data, c_code->data
+                                             , 1, c_code->len);
 
                 hw_String *cmd = hw_String_new(hw, 64);
                 hw_String_append_fmt(hw, &cmd, 
-                        "clang -std=c99 -O3 -Wall -Wextra -fPIC -shared %s -o %.*s"
-                        , file, conf.cmod_so->lenUsed, conf.cmod_so->data);
+                        "clang -std=c99 -O3 -Wall -Wextra -fPIC -shared %.*s -o %.*s"
+                        , cfile->lenUsed, cfile->data
+                        , conf.cmod_so->lenUsed, conf.cmod_so->data);
                 hw_String_push(hw, &cmd, '\0'); cmd->lenUsed -= 1;
                 hw_cmd_lock((void *)cmd->data);
 
@@ -398,7 +443,6 @@ int main(int argc, char *argv[])
                                                 , conf.cmod_call->lenUsed);
                     HW_DEBUG(HW_LOG("NO ARGS%s", ""));
                     fn(hw, NULL, NULL, 0);
-                    //hw_debug_print_cmod(hw, cmod);
                 }
             }
 

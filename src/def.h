@@ -258,9 +258,10 @@ union hw_Var {
     hw_Type             *as_type_mut, **as_type_mut_p;
 
     /* VM */
-    hw_Module       *as_module, **as_module_p;
-    hw_State        *as_state,  **as_state_p;
-    hw_Global       *as_global, **as_global_p;
+    hw_Module       *as_module,     **as_module_p;
+    hw_CModule      *as_cmodule,    **as_cmodule_p;
+    hw_State        *as_state,      **as_state_p;
+    hw_Global const *as_global,     **as_global_p;
 };
 
 struct hw_VarP {
@@ -293,6 +294,7 @@ enum hw_TypeID {
     , hw_TypeID_list
     , hw_TypeID_table
     , hw_TypeID_symtable
+    , hw_TypeID_symtableord
     , hw_TypeID_katable
     , hw_TypeID_kvtable
 
@@ -302,6 +304,7 @@ enum hw_TypeID {
     , hw_TypeID_typesys
 
     , hw_TypeID_module
+    , hw_TypeID_cmodule
     , hw_TypeID_thread
     , hw_TypeID_state
 

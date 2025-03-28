@@ -6,6 +6,15 @@
 #define CAT2(X_Y) X##_##Y
 #define CAT(X_Y) CAT2(X, Y)
 
+enum hwfn_InterfaceID {
+      hwfn_InterfaceID_new                    // &self
+    , hwfn_InterfaceID_delete                 // &self
+    , hwfn_InterfaceID_newFrom_string         // &self, &lexer
+    , hwfn_InterfaceID_newFrom_deserialize    // &self, &index, bytearr
+    , hwfn_InterfaceID_to_string              // &self, &String
+    , hwfn_InterfaceID_to_info                // &self, &String
+    , hwfn_InterfaceID_to_serialize           // &self, &bytearr
+};
 
 /**
  * Section ARR_EXPORT

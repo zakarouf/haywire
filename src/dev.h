@@ -5,9 +5,9 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
-/**
- * Section: Pre-Processor
- */
+/************************************************************************
+ *                          Section: Pre-Processor                      *
+ ************************************************************************/
 #define CAT2(X, Y) X##_##Y
 #define CAT(X, Y) CAT2(X, Y)
 
@@ -24,33 +24,34 @@
 #define HW_SAFE_GAURD(...)
 #endif
 
-/**
- */
+/************************************************************************
+ *                              Process String                          *
+ ************************************************************************/
 #define HW_STR(s) (void *)s, (sizeof(s)-1)
 
-/**
- * Section: Allocator
- */
+/************************************************************************
+ *                            Section: Allocator
+ ************************************************************************/
 #define HW_MALLOC(X)               malloc(X)
 #define HW_FREE(X)                 free(X)
 #define HW_REALLOC(X, NEW_SZ)      realloc(X, NEW_SZ)
 
-/**
- */
+/************************************************************************
+ *                                MIN, MAX                              *
+ ************************************************************************/
 #define HW_MIN(x, y) (x > y? y : x)
 #define HW_MAX(x, y) (x > y? x : y)
 
-/**
- * Section: Cast
- */
+/************************************************************************
+ *                              Section: Cast                           *
+ ************************************************************************/
 #define HW_CAST(T, ...) ((T)(__VA_ARGS__))
-
 #define HW_CAST_SET(T, ptr, offset, val) \
     { *HW_CAST(T*, ptr + offset) = val; }
 
-/**
- * Log & Exit
- */
+/************************************************************************
+ *                               Log & Exit                             *
+ ************************************************************************/
 void hw_exit(hw_int code, const char *msg, size_t const size);
 void hw_logp(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void hw_logstr(const char *msg, size_t const);
@@ -59,9 +60,10 @@ void hw_logstr(const char *msg, size_t const);
 #define HW_LOG(fmt, ...)\
     hw_logp("[HWLOG]: " __FILE__ ":%d: " fmt "\n", __LINE__, __VA_ARGS__)
 
-/**
- * Section: Assert
- */
+
+/************************************************************************
+ *                              Section: Assert                         *
+ ************************************************************************/
 #define HW_ASSERTEX(exp, fmt, ...)\
         do {                \
             if(!(exp)) {    \
@@ -96,9 +98,10 @@ void hw_logstr(const char *msg, size_t const);
             (TH)->allocator.free(&(TH)->allocator, PTR)
 #endif
 
-/**
- * hw_VarFn
- */
+
+/************************************************************************
+ *                              hw_VarFn                                *
+ ************************************************************************/
 #define HW_MACRO_EXPAND(...) __VA_ARGS__
 #define HW_VARFN(hw, fn, args, argtypes, ...)           \
     {                                                   \
@@ -117,6 +120,9 @@ void hw_logstr(const char *msg, size_t const);
             , (type_id, HW_MACRO_EXPAND argt), __VA_ARGS__)         \
     }
 
+/************************************************************************
+ *                              Lex Token Type                          *
+ ************************************************************************/
 #define TOKEN(x) CAT2(HW_LEXTOKEN, x)
 enum hw_LexTokenType {
     /* Unknown Token */
@@ -191,9 +197,9 @@ enum hw_LexTokenType {
 
 
 
-/**
- * Section: hw_char
- */
+/************************************************************************
+ *                              Section: hw_char                        *
+ ************************************************************************/
 #define hw_char_is_ws(x) ((x) == ' ' | (x) == '\n' | (x) == '\t')
 #define hw_char_is_num(x) ((x) >= '0' && (x) <= '9')
 #define hw_char_is_lower(x) ((x) >= 'a' && (x) <= 'z')
@@ -211,10 +217,10 @@ enum hw_LexTokenType {
         (ch - 'a'):\
      ((ch) >= 'A' && (ch) <= 'F')? (ch - 'A'):0 )
 
-/**
- * Section: c-string
- * ASCII string utility
- */
+/************************************************************************
+ *                          Section: c-string                           *
+ *                         ASCII string utility                         *
+ ************************************************************************/
 hw_i32 hw_strto_uint(hw_uint *ret, hw_byte const *str, hw_u32 size);
 hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size);
 hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size);
@@ -227,9 +233,9 @@ hw_uint hw_str_calc_linecount(hw_byte const *str, hw_uint size);
 hw_uint hw_str_calc_column(hw_byte const *at, hw_byte const *str);
 hw_uint hw_str_calc_lineend(hw_byte const *at, hw_byte const *end);
 
-/**
- * Command Line & Subprocess
- */
+/************************************************************************
+ *                      Command Line & Subprocess                       *
+ ************************************************************************/
 char** hw_getenv(void);
 
 int hw_fork(const char *command);
@@ -239,9 +245,9 @@ pid_t hw_cmd(char * const cmd_nullterm);
 int hw_spawn_lock(char const *exec_path, char * const *argv);
 int hw_cmd_lock(char * const cmd_nullterm);
 
-/**
- * Section: Tokens
- */
+/************************************************************************
+ *                          Section: Tokens                             *
+ ************************************************************************/
 void hw_Lexer_start(hw_Lexer *lex, hw_byte const *data, hw_uint size);
 void hw_Lexer_next(hw_Lexer *lex);
 void hw_Lexer_next_skipws(hw_Lexer *lex);
@@ -253,9 +259,9 @@ hw_uint hw_Lexer_line(hw_Lexer const *l);
 hw_uint hw_Lexer_col(hw_Lexer const *l);
 hw_byte const *hw_Lexer_line_start(hw_Lexer const *l);
 
-/**
- * Memory Allocators 
- */
+/************************************************************************
+ *                          Memory Allocators                           *
+ ************************************************************************/
 void hw_Allocator_new_gpa(hw_Allocator *self);
 void hw_Allocator_gpa_delete(hw_Allocator *allocator);
 void hw_Allocator_new_arena(hw_Allocator *self);
@@ -272,9 +278,9 @@ hw_u32 hw_Arena_total_used(hw_Arena *arena);
 hw_u32 hw_Arena_total(hw_Arena *arena);
 hw_bool hw_Arena_check(hw_Arena *arena);
 
-/**
- * Section: Type Impl
- */
+/************************************************************************
+ *                          Section: Type System                        *
+ ************************************************************************/
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator);
 hw_TypeSys* hw_TypeSys_new_default(hw_Allocator *allocator);
 void hw_TypeSys_delete(hw_TypeSys *t, hw_Allocator *allocator);
@@ -283,9 +289,9 @@ hw_Type *hw_TypeSys_get(hw_TypeSys const *ts, char const *key, hw_uint key_size)
 hw_Type *hw_TypeSys_get_via_id(hw_TypeSys const *ts, hw_uint typeid);
 hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size);
 
-/**
- * Utils
- */
+/************************************************************************
+ *                                  Utils                               *
+ ************************************************************************/
 hw_bool hw_byteArr_loadinc(
     hw_byteArr const *stream, hw_uint* index
   , hw_ptr dest, hw_uint const dest_size);
@@ -298,7 +304,7 @@ hw_bool hw_writefile(char const path[], void *data, hw_u32 unitsize, hw_u32 len)
 hw_byteArr *hw_byteArr_newloadfile(hw_State *hw, const char path[]);
 
 /************************************************************************
- *                              Types
+ *                              Types                                   *
  ************************************************************************/
 
 /*--------------------- SymTableOrd ------------------------*/
@@ -315,8 +321,10 @@ hw_bool hw_SymTableOrd_set(hw_State *hw, hw_SymTableOrd *table
 /*--------------------- String ------------------------*/
 
 hw_String *hw_String_new(hw_State *hw, hw_u32 _len);
+void hw_String_delete(hw_State *hw, hw_String *self);
 hw_String *hw_String_newFrom_data(
     hw_State *hw, hw_byte const *data, hw_u32 _len);
+void hw_String_nullterm(hw_State *hw, hw_String **self);
 hw_bool hw_String_expand(hw_State *hw, hw_String **selfp, hw_u32 const by);
 void hw_String_append_data(
     hw_State *hw, hw_String **selfp, hw_byte const *data, hw_u32 _len);
@@ -353,9 +361,9 @@ hw_uint hw_SymTable_index(
 /*------------------------------- VarList --------------------------------*/
 hw_VarList *hw_VarList_new(hw_State *hw, hw_u32 len);
 
-/**
- * INSTS
- */
+/************************************************************************
+ *                          VM Instructions                             *
+ ************************************************************************/
 #define INST(x) CAT2(hw_Inst, x)
 enum hw_Inst {
   /**/
@@ -500,14 +508,20 @@ inline hw_bool hw_Global_add_symb(hw_Global *g, hw_byte const *name
     return hw_SymTableOrd_set(g->parent, g->symbols
                               , name, namesize, v, vtid); }
 
+
+inline hw_u32 hw_Global_get_symb_id(hw_Global const *g
+                                  , hw_byte const *symb_name
+                                  , hw_u32 symb_name_size) {
+    return  g->symbols->indices[
+        hw_SymTableOrd_get_index(g->symbols, symb_name, symb_name_size)]; }
+
 inline hw_Var hw_Global_get_symb(hw_Global const *g, hw_byte const *symb_name
                                             , hw_u32 symb_name_size) {
-    hw_u32 id = g->symbols->indices[
-      hw_SymTableOrd_get_index(g->symbols, symb_name, symb_name_size)];
+
+    hw_u32 id = hw_Global_get_symb_id(g, symb_name, symb_name_size);
     if(id > g->symbols->vlenUsed) {
-        return g->symbols->vals[id];
-    }
-    return (hw_Var){0}; }
+        return (hw_Var){0}; }
+    return g->symbols->vals[id]; }
 
 inline hw_Var hw_Global_get_symb_via_id(hw_Global const *g, hw_u32 id) {
     return g->symbols->vals[id]; }
@@ -643,9 +657,9 @@ void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t);
 void hw_debug_print_symtable_ord(hw_State *hw, hw_SymTableOrd *table);
 void hw_debug_print_cmod(hw_State *hw, hw_CModule* cmod);
 
-/**
- * Section: Undef
- */
+/************************************************************************
+ *                              Section: Undef                          *
+ ************************************************************************/
 #undef CAT
 #undef CAT2
 

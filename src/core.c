@@ -202,6 +202,7 @@ hw_bool hw_writefile(char const path[], void *data, hw_u32 unitsize, hw_u32 len)
         return HW_FALSE;
     }
     fwrite(data, unitsize, len, fp);
+    fclose(fp);
     return HW_FALSE;
 }
 
@@ -267,6 +268,18 @@ hw_uint hw_str_calc_lineend(hw_byte const *at, hw_byte const *end)
         at += 1;
     }
     return line_end;
+}
+
+hw_byte const *hw_str_file_extension(hw_byte const *str, hw_u32 str_size, hw_u32 *size)
+{
+    hw_byte const* at = str + (str_size - 1);
+    while (at > str && *at != '.') {
+        at -= 1;
+    }
+    if(at != str + str_size - 1) { at += 1; // skip dot 
+                                            }
+    *size = (str + str_size) - at;
+    return at;
 }
 
 hw_i32 hw_strto_int(hw_int *ret, hw_byte const *str, hw_u32 size)
@@ -384,16 +397,6 @@ hw_String *hw_stripfile_path_ext(hw_State *hw, hw_byte const *file_name
     hw_byte tids[3];
     hwfn_String_newFrom_data(hw, args, tids, 3);
     return args[0].as_string;
-}
-
-hw_byte const *hw_get_file_extension(hw_byte const *str, hw_u32 str_size, hw_u32 *size)
-{
-    hw_byte const* at = str + (str_size - 1);
-    while (at > str && *at != '.') {
-        at -= 1;
-    }
-    *size = (str + str_size-1) - at;
-    return at;
 }
 
 /**

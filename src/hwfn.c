@@ -216,10 +216,7 @@ DEFN(String_delete) {
     (void)args;
     (void)tids;
     (void)argc;
-
-    _SELF_BIND(hw_String *, as_string);
-    _FREE(self);
-    
+    hw_String_delete(hw, _GET_SELF().as_string);
 }
 
 DEFN(String_append_bytes) {
@@ -261,7 +258,9 @@ DEFN(String_to_string) {
     (void)tids;
 
     _SELF_BIND(hw_String *, as_string);
-    hw_String_append_data(hw, &args[1].as_string, self->data, self->lenUsed);
+    hw_String_push(hw, &_GET_ARG(0, as_string), '"');
+    hw_String_append_data(hw, &_GET_ARG(0, as_string), self->data, self->lenUsed);
+    hw_String_push(hw, &_GET_ARG(0, as_string), '"');
     _GET_SELF_TID() = hw_TypeID_string;
     
 }
@@ -1050,7 +1049,8 @@ const struct {
 
 static void _default_setall_atoms(hw_TypeSys *ts)
 {
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(nil,   hw_byte,   0)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(any,   hw_byte,  0)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(nil,   hw_byte,  0)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(ptr,   hw_ptr,   0)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(int,   hw_int,   0)));
     HW_ASSERT(hw_TypeSys_set(ts, &TYPE(uint,  hw_uint,  0)));
@@ -1059,14 +1059,15 @@ static void _default_setall_atoms(hw_TypeSys *ts)
 
 static void _default_setall_objects(hw_TypeSys *ts)
 {
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(array,    hw_VarArr,     1)));
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(sarr,     hw_SArr,       1)));
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(list,     hw_VarList,    1)));
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(symtable, hw_SymTable,   1)));
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(bytearr,  hw_byteArr,   1)));
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(string,   hw_String,     1)));
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(module,   hw_Module,     1)));
-    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(thread,   hw_State,      1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(array,       hw_VarArr,     1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(sarr,        hw_SArr,       1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(list,        hw_VarList,    1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(symtable,    hw_SymTable,   1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(symtableord, hw_SymTableOrd,1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(bytearr,     hw_byteArr,    1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(string,      hw_String,     1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(module,      hw_Module,     1)));
+    HW_ASSERT(hw_TypeSys_set(ts, &TYPE(thread,      hw_State,      1)));
 }
 
 #undef TYPE
