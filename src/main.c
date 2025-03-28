@@ -321,6 +321,14 @@ static int _load_files(hw_State *hw, hw_Config *conf)
             hw_Module_delete_detatch_knstobj(hw, mods->data[i]);
         }
 
+        if(conf->mod_name) {
+            hw_String *firstfile = conf->files->data[0];
+            hw_logp("warn: module name not given using '%.*s'"
+                    , firstfile->lenUsed, firstfile->data);
+            conf->mod_name = hw_stripfile_path_ext(hw
+                    , firstfile->data, firstfile->lenUsed);
+        }
+
         hw_Global_add_symb((void *)hw->global, conf->mod_name->data
         , conf->mod_name->lenUsed, (hw_Var){.as_module = mod}, hw_TypeID_module);
     }
@@ -387,7 +395,7 @@ int main(int argc, char *argv[])
         hw_debug_print_inst(hw);
     }
     if(conf.files->lenUsed && _load_files(hw, &conf)) {
-        HW_ASSERT(conf.mod_name);
+
         
         hw_u32 mod_id = hw_Global_get_symb_id(hw->global, conf.mod_name->data, conf.mod_name->lenUsed);
         hw_Module *mod = hw_Global_get_symb_via_id(hw->global, mod_id).as_module;
