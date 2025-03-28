@@ -79,6 +79,8 @@ hw_String *hw_String_new(hw_State *hw, hw_u32 _len)
     return self;
 }
 
+void hw_String_delete(hw_State *hw, hw_String *self) { _FREE(self); }
+
 hw_String *hw_String_newFrom_data(
     hw_State *hw, hw_byte const *data, hw_u32 _len)
 {
@@ -86,6 +88,12 @@ hw_String *hw_String_newFrom_data(
     self->lenUsed = _len;
     memcpy(self->data, data, _len * sizeof(*self->data));
     return self;
+}
+
+void hw_String_nullterm(hw_State *hw, hw_String **self)
+{
+    hw_String_push(hw, self, '\0');
+    (*self)->lenUsed -= 1;
 }
 
 hw_bool hw_String_expand(hw_State *hw, hw_String **selfp, hw_u32 const by)
@@ -379,13 +387,13 @@ static void _SymTableOrd_expand_data(hw_State *hw, hw_SymTableOrd *table, hw_u32
 hw_u32 hw_SymTableOrd_get_index(hw_SymTableOrd *table, hw_byte const *str, hw_u32 len)
 {
     hw_u32 i = hw_hash_string_fnv(str, len) % (hw_uint)table->len;
-    HW_LOG("HASH(%.*s) = %u", len, str, i);
+    HW_DEBUG(HW_LOG("HASH(%.*s) = %u", len, str, i));
     hw_u32 id = table->indices[i];
     while (id < table->vlenUsed) {
-        HW_LOG("ID(%u) < %u, %u", id, table->vlenUsed, i);
+        HW_DEBUG(HW_LOG("ID(%u) < %u, H_%u", id, table->vlenUsed, i));
         if(table->key_size[id] == len
         && 0 == memcmp(table->keys[id], str, len)) { 
-            HW_LOG("DUP KEY @ %u", id);
+            HW_DEBUG(HW_LOG("DUP KEY @ %u", id));
             return i; 
         }
         i = i + 1;
