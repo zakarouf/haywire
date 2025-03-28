@@ -2,8 +2,10 @@
 CXX := gcc
 
 CXXFLAGS := -std=c99 -Oz -O3\
-			-Wall -Wextra -Wpedantic -Wshadow -Winline -Wswitch\
 			-rdynamic\
+			-Wl,--gc-sections\
+			-flto=auto\
+			-Wall -Wextra -Wpedantic -Wshadow -Winline -Wswitch\
 			-Wfatal-errors\
 			-Wno-unused-parameter\
 			-Wno-unused-command-line-argument
