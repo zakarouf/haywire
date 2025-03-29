@@ -158,6 +158,7 @@ struct hw_Config {
     hw_String *mod_name;
     hw_String *call;
     hw_String *cmod_so;
+    hw_String *cmod_ccflags;
     hw_String *cmod_call;
     hw_VarArr *args;
     struct hw_ConfigFlags {
@@ -207,7 +208,6 @@ static hw_uint _argparse_single_char_conf(
         break; case 'n': conf->flags.no_namespace = 1;
         break; case 'o': conf->flags.write_to_file = 1;
         break; case 'c': conf->call = argnext_req(args, &ARG);
-        break; case 'm': conf->mod_name = argnext_req(args, &ARG);
         break; default: hw_loglnp("Unknown command '-%c'", ch);
     }
     return ARG;
@@ -240,9 +240,21 @@ static hw_uint _argparse_mult_string(hw_State *hw,
     argcheck("call")        { conf->call = argnext_req(args, &ARG); }
     argcheck("ct-call")     { conf->cmod_call = argnext_req(args, &ARG); }
     argcheck("ct-compile")  { conf->flags.cmod_out = 1; }
+    argcheck("ct-ccflags")  { hw_String *ccflags = argnext(args, &ARG); 
+                              hw_String_append_fmt(hw, &conf->cmod_ccflags
+                                      , "%.*s", ccflags->lenUsed
+                                      , ccflags->data); }
     argparse_end()
     
     return ARG;
+}
+
+hw_String *hw_String_newFrom_str(hw_State *hw, hw_byte const *str, hw_u32 size)
+{
+    hw_String *string = hw_String_new(hw, size+1);
+    memcpy(string->data, str, size);
+    string->lenUsed += size;
+    return string;
 }
 
 hw_int hw_argparse(
@@ -250,6 +262,8 @@ hw_int hw_argparse(
     HW_ARR_NEW(hw, conf->files, 8);
     conf->cmod_so = NULL;
     conf->cmod_call = NULL;
+    conf->cmod_ccflags = hw_String_newFrom_str(hw, 
+            HW_STR("clang -std=c99 -O3 -Wall -Wextra -fPIC -shared "));
     hw_VarArr *args = _wrap_args(hw, argc, argv);
     conf->args = args;
     hw_uint ARG = 0;
@@ -272,6 +286,8 @@ hw_int hw_argparse(
 void config_del(hw_State *hw, hw_Config *conf)
 {
     hw_String_delete(hw, conf->cmod_so);
+    hw_String_delete(hw, conf->cmod_ccflags);
+    if(conf->mod_name) hw_String_delete(hw, conf->mod_name);
     hwfn_VarArr_delete(hw
         , (hw_Var[]){[0].as_arr = conf->args}, (hw_byte[]){hw_TypeID_array}, 1);
     HW_ARR_DELETE(hw, conf->files);
@@ -335,8 +351,6 @@ static int _load_files(hw_State *hw, hw_Config *conf)
 
         if(NULL == conf->mod_name) {
             hw_String *firstfile = conf->files->data[0];
-            hw_logp("warn: module name not given using '%.*s'"
-                    , firstfile->lenUsed, firstfile->data);
             conf->mod_name = hw_stripfile_path_ext(hw
                     , firstfile->data, firstfile->lenUsed);
         }
@@ -451,8 +465,10 @@ int main(int argc, char *argv[])
                 conf.cmod_so = s;
 
                 hw_String *cmd = hw_String_new(hw, 64);
+
                 hw_String_append_fmt(hw, &cmd, 
-                        "clang -std=c99 -O3 -Wall -Wextra -fPIC -shared %.*s -o %.*s"
+                        "%.*s %.*s -o %.*s"
+                        , conf.cmod_ccflags->lenUsed, conf.cmod_ccflags->data
                         , cfile->lenUsed, cfile->data
                         , conf.cmod_so->lenUsed, conf.cmod_so->data);
                 hw_String_push(hw, &cmd, '\0'); cmd->lenUsed -= 1;
