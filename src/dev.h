@@ -114,6 +114,7 @@ void hw_logstr(const char *msg, size_t const);
 #define HW_VAR_CALLEX(hw, type_id, self, name, arglist, argt, ...)\
     {                                                               \
         hw_Type *__T = hw_TypeSys_get_via_id(hw->ts, type_id);      \
+        HW_DEBUG(HW_ASSERT(__T));                                   \
         hw_VarFn __fn = hw_Type_getvt(__T, name, sizeof(name)-1);   \
         HW_VARFN(hw, __fn                                           \
             , (self, HW_MACRO_EXPAND arglist)                       \
@@ -570,9 +571,8 @@ hw_u32 hw_State_vstack_push_mult(hw_State *hw, hw_u32 const by);
 hw_u32 hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
 void hw_State_vstack_pop_mult_dtor(hw_State *hw, hw_u32 const by);
 
-inline void hw_State_vstack_pop_mult(hw_State *hw, const hw_u32 by) {
+inline void hw_State_vstack_pop_mult(hw_State *hw, const hw_u32 by) { 
     hw->vstack->lenUsed -= by; }
-
 /**
  * VM
  */

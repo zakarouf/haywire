@@ -356,6 +356,7 @@ void hw_SymTableOrd_delete(hw_State *hw, hw_SymTableOrd *table)
     _FREE(table->vals);
     _FREE(table->keys);
     _FREE(table->key_size);
+    _FREE(table->indices);
     _FREE(table);
 }
 
@@ -452,7 +453,8 @@ hw_bool hw_SymTableOrd_set(hw_State *hw, hw_SymTableOrd *table
                     //        or id = 0xFFFFFFFF
     hw_u32 index = hw_SymTableOrd_get_index(table, key, keysize);
     hw_u32 id = table->indices[index];
-
+    
+    hw_bool update = 0;
     if(table->vlenUsed < id) { // true if new key
         id = hw_SymTableOrd_push(hw, table, v, vtid);
         table->indices[index] = id;
@@ -460,11 +462,12 @@ hw_bool hw_SymTableOrd_set(hw_State *hw, hw_SymTableOrd *table
         table->keys[id] = _ALLOC(keysize);
         memcpy(table->keys[id], key, keysize);
         table->lenUsed += 1;
+        update = 1;
     }
 
     table->vals[id] = v;
     table->valT[id] = vtid;
-    return 0;
+    return update;
 }
 
 

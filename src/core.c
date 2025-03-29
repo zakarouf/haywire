@@ -435,13 +435,19 @@ hw_CModule *hw_CModule_newFrom_file(
         // from the host binary; functions from here.
         // Note: use -rdynamic flag while compiling the binary
         , RTLD_NOW | RTLD_GLOBAL);
-
-    if(lib == NULL) return NULL;
+    
+    if(lib == NULL) {
+        HW_DEBUG(HW_LOG("dlerror: %s", dlerror()));
+        return NULL;
+    }
 
     hw_CModule* (*hwfn_init)(hw_State *hw) 
           = HW_CAST(hw_CModule *(*)(hw_State *)
               , dlsym(lib, "_hwfn_init"));
-    if(hwfn_init == NULL) return NULL;
+    if(hwfn_init == NULL) {
+        HW_DEBUG(HW_LOG("dlerror: %s", dlerror()));
+        return NULL;
+    }
 
     hw_CModule *cmod = hwfn_init(hw);
     cmod->lib = lib;

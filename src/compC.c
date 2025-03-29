@@ -46,8 +46,8 @@ void hw_compc_delete(hw_CompilerC *c)
             , ([0].as_string = c->tmp_buffer)
             , (hw_TypeID_string),);
 
-    HW_THREAD_FREE(c->vm_child, c);
     hw_State *child = c->vm_child;
+    HW_THREAD_FREE(c->vm_child, c);
     hw_State_delete(child);
 }
 
