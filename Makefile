@@ -1,7 +1,7 @@
 # tool macros
 CXX := gcc
 
-CXXFLAGS := -std=c99 -Oz -O3\
+CXXFLAGS := -std=c99 -O3\
 			-rdynamic\
 			-Wl,--gc-sections\
 			-flto=auto\
@@ -16,8 +16,8 @@ PRFFLAGS := -std=c99\
 			-ggdb3\
 			-flto
 
-DBGFLAGS := -O0\
-			-ggdb3\
+DBGFLAGS := -ggdb3\
+			-fno-lto\
 			-DHW_DEBUG_CODE_ENABLE\
 			-fsanitize=address
 
