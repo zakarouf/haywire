@@ -16,9 +16,14 @@
 #endif
 
 
-#define line(s) s "\n"
+#define line(...) __VA_ARGS__ "\n"
+#define HW_VERSION_STR "0.0.1"
+
+#define PROG_INFO   line("Haywire verison v" HW_VERSION_STR)\
+                    line("A Small VM with an in-build Programing Language")
+                   
 const hw_CStr HELP_TXT = hw_CStr_LIT(
-line("A Small VM with an in-build Programing Language")
+    PROG_INFO
 line("")
 line("Usage: hw [OPTIONS] [file]... -- [vmargs]")
 line("")
@@ -46,8 +51,6 @@ line("")
 line("    --mcall               : Call The loaded module")
 line("    --cmcall              : Call The Compiled C Module")
 );
-#undef line
-
 
 static void _check_vm_inst(hw_State const *hw)
 {
@@ -202,8 +205,7 @@ inline static hw_String *argnext_req(hw_VarArr *args, hw_uint *arg_i)
     return arg;
 }
 
-static hw_uint _argparse_single_char_conf(
-    hw_VarArr *args, hw_Config *conf, hw_byte ch, hw_uint ARG)
+static hw_uint _argparse_single_char_conf(hw_Config *conf, hw_byte ch, hw_uint ARG)
 {
     switch (ch) {
                case 'd': conf->flags.disasm = 1;
@@ -279,7 +281,7 @@ hw_int hw_argparse(
     while(arg) {
         switch (_argparse_is_arg(arg)) {
             case ARG_TYPE_CONF_CHAR:        ARG = _argparse_single_char_conf(
-                                                    args, conf, ARG()->data[1], ARG);
+                                                    conf, ARG()->data[1], ARG);
             break; case ARG_TYPE_CONF_STR:  ARG = _argparse_mult_string(
                                                     hw, args, conf, ARG);
             break; case ARG_TYPE_STRING:    HW_ARR_PUSH(hw, conf->files, ARG());
@@ -396,8 +398,11 @@ int main(int argc, char *argv[])
     hw_Config conf = {0};
     HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
 
-    if(argc < 2) { fputs("-h, --help to see options\n", hw->stdout);
-                   goto _L_early_exit;}
+    if(argc < 2) { 
+        fputs(PROG_INFO, hw->stdout);
+        fputs("Use `-h`, `--help` to list all commands\n", hw->stdout);
+        goto _L_early_exit;
+    }
     if(conf.flags.help) {
         fputs((void *)HELP_TXT.data, hw->stdout);
         goto _L_early_exit;
@@ -492,7 +497,6 @@ int main(int argc, char *argv[])
     } // _load_files
 
 
-
     _L_early_exit:
     config_del(hw, &conf);
     hw_State_delete(hw);
@@ -500,3 +504,4 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
+#undef line

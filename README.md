@@ -6,10 +6,15 @@
 A small register based Programmable VM made to be fast and modular.
 
 ## Source Files Description
-* `hw_compbc.c`: Haywire Byte Code Compiler.
-* `hw_debug.c`: Debug Utilities (i.e. Decompiler, Stack Trace etc.)
-* `hw_vm.c`: HayWire Virtual Machine.
-* `hw_...`: All Utility functions and modules for haywire.
+* `debug`: Debug Utilities (i.e. Decompiler, Stack Trace etc.)
+* `core`: Core Components of Haywire.
+* `cstd`: C Standard Function Alternative.
+* `lexer`: Generic Lexer.
+* `types`: Functions of all the common data types.
+* `hwfn`: Same as `types` but haywire vm compliant.
+* `vm`: HayWire Virtual Machine.
+* `comp-bc`: Haywire ByteCode Compiler.
+* `comp-C`: Haywire ByteCode to C Transpiler.
 
 # Roadmap
 * [x] VM
@@ -69,6 +74,14 @@ make debug -j
 ```
 > Haywire Only depends on the C Standard Library & CRT. Removing/Replacing them
 > is a low priority goal.
+
+After Building, you can run the binary
+```sh 
+./bin/hw
+Haywire version 0.0.1
+A Small VM with an in-build Programing Language
+Use `-h`, `--help` to list all commands
+```
 
 ## Byte-code, IR & VM
 The Virtual Machine is fully implemented and ready. Along side the bytecode compiler. You can write a human readable of IR for the VM. 
@@ -195,7 +208,7 @@ x = [1, 2, 3]
 
 Haywire also has type unions or sum types built in.
 > As haywire is a vm language, each variable already hold in their type info.
-> Haywite facilitates a way to utilize it properly
+> Haywire facilitates a way to utilize it properly
 `?` is used for defining a sum type and pipe `|` for declaring possible types
 ```sh
 let x: ?int | float | str = 0.23
