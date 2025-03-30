@@ -10,11 +10,8 @@ CXXFLAGS := -std=c99 -O3\
 			-Wno-unused-parameter\
 			-Wno-unused-command-line-argument
 
-PRFFLAGS := -std=c99\
-			-O3\
-			-g\
+PRFFLAGS := -g\
 			-ggdb3\
-			-flto
 
 DBGFLAGS := -ggdb3\
 			-fno-lto\
@@ -91,7 +88,7 @@ $(TARGET_DEBUG): $(OBJ_DEBUG)
 	$(CXX) $(CXXFLAGS) $(DBGFLAGS) $(OBJ_DEBUG) -o $@
 
 $(TARGET_PROFILE): $(OBJ_PROF)
-	$(CXX) $(PRFFLAGS) $(OBJ_PROF) -o $@
+	$(CXX) $(CXXFLAGS) $(PRFFLAGS) $(OBJ_PROF) -o $@
 
 # phony rules
 .PHONY: makedir
