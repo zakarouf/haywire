@@ -27,39 +27,24 @@ line("    [file]...")
 line("    The files which are to be loaded")
 line("")
 line("Options:")
-line("    -h, --help")
-line("            Show this message")
+line("    -h, --help            : Show this message")
+line("    -n                    : Do not prefix file name as the namespace while complilation")
+line("    -m, --modname         : Assign name to the compiled module")
+line("                            otherwise use the name of the first file passed in")
+line("    -o                    : Write the compiled bytecode into a file with .hwo extention")
+line("                            Will use passed in mod name via -m")
 line("")
-line("    -n")
-line("            Do not prefix file name as the namespace while complilation")
+line("    -c, --c-compile       : Compile the loaded module in to shared object, requires c compiler")
+line("        --cc [bin]        : Set the c compiler, default is clang")
+line("        --ccflags \"[f]\"   : Append cc flags")
+line("                            flags \"-std=c99 -Wall -Wextra -fPIC -shared\", are always set")
 line("")
-line("    -d, --disasm")
-line("            Disassemble the loaded file and print it to `stdout`")
+line("    -d, --disasm          : Disassemble the loaded file and print it to `stdout`")
+line("        --disasm-out [n]  : Same as `-d` but print it out to a specific file instead")
+line("    --ct-print            : Print the transpiled c code to `stdout`")
 line("")
-line("        --disasm-out [file name]")
-line("            Same as `-d` but print it out to a specific file instead")
-line("")
-line("    -m, --modname")
-line("            Assign name to the compiled module")
-line("")
-line("    -o")
-line("            Write the compiled bytecode into a file with .hwo extention")
-line("            Will use passed in mod name via -m")
-line("")
-line("    --ct")
-line("            Enable C-Transpiler")
-line("")
-line("        --ct-print")
-line("            Print the transpiled c code to `stdout`")
-line("")
-line("        --ct-compile [file]")
-line("            Compile and write a shared object [file], requires c compiler")
-line("")
-line("        --ct-cc [bin]")
-line("            Set the c compiler,")
-line("            default is gcc or clang if gcc not available")
-line("")
-line("    --ct")
+line("    --mcall               : Call The loaded module")
+line("    --cmcall              : Call The Compiled C Module")
 );
 #undef line
 
@@ -157,6 +142,7 @@ struct hw_Config {
     HW_ARR(hw_String *) *files;
     hw_String *mod_name;
     hw_String *call;
+    hw_String *cc;
     hw_String *cmod_so;
     hw_String *cmod_ccflags;
     hw_String *cmod_call;
@@ -175,12 +161,29 @@ struct hw_Config {
     } flags;
 };
 
-static hw_byte _argparse_is_arg(hw_String *arg)
+enum ArgType {
+    ARG_TYPE_CONF_CHAR,
+    ARG_TYPE_CONF_STR,
+    ARG_TYPE_STRING,
+    ARG_TYPE_VMARG,
+    ARG_TYPE_ERROR
+};
+
+static enum ArgType _argparse_is_arg(hw_String *arg)
 {
-    if(arg->lenUsed == 2) { return arg->data[0] == '-'; }
-    if(arg->lenUsed > 2 
-    && (arg->data[0] == '-' && arg->data[1] == '-')) {return 2;}
-    return 0;
+    if(arg->lenUsed == 2) {
+        if(arg->data[0] == '-') {
+            if(arg->data[1] == '-') return ARG_TYPE_VMARG; // ... -- ...
+            else return ARG_TYPE_CONF_CHAR;  // ... '-a' ...
+        }
+        return ARG_TYPE_STRING;           // ... 'a' ...
+    } else if(arg->lenUsed > 2) {
+        if(arg->data[0] == '-') {
+            if(arg->data[1] == '-') return ARG_TYPE_CONF_STR;     // ...
+        } else return ARG_TYPE_STRING;
+    }
+
+    return ARG_TYPE_ERROR;
 }
 
 #define ARG() (args->data[ARG].as_string)
@@ -207,7 +210,7 @@ static hw_uint _argparse_single_char_conf(
         break; case 'h': conf->flags.help = 1;
         break; case 'n': conf->flags.no_namespace = 1;
         break; case 'o': conf->flags.write_to_file = 1;
-        break; case 'c': conf->call = argnext_req(args, &ARG);
+        break; case 'c': conf->flags.cmod_out = 1;
         break; default: hw_loglnp("Unknown command '-%c'", ch);
     }
     return ARG;
@@ -234,13 +237,18 @@ static hw_uint _argparse_mult_string(hw_State *hw,
     argcheck("help")        { conf->flags.help = 1; }
     argcheck("disasm")      { conf->flags.disasm = 1; }
     argcheck("print_inst")  { conf->flags.print_inst_info = 1; }
+
     argcheck("ct")          { conf->flags.transpile = 1; }
     argcheck("ct-print")    { conf->flags.cmod_source_print = 1; }
+
     argcheck("cmd")         { hw_cmd((void*)argnext_req(args, &ARG)->data); }
-    argcheck("call")        { conf->call = argnext_req(args, &ARG); }
-    argcheck("ct-call")     { conf->cmod_call = argnext_req(args, &ARG); }
-    argcheck("ct-compile")  { conf->flags.cmod_out = 1; }
-    argcheck("ct-ccflags")  { hw_String *ccflags = argnext(args, &ARG); 
+
+    argcheck("mcall")       { conf->call = argnext_req(args, &ARG); }
+    argcheck("cmcall")      { conf->cmod_call = argnext_req(args, &ARG); }
+
+    argcheck("cc")          { conf->cc = argnext(args, &ARG); }
+    argcheck("c-compile")   { conf->flags.cmod_out = 1; }
+    argcheck("ccflags")     { hw_String *ccflags = argnext(args, &ARG); 
                               hw_String_append_fmt(hw, &conf->cmod_ccflags
                                       , "%.*s", ccflags->lenUsed
                                       , ccflags->data); }
@@ -263,19 +271,21 @@ hw_int hw_argparse(
     conf->cmod_so = NULL;
     conf->cmod_call = NULL;
     conf->cmod_ccflags = hw_String_newFrom_str(hw, 
-            HW_STR("clang -std=c99 -O3 -Wall -Wextra -fPIC -shared "));
+            HW_STR("-std=c99 -Wall -Wextra -fPIC -shared "));
     hw_VarArr *args = _wrap_args(hw, argc, argv);
     conf->args = args;
     hw_uint ARG = 0;
     hw_String *arg = argnext(args, &ARG);
     while(arg) {
-        hw_byte argtype = _argparse_is_arg(arg);
-        if(argtype == 1) {
-            ARG = _argparse_single_char_conf(args, conf, ARG()->data[1], ARG);
-        } else if(argtype == 2) {
-            ARG = _argparse_mult_string(hw, args, conf, ARG);
-        } else {
-            HW_ARR_PUSH(hw, conf->files, ARG());
+        switch (_argparse_is_arg(arg)) {
+            case ARG_TYPE_CONF_CHAR:        ARG = _argparse_single_char_conf(
+                                                    args, conf, ARG()->data[1], ARG);
+            break; case ARG_TYPE_CONF_STR:  ARG = _argparse_mult_string(
+                                                    hw, args, conf, ARG);
+            break; case ARG_TYPE_STRING:    HW_ARR_PUSH(hw, conf->files, ARG());
+            break; case ARG_TYPE_VMARG:
+            default: hw_loglnp("Unknown argument %.*s"
+                , ARG()->lenUsed, ARG()->data);
         }
         arg = argnext(args, &ARG);
     }
@@ -374,30 +384,6 @@ static int _load_files(hw_State *hw, hw_Config *conf)
     return compile;
 }
 
-void hw_test_check_symtableord(hw_State *hw, hw_u32 count)
-{
-    hw_SymTableOrd *table = hw_SymTableOrd_new(hw, 64);
-    char buffer[64] = {[63] = 0};
-    for (size_t i = 0; i < count; i++) {
-        snprintf(buffer, 63, "symbols_%lu", i);
-        hw_SymTableOrd_set(hw, table,(hw_byte*)buffer, strnlen(buffer, 63)
-                            , (hw_Var){.as_uint = i}, hw_TypeID_int);
-    }
-    hw_bool *instances = HW_THREAD_ALLOC(hw, sizeof(hw_bool) * count);
-    memset(instances, 0, sizeof(*instances) * count);
-    for (size_t i = 0; i < table->len; i++) {
-        hw_u32 index = table->indices[i];
-        if(index < table->vlenUsed) {
-            HW_ASSERT(instances[index] == 0);
-            instances[index] = 1;
-        }
-    }
-    for (size_t i = 0; i < count; i++) {
-        HW_ASSERT(instances[i]);
-    }
-}
-
-
 #ifdef HAYWIRE_LIBRARY_IMPLEMENTATION
 int hw_main(int argc, char *argv[])
 #else
@@ -410,6 +396,8 @@ int main(int argc, char *argv[])
     hw_Config conf = {0};
     HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
 
+    if(argc < 2) { fputs("-h, --help to see options\n", hw->stdout);
+                   goto _L_early_exit;}
     if(conf.flags.help) {
         fputs((void *)HELP_TXT.data, hw->stdout);
         goto _L_early_exit;
@@ -443,54 +431,67 @@ int main(int argc, char *argv[])
             hw_String_delete(hw, outfile);
         }
 
-        if(conf.flags.transpile) {
-            hw_String *c_code = hw_compc_mod_to_c(hw, mod);
+        hw_String *c_code = NULL;
 
-            if(conf.flags.cmod_source_print) {
-                hw_debug_print_var(hw, (hw_Var){.as_string = c_code}
-                                     , hw_TypeID_string);
+
+        if(conf.flags.cmod_out) {
+            c_code = hw_compc_mod_to_c(hw, mod);
+            hw_String *cfile = hw_String_new(hw, conf.mod_name->lenUsed + 3);
+            hw_String_append_fmt(hw, &cfile, "%.*s.c"
+                    , conf.mod_name->lenUsed, conf.mod_name->data); hw_String_nullterm(hw, &cfile);
+            hw_writefile((void *)cfile->data, c_code->data
+                                         , 1, c_code->len);
+
+            hw_String *s = hw_String_new(hw, conf.mod_name->lenUsed + 5);
+            hw_String_append_fmt(hw, &s, "./%.*s.hwso"
+                      , conf.mod_name->lenUsed
+                      , conf.mod_name->data);
+            conf.cmod_so = s;
+
+            hw_String *cmd = hw_String_new(hw, 64);
+
+            if(conf.cc) {
+                hw_String_append_fmt(hw, &cmd, "%.*s ", conf.cc->lenUsed
+                                                      , conf.cc->data);
+            } else {
+                hw_String_append_fmt(hw, &cmd, "clang ");
             }
 
-            if(conf.flags.cmod_out) {
-                hw_String *cfile = hw_String_new(hw, conf.mod_name->lenUsed + 3);
-                hw_String_append_fmt(hw, &cfile, "%.*s.c"
-                        , conf.mod_name->lenUsed, conf.mod_name->data); hw_String_nullterm(hw, &cfile);
-                hw_writefile((void *)cfile->data, c_code->data
-                                             , 1, c_code->len);
+            hw_String_append_fmt(hw, &cmd, 
+                    "%.*s %.*s -o %.*s"
+                    , conf.cmod_ccflags->lenUsed, conf.cmod_ccflags->data
+                    , cfile->lenUsed, cfile->data
+                    , conf.cmod_so->lenUsed, conf.cmod_so->data);
 
-                hw_String *s = hw_String_new(hw, conf.mod_name->lenUsed + 5);
-                hw_String_append_fmt(hw, &s, "./%.*s.hwso"
-                          , conf.mod_name->lenUsed
-                          , conf.mod_name->data);
-                conf.cmod_so = s;
+            hw_String_push(hw, &cmd, '\0'); cmd->lenUsed -= 1;
+            hw_logstr((void *)cmd->data, cmd->lenUsed);
+            hw_cmd_lock((void *)cmd->data);
+            hw_String_delete(hw, cmd);
 
-                hw_String *cmd = hw_String_new(hw, 64);
-
-                hw_String_append_fmt(hw, &cmd, 
-                        "%.*s %.*s -o %.*s"
-                        , conf.cmod_ccflags->lenUsed, conf.cmod_ccflags->data
-                        , cfile->lenUsed, cfile->data
-                        , conf.cmod_so->lenUsed, conf.cmod_so->data);
-                hw_String_push(hw, &cmd, '\0'); cmd->lenUsed -= 1;
-                hw_cmd_lock((void *)cmd->data);
-                hw_String_delete(hw, cmd);
-
-                if(conf.cmod_call) {
-                    hw_CModule *cmod = hw_CModule_newFrom_file(
-                            hw, (void*) conf.cmod_so->data);
-                    HW_DEBUG(
-                        HW_ASSERT(cmod);
-                    );
-                    hw_VarFn fn = hw_CModule_getfn(cmod, conf.cmod_call->data
-                                                , conf.cmod_call->lenUsed);
-                    HW_DEBUG(HW_LOG("NO ARGS%s", ""));
-                    fn(hw, NULL, NULL, 0);
-                }
-                hw_String_delete(hw, cfile);
+            if(conf.cmod_call) {
+                hw_CModule *cmod = hw_CModule_newFrom_file(
+                        hw, (void*) conf.cmod_so->data);
+                HW_DEBUG(
+                    HW_ASSERT(cmod);
+                );
+                hw_VarFn fn = hw_CModule_getfn(cmod, conf.cmod_call->data
+                                            , conf.cmod_call->lenUsed);
+                HW_DEBUG(HW_LOG("NO ARGS%s", ""));
+                fn(hw, NULL, NULL, 0);
             }
-            hw_String_delete(hw, c_code);
+            hw_String_delete(hw, cfile);
         }
-    }
+
+        if(conf.flags.cmod_source_print) {
+            if(c_code == NULL) c_code = hw_compc_mod_to_c(hw, mod);
+            hw_debug_print_var(hw, (hw_Var){.as_string = c_code}
+                                 , hw_TypeID_string);
+        }
+        if(c_code) hw_String_delete(hw, c_code);
+
+    } // _load_files
+
+
 
     _L_early_exit:
     config_del(hw, &conf);

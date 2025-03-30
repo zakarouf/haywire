@@ -312,3 +312,27 @@ void hw_debug_print_cmod(hw_State *hw, hw_CModule* cmod)
     fprintf(hw->stdout, "   k:%u\n", cmod->k_count);
 }
 
+void hw_test_check_symtableord(hw_State *hw, hw_u32 count)
+{
+    hw_SymTableOrd *table = hw_SymTableOrd_new(hw, 64);
+    char buffer[64] = {[63] = 0};
+    for (size_t i = 0; i < count; i++) {
+        snprintf(buffer, 63, "symbols_%lu", i);
+        hw_SymTableOrd_set(hw, table,(hw_byte*)buffer, strnlen(buffer, 63)
+                            , (hw_Var){.as_uint = i}, hw_TypeID_int);
+    }
+    hw_bool *instances = HW_THREAD_ALLOC(hw, sizeof(hw_bool) * count);
+    memset(instances, 0, sizeof(*instances) * count);
+    for (size_t i = 0; i < table->len; i++) {
+        hw_u32 index = table->indices[i];
+        if(index < table->vlenUsed) {
+            HW_ASSERT(instances[index] == 0);
+            instances[index] = 1;
+        }
+    }
+    for (size_t i = 0; i < count; i++) {
+        HW_ASSERT(instances[i]);
+    }
+}
+
+
