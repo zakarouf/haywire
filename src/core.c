@@ -339,16 +339,21 @@ hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size)
         str++;
     }
 
+    // Fraction Part
     if(*str == '.') {
-        hw_float fraction = 0.0;
+        str++;
+        hw_u32 fraction = 0;
+        hw_float pow = 1;
         while( str < end && hw_char_is_num(*str) ) {
             hw_float digit = *str - '0';
-            fraction = (fraction * 10.0) + (digit);
+            fraction = (fraction * 10) + (digit);
+            pow *= 10;
             str++;
         }
-        result += (1.0/fraction);
+        result += ((hw_float)fraction/(hw_float)pow);
     }
     
+    // Exponent Part
     if(*str == 'e' || *str == 'E') {
         str++;
         hw_uint exp = 0;
@@ -369,7 +374,7 @@ hw_i32 hw_strto_float(hw_float *ret, hw_byte const *str, hw_u32 size)
         else         { result /= power; }
 
     }
-
+    
     *ret = sign * result;
     return end - str;
 }
