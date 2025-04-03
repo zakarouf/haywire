@@ -485,9 +485,7 @@ DEFN(VarList_newFrom_copy) {
     }
     
     self->lenUsed = src->lenUsed;
-
     _SELF_ASSIGN(as_list);
-    
 }
 
 DEFN(VarList_expand) {
@@ -495,18 +493,8 @@ DEFN(VarList_expand) {
     (void)argc;
 
     _SELF_BIND(hw_VarList *, as_list);
-    self->len += _GET_ARG(0, as_uint);
-    self = _REALLOC(self, ( (sizeof(*self)) 
-                          + (sizeof(*self->data) * (self->len))
-                        ));
-
-    HW_DEBUG(HW_ASSERT(self));
-    self->data = HW_CAST(void *, self + 1);
-    self->tid = _REALLOC(self->tid, sizeof(*self->tid) * (self->len));
-    HW_DEBUG(HW_ASSERT(self));
-
+    hw_VarList_expand(hw, &self, _GET_ARG(0, as_uint));
     _SELF_ASSIGN(as_list);
-    
 }
 
 DEFN(VarList_newFrom_fmt) {
@@ -556,7 +544,6 @@ DEFN(VarList_to_serialize) { // &self, &bytearray
     }
     _SELF_ASSIGN(as_list);
     _SET_ARG(0, as_bytearr, buffer);
-    
 }
 
 DEFN(VarList_newFrom_deserialize) { // &self, &index, &bytearray
@@ -590,20 +577,8 @@ DEFN(VarList_push_shallow) {
     (void)argc;
 
     _SELF_BIND(hw_VarList *, as_list);
-    if(self->len <= self->lenUsed) {
-        hw_Var expand_args[] = { _GET_SELF(), (hw_Var){.as_uint = self->len * 2} };
-        hw_byte expand_args_tids[] = { hw_TypeID_list, hw_TypeID_uint };
-        hwfn_VarList_expand(hw, expand_args, expand_args_tids, 2);
-        _GET_SELF() = expand_args[0];
-        self = _GET_SELF().as_list;
-    }
-    
-    self->data[self->lenUsed] = _GET_ARG_RAW(0);
-    self->tid[self->lenUsed] = _GET_ARG_TID(0);
-
-    self->lenUsed += 1;
-    
-    
+    hw_VarList_push_shallow(hw, &self, _GET_ARG_RAW(0), _GET_ARG_TID(0));
+    _SELF_ASSIGN(as_list);
 }
 
 DEFN(VarList_pop_dtor) {
@@ -621,14 +596,9 @@ DEFN(VarList_pop_dtor) {
         hw_Var *top = self->data + self->lenUsed;
         
         HW_DEBUG(
-            HW_ASSERT(T->vt[1] == hw_Type_getvt(T, "delete", 6));
-        );
-
+            HW_ASSERT(T->vt[1] == hw_Type_getvt(T, "delete", 6)););
         T->vt[1](hw, top, &tid, 1);
     }
-
-
-    
 }
 
 DEFN(VarList_reserve) {
@@ -645,21 +615,7 @@ DEFN(VarList_delete) {
     (void)argc;
 
     _SELF_BIND(hw_VarList *, as_list);
-    for (hw_uint i = 0; i < self->lenUsed; i++) {
-        HW_DEBUG(
-            printf("{}==== %"PRIu64 "===%" PRIu32 "\n", i, self->lenUsed);
-            HW_ASSERT_OP(self->tid[i], <, hw_TypeID_TOTAL, PRIu8, PRIu8));
-        hw_Type const *T = hw_TypeSys_get_via_id(hw->ts, self->tid[i]);
-        HW_ASSERT(T);
-        if(T->is_obj) {
-            HW_DEBUG(HW_LOG("USING vt[1] here %s", ""););
-            hw_VarFn delete = hw_Type_getvt(T, "delete", 6);
-            delete(hw, self->data + i, self->tid + i, 1);
-        }
-    }
-    _FREE(self->tid);
-    _FREE(self);
-    
+    hw_VarList_delete(hw, self);
 }
 
 DEFN(VarList_to_string) {

@@ -349,7 +349,7 @@ struct hw_Arena {
 /*************************************************************/
 struct hw_LexToken {
     hw_byte const   *start;
-    hw_uint         size;
+    hw_u32          size; 
     hw_byte         type;
 };
 

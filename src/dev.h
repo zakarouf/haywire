@@ -159,6 +159,13 @@ enum hw_LexTokenType {
     , TOKEN(SYMBOL)
     , TOKEN(NUMBER), TOKEN(FLOAT)
                       
+    /* String */
+    /**
+     * NOTE: Lexer does not evaluate string, but does provide a function
+     *       to evaluate a double-quoted string, use convert_dq_string
+     */
+    , TOKEN(STRING) 
+
     /* Keywords */    
     /*
      * NOTE: As per the new spec, keywords are handled by the
@@ -259,6 +266,8 @@ hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size);
 hw_uint hw_Lexer_line(hw_Lexer const *l);
 hw_uint hw_Lexer_col(hw_Lexer const *l);
 hw_byte const *hw_Lexer_line_start(hw_Lexer const *l);
+hw_bool hw_Lexer_convert_dq_string(hw_Lexer *l);
+hw_CStr hw_LexToken_get_name(hw_uint token_type);
 
 /************************************************************************
  *                          Memory Allocators                           *
@@ -361,7 +370,10 @@ hw_uint hw_SymTable_index(
 
 /*------------------------------- VarList --------------------------------*/
 hw_VarList *hw_VarList_new(hw_State *hw, hw_u32 len);
-
+void hw_VarList_delete(hw_State *hw, hw_VarList *self);
+void hw_VarList_expand(hw_State *hw, hw_VarList **vl, hw_u32 by);
+void hw_VarList_push_shallow(
+        hw_State *hw, hw_VarList **vl, hw_Var v, hw_byte tid);
 /************************************************************************
  *                          VM Instructions                             *
  ************************************************************************/
@@ -656,6 +668,9 @@ void hw_debug_print_mobj(hw_CompilerBC const *comp);
 void hw_debug_print_var(hw_State *hw, hw_Var v, hw_byte t);
 void hw_debug_print_symtable_ord(hw_State *hw, hw_SymTableOrd *table);
 void hw_debug_print_cmod(hw_State *hw, hw_CModule* cmod);
+void hw_debug_print_context(hw_byte const *source, hw_u32 source_size
+                          , hw_u32 context, hw_u32 context_size);
+
 
 /************************************************************************
  *                              Section: Undef                          *

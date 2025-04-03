@@ -3,8 +3,6 @@
 #include "cstd.h"
 #include "hwfn.h"
 
-hw_CStr hw_get_token_name(hw_uint token_type);
-
 enum DeferLableOperand {
     DEFER_LABLE_OPERAND_A = 0,
     DEFER_LABLE_OPERAND_B,
@@ -39,6 +37,7 @@ static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
     hw_loglnp("file: %.*s:"
         , (int)comp->sname.len, comp->sname.data);
 
+    //TODO: Use hw_debug_print_context
     
     hw_uint col = hw_Lexer_col(&comp->lexer);
     hw_uint line = hw_Lexer_line(&comp->lexer);
@@ -612,7 +611,7 @@ static void hw_compbc_lex_next(hw_CompilerBC *comp) {
 static void hw_compbc_lex_next_expect(hw_CompilerBC *comp, enum hw_LexTokenType ttype)
 {
     if(!hw_Lexer_next_expect(&comp->lexer, ttype)) {
-        hw_CStr const tname = hw_get_token_name(ttype);
+        hw_CStr const tname = hw_LexToken_get_name(ttype);
         _ERROR("Expected %.*s, got: %.*s"
                 , (int)tname.len, tname.data
                 , (int)comp->lexer.token.size, comp->lexer.token.start );
@@ -628,7 +627,7 @@ static void hw_compbc_lex_next_skipws_expect(hw_CompilerBC *comp, enum hw_LexTok
 {
     hw_Lexer_next_skipws(&comp->lexer);
     if(hw_LexToken_is_not(comp->lexer.token, ttype)) {
-        hw_CStr const tname = hw_get_token_name(ttype);
+        hw_CStr const tname = hw_LexToken_get_name(ttype);
         _ERROR("Expected %.*s, got: %.*s"
                 , (int)tname.len, tname.data
                 , (int)comp->lexer.token.size, comp->lexer.token.start );
@@ -638,7 +637,7 @@ static void hw_compbc_lex_next_skipws_expect(hw_CompilerBC *comp, enum hw_LexTok
 static void hw_compbc_lex_expect(hw_CompilerBC *comp, enum hw_LexTokenType ttype)
 {
     if(hw_LexToken_is_not(comp->lexer.token, ttype)) {
-         hw_CStr const tname = hw_get_token_name(ttype);
+         hw_CStr const tname = hw_LexToken_get_name(ttype);
         _ERROR("Expected %.*s, got: %.*s"
                 , (int)tname.len, tname.data
                 , (int)comp->lexer.token.size, comp->lexer.token.start );
@@ -963,7 +962,7 @@ static hw_bool _compiler_top(hw_CompilerBC *comp)
         TOKEN(COLON) { _compiler_lable(comp); }
         
         break; default: {
-                hw_CStr const tokenname = hw_get_token_name(comp->lexer.token.type);
+                hw_CStr const tokenname = hw_LexToken_get_name(comp->lexer.token.type);
                 _ERROR("Expected 'Comment', 'Instruction', Compiler Invoke got %.*s"
                         , (int)tokenname.len, tokenname.data);
             }

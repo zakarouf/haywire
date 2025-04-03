@@ -319,6 +319,53 @@ hw_VarList *hw_VarList_new(hw_State *hw, hw_u32 len)
     return self;
 }
 
+void hw_VarList_delete(hw_State *hw, hw_VarList *self)
+{
+     for (hw_uint i = 0; i < self->lenUsed; i++) {
+        HW_DEBUG(
+            printf("{}==== %"PRIu64 "===%" PRIu32 "\n", i, self->lenUsed);
+            HW_ASSERT_OP(self->tid[i], <, hw_TypeID_TOTAL, PRIu8, PRIu8));
+        hw_Type const *T = hw_TypeSys_get_via_id(hw->ts, self->tid[i]);
+        HW_ASSERT(T);
+        if(T->is_obj) {
+            HW_DEBUG(HW_LOG("USING vt[1] here %s", ""););
+            hw_VarFn delete = hw_Type_getvt(T, "delete", 6);
+            delete(hw, self->data + i, self->tid + i, 1);
+        }
+    }
+    _FREE(self->tid);
+    _FREE(self);   
+}
+
+void hw_VarList_expand(hw_State *hw, hw_VarList **vl, hw_u32 by)
+{
+    hw_VarList *self = *vl;
+    self->len += by;
+    self = _REALLOC(self, ( (sizeof(*self)) 
+                          + (sizeof(*self->data) * (self->len))
+                        ));
+
+    HW_DEBUG(HW_ASSERT(self));
+    self->data = HW_CAST(void *, self + 1);
+    self->tid = _REALLOC(self->tid, sizeof(*self->tid) * (self->len));
+    *vl = self;
+}
+
+void hw_VarList_push_shallow(
+        hw_State *hw, hw_VarList **vl, hw_Var v, hw_byte tid) {
+
+    hw_VarList *self = *vl;
+    if(self->len <= self->lenUsed) {
+        hw_VarList_expand(hw, &self, self->len);
+    }
+    
+    self->data[self->lenUsed] = v;
+    self->tid[self->lenUsed] = tid;
+    self->lenUsed += 1;
+
+    **vl = *self;
+}
+
 
 /*------------------------------- VarList --------------------------------*/
 hw_SymTableOrd *hw_SymTableOrd_new(hw_State *hw, hw_u32 len)

@@ -1,5 +1,8 @@
+#include "def.h"
 #include "dev.h"
 #include "cstd.h"
+#include <ctype.h>
+#include <stdio.h>
 
 #define TOKEN(x) [HW_LEXTOKEN_##x] = { .data = (void *)#x, .len = (sizeof(#x) -1) }
 static hw_CStr const hw_TOKEN_NAMES[HW_LEXTOKEN_TOTAL+1] = {
@@ -36,6 +39,9 @@ static hw_CStr const hw_TOKEN_NAMES[HW_LEXTOKEN_TOTAL+1] = {
     , TOKEN(SYMBOL)
     , TOKEN(NUMBER), TOKEN(FLOAT)
                       
+    /**/
+    , TOKEN(STRING)
+
     /* Keywords */    
     /*
      * NOTE: As per the new spec, keywords are handled by the
@@ -62,12 +68,15 @@ static hw_CStr const hw_TOKEN_NAMES[HW_LEXTOKEN_TOTAL+1] = {
 #undef TOKEN
 
 
+#define _prev_peek(l) (*(l)->at-1)
 #define _peek(s) (*(s)->at)
 #define _isend(s) ((s)->at >= (s)->end)
+#define _save(lex) ((lex)->at)
+#define _load(lex, with) {(lex)->at = (with);}
 
 #define hw_Lexer_check(lex, is) ((lex).token.type == is)
 
-hw_CStr hw_get_token_name(hw_uint token_type)
+hw_CStr hw_LexToken_get_name(hw_uint token_type)
 {
     HW_ASSERT(token_type < HW_LEXTOKEN_TOTAL);
     return hw_TOKEN_NAMES[token_type];
@@ -86,10 +95,10 @@ static inline void _make_token_err(hw_Lexer *lex, hw_byte *msg, hw_uint size)
     lex->token.size = size;
 }
 
-static inline hw_uint _advance(hw_Lexer *lex)
+static inline hw_bool _advance(hw_Lexer *lex)
 {
     lex->at += 1;
-    return lex->at[-1];
+    return !_isend(lex);
 }
 
 static int _check_if_symbol(hw_Lexer *lex)
@@ -111,24 +120,35 @@ static int _check_if_number(hw_Lexer *lex)
     if(!isdigit(lex->token.start[0])) {
         return 0;
     }
-    hw_byte dot = 0;
-    if(_peek(lex) == '.') {
-        dot += 1;
-        _advance(lex);
-    }
 
-    while(isdigit(_peek(lex)) && !_isend(lex)) {
-        _advance(lex);
+    hw_byte dot = 0;
+    while(!_isend(lex)) {
         if(_peek(lex) == '.') {
             if(dot) {
                 _make_token(lex, HW_LEXTOKEN_FLOAT);
-                return 1;
+                return 1; 
+            } else { dot = 1; }
+        } else if(!isdigit(_peek(lex))) { goto _L_eval; }
+        _advance(lex);
+    }
+    
+
+    _L_eval:
+    if(dot) {
+        hw_byte const *lsave = _save(lex);
+        if(_peek(lex) == 'e' || _peek(lex) == 'E') {
+            _advance(lex);
+            if(!_isend(lex) 
+            &&( _peek(lex) == '-' || isdigit(_peek(lex)))) {
+                _advance(lex);
+                while(!_isend(lex) && isdigit(_peek(lex))) _advance(lex);
             } else {
-                dot += 1;
+                _load(lex, lsave);
             }
         }
+        _make_token(lex, HW_LEXTOKEN_FLOAT);
+        return 1;
     }
-
     _make_token(lex, HW_LEXTOKEN_NUMBER);
     return 1;
 }
@@ -191,10 +211,12 @@ static int _check_if_char(hw_Lexer *lex)
 
         #define _match2(c1, T1, c2, T2)\
             case c1: {\
+                hw_byte const *save = _save(lex);\
                 _advance(lex);\
-                if(_peek(lex) == c2) {\
+                if(!_isend(lex) && _peek(lex) == c2) {\
                     _make_token(lex, TOKEN(T2));\
                 } else {\
+                    _load(lex, save);\
                     _make_token(lex, TOKEN(T1));\
                 }\
                 return 1;\
@@ -252,7 +274,7 @@ static void _print_token(hw_Lexer *lex)
         printf(" -> NEWLINE\n");
         return;
     }
-    hw_CStr const tokname = hw_get_token_name(lex->token.type);
+    hw_CStr const tokname = hw_LexToken_get_name(lex->token.type);
     printf("%.*s -> %.*s\n | \n", (int)lex->token.size, lex->token.start,
             (int)tokname.len, tokname.data);
     
@@ -308,6 +330,19 @@ hw_bool hw_Lexer_tiseq(hw_Lexer *lex, char const *string, hw_uint string_size)
     return 0;
 }
 
+hw_bool hw_Lexer_convert_dq_string(hw_Lexer *l)
+{
+    while(_advance(l)) {
+        if(_peek(l) == '"' && _prev_peek(l) != '\\') {
+            _advance(l); // include '"'
+            _make_token(l, HW_LEXTOKEN_STRING);
+            return HW_TRUE;
+        }
+    }
+    _make_token(l, HW_LEXTOKEN_ERROR);
+    return HW_FALSE;
+}
+
 inline hw_uint hw_Lexer_line(hw_Lexer const *l)
 {
     return hw_str_calc_linecount(l->begin, l->token.start - l->begin);
@@ -322,4 +357,3 @@ inline hw_byte const *hw_Lexer_line_start(hw_Lexer const *l)
 {
     return l->token.start - hw_Lexer_col(l);    
 }
-

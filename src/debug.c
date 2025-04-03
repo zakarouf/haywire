@@ -5,6 +5,34 @@
 #include <stdatomic.h>
 #include <stdio.h>
 
+static void _space(hw_u32 count)
+{
+    for (hw_u32 i = 0; i < count; i++) {
+        putchar(' ');
+    }
+}
+
+void hw_debug_print_context(hw_byte const *source, hw_u32 source_size
+                          , hw_u32 context, hw_u32 context_size)
+{
+    hw_u32 line = hw_str_calc_linecount(source, source_size);
+    hw_u32 col = hw_str_calc_column(source, source);
+    
+    hw_u32 line_start = source_size - context;
+    while(line_start > 0 && source[line_start] != '\n') { line_start -= 1; }
+
+    hw_u32 part1_sz = context - line_start;
+    hw_u32 space_count = printf(
+        "%u:%u|%.*s" 
+        , line+1, col+1
+        , part1_sz , source + line_start);
+     printf("\x1b[0;31m%.*s\x1b[0m\n"
+         , context_size, source + context); 
+     _space(space_count);
+     putchar('^');
+     putchar('\n');
+}
+
 void hw_debug_print_inst(hw_State *hw)
 {
     hw_InstInfo const *instinfo = hw->global->insts;
