@@ -101,6 +101,12 @@ static inline hw_bool _advance(hw_Lexer *lex)
     return !_isend(lex);
 }
 
+static inline hw_bool _retreat(hw_Lexer *lex)
+{
+    lex->at -= 1;
+    return (lex->at >= lex->begin);
+}
+
 static int _check_if_symbol(hw_Lexer *lex)
 {
     if(!(isalpha(lex->token.start[0]) || lex->token.start[0] == '_')) {
@@ -164,7 +170,10 @@ static int _check_if_char(hw_Lexer *lex)
         #define _match(ch, Token)\
             break; case ch: {_make_token(lex, TOKEN(Token)); return 1;}
 
-        _match(' ', SPACE);
+        case ' ': { while (_peek(lex) == ' ' && _advance(lex)){ }
+                    _make_token(lex, TOKEN(SPACE));
+                    return 1;
+               }
         _match('\t', TABSPACE);
         case '\n': {
             _make_token(lex, TOKEN(NEWLINE));
