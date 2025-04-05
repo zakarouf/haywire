@@ -9,91 +9,81 @@
 /**
  * AST
  */
-#define Ast(x) hw_ASTExprTAG_##x
-enum hw_ASTExprTAG {
-     Ast(BinaryOP)
-   , Ast(UnaryOP)
-   , Ast(Assign)
-   , Ast(Symbol)
-   , Ast(Literal)
-};
-#undef Ast
+    /**
+     * Literals:
+     *      Can Be of Type that can be parsed by the vm
+     *      e.g.:  10.53e-2
+     *           , [1, "Hello"]
+     *           , @type(table, table.from_jsonstring)
+     *              r"{ "Day": 16, "AvgTemp": [ 32.4, 26.2, 30.1 ] }"
+     */
+    /**
+     * operators: + - * / % > < == >= <= 
+     */
 
-#define AstDef(name) hw_ASTExpr_##name
-#define Ast(name, ...)\
+
+#define AstTAG(x) hw_ASThwTAG_##x
+#define AstDef(name) hw_ASThwNode_##name
+#define AstNode(name, ...)\
     typedef struct AstDef(name) AstDef(name);\
-    struct AstDef(name) {__VA_ARGS__}
+    struct AstDef(name) {__VA_ARGS__;};
 
-typedef struct hw_ASTExpr hw_ASTExpr;
-typedef struct hw_ASTStmt hw_ASTStmt;
-typedef struct hw_ASTDecl hw_ASTDecl;
-
-Ast(BinaryOP, hw_u32 expr_l, expr_r; hw_byte op;);
-Ast(UnaryOP, hw_u32 expr_r; hw_byte op; );
-Ast(Expr, hw_u32 expr;);
-Ast(Symbol, hw_u32 tok;);
-Ast(Literal, hw_u32 lit;);
-
-struct hw_ASTExpr {
-    enum hw_ASTExprTAG tag;
-    union {
-        AstDef(BinaryOP) BinaryOP;
-        AstDef(UnaryOP)  UnaryOP;
-        AstDef(Symbol)   Symbol;
-        AstDef(Literal)  Literal;
-        AstDef(Expr)     Expr;
-    } as;
+enum hw_ASThwTAG {
+     AstTAG(Literal)
+   , AstTAG(Symbol)
+   , AstTAG(BinaryExpr) 
+   , AstTAG(UnaryExpr)
+   , AstTAG(Block)
+   , AstTAG(ExprList)
+   , AstTAG(Assign)
+   , AstTAG(Call)
+   , AstTAG(Defn)
+   , AstTAG(Return)
 };
 
-#undef Ast
+typedef union   hw_ASThwNode hw_ASThwNode;
+typedef struct  hw_ASThw     hw_ASThw;
+
+AstNode(Literal     , hw_u32 lit)
+AstNode(Symbol      , hw_u32 tok)
+AstNode(BinaryExpr  , hw_u32 node_r, node_l, op)
+AstNode(UnaryExpr   , hw_u32 node_r, op)
+AstNode(ExprList    , hw_u32 node_expr, node_next)
+AstNode(Assign      , hw_u32 sym, node)
+AstNode(Call        , hw_u32 sym, node_exprlist)
+
+union hw_ASThwNode {
+    AstDef(BinaryExpr)  BinaryExpr;
+    AstDef(UnaryExpr)   UnaryExpr;
+    AstDef(Symbol)      Symbol;
+    AstDef(Literal)     Literal;
+};
+
+struct hw_ASThw {
+    hw_ASThwNode        as;
+    enum hw_ASThwTAG    tag;
+};
+
+#undef AstTAG
 #undef AstDef
+#undef AstNode
 
-enum hw_ASTStmtTAG {
-    hw_ASTStmtTAG_declsymb,
-    hw_ASTStmtTAG_declconst,
-    hw_ASTStmtTAG_decldefn,
-    hw_ASTStmtTAG_declvar,
-
-    hw_ASTStmtTAG_if,
-    hw_ASTStmtTAG_while,
-    hw_ASTStmtTAG_block,
-    hw_ASTStmtTAG_return,
-    hw_ASTStmtTAG_expr,
+#define HW_PARSER_ERRORMSG_MAX 256
+struct hw_ParserHW {
+    hw_TokList              *toklist;
+    hw_byte const           *source;
+    struct {
+        hw_ASThwNode *nodes;
+        hw_byte      *ntags;
+        hw_u32       len;
+        hw_u32       lenUsed;
+    } ast_pool;
+    hw_VarList              *lit_pool;
+    hw_u32                  source_size;
+    hw_u32                  tokat;
+    hw_u16                  emsize;
+    hw_byte                 error_msg[HW_PARSER_ERRORMSG_MAX];
 };
-
-
-#define AstDef(name) hw_ASTStmt_##name
-#define Ast(name, ...)\
-    typedef struct AstDef(name) AstDef(name);\
-    struct AstDef(name) {__VA_ARGS__;}
-
-Ast(if, hw_ASTExpr *cond;
-            hw_ASTStmt *then_stmt, *else_stmt);
-
-Ast(while, hw_ASTExpr *cond;
-            hw_ASTStmt *body);
-
-Ast(block, hw_ASTExpr *expr;
-            hw_ASTStmt *then_stmt, *else_stmt);
-
-Ast(return, hw_ASTExpr *expr;
-            hw_ASTStmt *then_stmt, *else_stmt);
-
-Ast(expr, hw_ASTExpr *expr;
-            hw_ASTStmt *then_stmt, *else_stmt);
-
-struct hw_ASTStmt {
-    hw_byte tag;
-    union {
-      hw_ASTStmt_expr *expr;
-      hw_ASTStmt_block *block;
-      hw_ASTStmt_if *condblock;
-      hw_ASTStmt_while *whileblock;
-    }as;
-};
-
-#undef Ast
-#undef AstDef
 
 /**
  *  Keyword Tokens
@@ -101,9 +91,9 @@ struct hw_ASTStmt {
 enum hw_TokenKeyword {
     #define KEY(NAME) HW_LEXTOKENHW_KEYWORD_##NAME
     KEY(if) = HW_LEXTOKEN_TOTAL
+  , KEY(fn)
   , KEY(for)
   , KEY(let) 
-  , KEY(defn)
   , KEY(else)
   , KEY(loop)
   , KEY(symb)
@@ -117,27 +107,6 @@ enum hw_TokenKeyword {
 /**
  * Types
  */
-
-typedef struct hw_TokList hw_TokList;
-struct hw_TokList {
-    hw_byte *tok;
-    hw_u32  *pos;
-    hw_u32  lenUsed;
-    hw_u32  len;
-};
-
-#define HW_PARSER_ERRORMSG_MAX 256
-typedef struct hw_ParserHW hw_ParserHW;
-struct hw_ParserHW {
-    hw_TokList          *toklist;
-    hw_byte const       *source;
-    HW_ARR(hw_ASTExpr)  *expr_pool;
-    hw_VarList          *lit_pool;
-    hw_u32              source_size;
-    hw_u32              tokat;
-    hw_u16              emsize;
-    hw_byte             error_msg[HW_PARSER_ERRORMSG_MAX];
-};
 
 typedef struct hw_CompilerHW hw_CompilerHW;
 struct hw_CompilerHW {
@@ -193,9 +162,9 @@ static hw_byte _try_promote_symb_to_keyword(hw_LexToken lt)
         hw_byte    tok;
     } keyword_info[] = {
         KEY(if)
+      , KEY(fn)
       , KEY(for)
       , KEY(let) 
-      , KEY(defn)
       , KEY(else)
       , KEY(loop)
       , KEY(symb)
@@ -207,9 +176,10 @@ static hw_byte _try_promote_symb_to_keyword(hw_LexToken lt)
     #undef KEY
 
     for (size_t i = 0; i < KEYWORDS; i++) {
-        if(0 == hw_ptrcmp(keyword_info[i].keyword
-                   , keyword_info[i].keyword_size
-                   , lt.start, lt.size)) { return keyword_info[i].tok; }
+        if(keyword_info[i].keyword_size == lt.size
+        && keyword_info[i].keyword[0]   == lt.start[0]
+        && 0 == memcmp(keyword_info[i].keyword, lt.start, lt.size)){ 
+          return keyword_info[i].tok; }
     }
 
     return HW_LEXTOKEN_SYMBOL;
@@ -299,35 +269,28 @@ static hw_bool is_operator(hw_byte tok)
     return HW_FALSE;
 }
 
-static hw_u32 hw_ParserHW_lit(hw_State *hw, hw_ParserHW *parser
-                     , hw_Var value, hw_byte type) {
-    hw_VarList_push_shallow(hw, &parser->lit_pool, value, type);
-    return parser->lit_pool->lenUsed-1;
-}
 
-static hw_u32 hw_ParserHW_expr(hw_State *hw, hw_ParserHW *parser)
-{
-    HW_ARR_PUSHINC(hw, parser->expr_pool);
-    return parser->expr_pool->lenUsed-1;
-}
-
-#define Expr(name, ...) hw_ASTExpr_as_##name(hw, parser, __VA_ARGS__)
-    
-#define ExprImpl(name, args, ...)\
-    static hw_u32 hw_ASTExpr_as_##name(hw_State *hw, hw_ParserHW *parser, HW_MACRO_EXPAND args ) {\
-      hw_u32 const id = hw_ParserHW_expr(hw, parser);                   \
-      hw_ASTExpr *self = parser->expr_pool->data + id;                  \
-      self->tag = hw_ASTExprTAG_##name;                                 \
-      self->as.name = (hw_ASTExpr_##name){__VA_ARGS__};                 \
+#define ASTNode(name, ...) hw_ASThwNode_new_##name(hw, parser, __VA_ARGS__)
+#define NodeImpl(name, args, ...)\
+    static hw_u32 hw_ASThwNode_new_##name(hw_State *hw, hw_ParserHW *parser, HW_MACRO_EXPAND args ) {\
+      hw_u32 const id = hw_ParserHW_node(hw, parser);                   \
+      parser->ast_pool.nodes[id].name = (hw_ASThwNode_##name){__VA_ARGS__}; \
+      parser->ast_pool.ntags[id]= hw_ASThwTAG_##name;              \
       return id; }
 
-ExprImpl(Literal, (hw_Var val, hw_byte type)
+NodeImpl(Literal, (hw_Var val, hw_byte type)
     , .lit = hw_ParserHW_lit(hw, parser, val, type))
-ExprImpl(BinaryOP, (hw_u32 l_expr, hw_u32 r_expr, hw_byte op), .expr_l = l_expr,
-                                                               .expr_r = r_expr,
-                                                               .op = op)
-ExprImpl(Symbol, (hw_u32 symbol_at), .tok = symbol_at)
-#undef ExprImpl
+
+
+
+NodeImpl(BinaryExpr, (hw_u32 node_l, hw_u32 node_r, hw_byte op)
+    , .node_l = node_l
+    , .node_r = node_r
+    , .op = op)
+
+NodeImpl(Symbol, (hw_u32 symbol_at), .tok = symbol_at)
+
+#undef NodeImpl
 
 /************************************************************************
  *                            Parser Private                            *
@@ -356,8 +319,10 @@ ExprImpl(Symbol, (hw_u32 symbol_at), .tok = symbol_at)
 #define _parser_softassert_err(parser) { if((parser)->emsize) return ; }
 #define _currenttok() (parser->toklist->tok[parser->tokat])
 
+
 static void _parser_error(hw_ParserHW *parser, const char *restrict format, ...)
-__printflike(2, 3)
+__printflike(2, 3);
+static void _parser_error(hw_ParserHW *parser, const char *restrict format, ...)
 {
     va_list vargs;
     va_start(vargs, format);
@@ -426,11 +391,11 @@ defn_parse(expr_factor)
             hw_LexToken tokn = _maketok(parser);
             hw_Var value;
             hw_strto_int(&value.as_int, tokn.start, tokn.size);
-            node = Expr(Literal, value, hw_TypeID_int);
+            node = ASTNode(Literal, value, hw_TypeID_int);
             _next_tok(parser);
         }
         break; case HW_LEXTOKEN_SYMBOL: {
-            node = Expr(Symbol, parser->tokat);
+            node = ASTNode(Symbol, parser->tokat);
             _next_tok(parser);
         }
         break; case HW_LEXTOKEN_PAREN_LEFT: {
@@ -455,7 +420,7 @@ defn_parse(expr_term)
         char op = _currenttok();
         _next_tok(parser);
         hw_u32 node_right = parse_call(expr_factor);
-        node_left = Expr(BinaryOP, node_left, node_right, op);
+        node_left = ASTNode(BinaryExpr, node_left, node_right, op);
     }
     return node_left;
 }
@@ -467,60 +432,43 @@ defn_parse(expr_expression)
         char op = _currenttok();
         _next_tok(parser);
         hw_u32 node_right = parse_call(expr_term);
-        node_left = Expr(BinaryOP, node_left, node_right, op);
+        node_left = ASTNode(BinaryExpr, node_left, node_right, op);
     }
     return node_left;
 }
 
-#undef Expr
+
+defn_parse(global)
+    //! symb main:fn(x|y) = {
+    //!     
+    //! }
+}
+
+#undef ASTNode
 #undef defn_parse
 #undef parse_call
 #undef parse_fail
 #undef parse_fail_on
 
 /************************************************************************
- *                     Haywire Source Compiler Public API
+ *                     Haywire Source Compiler API
  ************************************************************************/
 
 /********************************* Parser *******************************/
 /************************************************************************/
-
-void hw_ParserHW_printerr(hw_ParserHW *parser)
-{
-    if(!parser->emsize) { hw_logp("Success\n"); return; }
-    hw_u32 tokstart = hw_TokList_gettokpos(parser->toklist, parser->tokat);
-    hw_u32 toksize = hw_TokList_gettok_len(
-        parser->toklist, parser->tokat, parser->source_size);
-    hw_loglnp("Error: %.*s\n", parser->emsize, parser->error_msg);
-    hw_debug_print_context(parser->source, parser->source_size, tokstart
-                                , toksize);
-}
-
-void hw_ParserHW_new(hw_State *hw, hw_ParserHW *self)
-{
-    memset(self, 0, sizeof(*self));
-    self->toklist = hw_TokList_new(hw, 128);
-    self->lit_pool = hw_VarList_new(hw, 32);
-    HW_ARR_NEW(hw, self->expr_pool, 32);
-}
-
-void hw_ParserHW_delete(hw_State *hw, hw_ParserHW *self)
-{
-    hw_TokList_delete(hw, self->toklist);
-    hw_VarList_delete(hw, self->lit_pool);
-    HW_ARR_DELETE(hw, self->expr_pool);
-}
-
-inline void hw_debug_print_indent(hw_u16 count)
-{
-    for (hw_u16 i = 0; i < count; i++) {
-        fputs("    ", stdout);
-    }
-}
-
-#define _getexprnode(parser, id) (parser->expr_pool->data[id])
 #define _getvar(parser, id)      (parser->lit_pool->data[id])
 #define _getvartid(parser, id)   (parser->lit_pool->tid[id])
+
+inline void hw_debug_print_indent(hw_u16 count) {
+    for (hw_u16 i = 0; i < count; i++) { fputs("    ", stdout); }}
+
+static inline hw_ASThw hw_ParserHW_getAST(hw_ParserHW *parser, hw_u32 node) {
+    return (hw_ASThw) { .as = parser->ast_pool.nodes[node],
+                        .tag = parser->ast_pool.ntags[node] };}
+
+inline hw_VarP hw_ParserHW_getLit(hw_ParserHW *parser, hw_u32 lit) {
+    return (hw_VarP) { .type = parser->lit_pool->tid[lit],
+                       .value = parser->lit_pool->data[lit] };}
 
 void hw_debug_print_astexpr(hw_State *hw, hw_ParserHW *parser, hw_u32 node, hw_u32 depth)
 {
@@ -530,24 +478,26 @@ void hw_debug_print_astexpr(hw_State *hw, hw_ParserHW *parser, hw_u32 node, hw_u
             hw_loglnp(fmt, __VA_ARGS__);\
         }
 
-    if(node >= parser->expr_pool->lenUsed) {
+    if(node >= parser->ast_pool.lenUsed) {
         prnt("ERROR: INVALID NODE ID %u", node);         
     }
     
-    hw_ASTExpr expr = _getexprnode(parser, node);
+    hw_ASThw expr = hw_ParserHW_getAST(parser, node);
     switch (expr.tag) {
-        break; case hw_ASTExprTAG_Literal:
-            prnt("Literal: (%u)", expr.as.Literal.lit);
+        break; case hw_ASThwTAG_Literal:
+            hw_debug_print_indent(depth);
+            hw_logp("Literal: ");
             hw_debug_print_var(hw, _getvar(parser, expr.as.Literal.lit)
                                  , _getvartid(parser, expr.as.Literal.lit));
-        break; case hw_ASTExprTAG_BinaryOP:
+            hw_logp("\n");
+        break; case hw_ASThwTAG_BinaryExpr:
             prnt("BinaryOP: %s", hw_LexToken_get_name(
-                        expr.as.BinaryOP.op).data);
+                        expr.as.BinaryExpr.op).data);
             hw_debug_print_astexpr(hw, parser
-                , expr.as.BinaryOP.expr_l, depth+1);
+                , expr.as.BinaryExpr.node_l, depth+1);
             hw_debug_print_astexpr(hw, parser
-                , expr.as.BinaryOP.expr_r, depth+1);
-        break; case hw_ASTExprTAG_Symbol: {
+                , expr.as.BinaryExpr.node_r, depth+1);
+        break; case hw_ASThwTAG_Symbol: {
             hw_byte const *symb = hw_TokList_gettokval(parser->toklist
                 , parser->source, expr.as.Symbol.tok);
             hw_u32 symb_sz = hw_TokList_gettok_len(parser->toklist
@@ -563,12 +513,59 @@ void hw_debug_print_parserinfo(hw_ParserHW *parser)
 {
     hw_loglnp("Parser Info", "");
     hw_loglnp("Error: %.*s", parser->emsize, parser->error_msg);
-    hw_loglnp("ExprNode Count: %u", parser->expr_pool->lenUsed);
+    hw_loglnp("ASTNode Count: %u", parser->ast_pool.lenUsed);
     hw_loglnp("Literal  Count: %u", parser->lit_pool->lenUsed);
     hw_loglnp("Token Count %u", parser->toklist->lenUsed);
     hw_loglnp("Token At %u", parser->tokat);
     hw_loglnp("Source Size %u", parser->source_size);
     hw_loglnp("Source:\n %.*s", parser->source_size, parser->source);
+}
+
+void hw_ParserHW_printerr(hw_ParserHW *parser)
+{
+    if(!parser->emsize) { hw_logp("Success\n"); return; }
+    hw_u32 tokstart = hw_TokList_gettokpos(parser->toklist, parser->tokat);
+    hw_u32 toksize = hw_TokList_gettok_len(
+        parser->toklist, parser->tokat, parser->source_size);
+    hw_loglnp("Error: %.*s\n", parser->emsize, parser->error_msg);
+    hw_debug_print_context(parser->source, parser->source_size, tokstart
+                                , toksize);
+}
+
+hw_u32 hw_ParserHW_lit(hw_State *hw, hw_ParserHW *parser
+                     , hw_Var value, hw_byte type) {
+    hw_VarList_push_shallow(hw, &parser->lit_pool, value, type);
+    return parser->lit_pool->lenUsed-1;
+}
+
+hw_u32 hw_ParserHW_node(hw_State *hw, hw_ParserHW *parser)
+{
+    if(parser->ast_pool.lenUsed >= parser->ast_pool.len) {
+        parser->ast_pool.len *= 2;
+        HW_TPTR_REALLOC(hw, parser->ast_pool.nodes, parser->ast_pool.len);
+        HW_TPTR_REALLOC(hw, parser->ast_pool.ntags, parser->ast_pool.len);
+
+    }
+    parser->ast_pool.lenUsed += 1;
+    return parser->ast_pool.lenUsed-1;
+}
+
+void hw_ParserHW_new(hw_State *hw, hw_ParserHW *self)
+{
+    memset(self, 0, sizeof(*self));
+    self->toklist = hw_TokList_new(hw, 128);
+    self->lit_pool = hw_VarList_new(hw, 32);
+    HW_TPTR_ALLOC(hw, self->ast_pool.nodes, 32);
+    HW_TPTR_ALLOC(hw, self->ast_pool.ntags, 32);
+    self->ast_pool.len = 32;
+}
+
+void hw_ParserHW_delete(hw_State *hw, hw_ParserHW *self)
+{
+    hw_TokList_delete(hw, self->toklist);
+    hw_VarList_delete(hw, self->lit_pool);
+    HW_THREAD_FREE(hw, self->ast_pool.nodes);
+    HW_THREAD_FREE(hw, self->ast_pool.ntags);
 }
 
 void hw_ParserHW_generate_ast(hw_State *hw, hw_ParserHW *parser)
@@ -581,8 +578,9 @@ void hw_ParserHW_generate_ast(hw_State *hw, hw_ParserHW *parser)
         hw_ParserHW_printerr(parser);
         return;
     }
+    _list_all_tok(parser->toklist, parser->source, parser->source_size);
     hw_debug_print_parserinfo(parser);
-    hw_loglnp("AST: %u nodes", parser->expr_pool->lenUsed);
+    hw_loglnp("AST: %u nodes", parser->ast_pool.lenUsed);
     hw_debug_print_astexpr(hw, parser, node, 1);
 }
 
@@ -624,7 +622,6 @@ hw_VarP hw_comphw_main(hw_State *parent, hw_byte const *source)
 {
     hw_CompilerHW *comp = hw_comphw_new(parent);
     hw_comphw_setsource(comp, source, strlen((void*)source));
-
 
     hw_comphw_delete(comp);
     return HW_VARP_NIL();

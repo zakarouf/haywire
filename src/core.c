@@ -603,42 +603,73 @@ pid_t hw_cmd(char * const cmd_nullterm)
  * Section: ALLOCATORS
  */
 
-HW_DEBUG(
-    static thread_local hw_uint total_alloc_size = 0;
-    static thread_local hw_uint total_alloc_call = 0;
-)
+#ifdef HW_DEBUG_ENABLE_MEMORYINFO
+#define HW_DMEM(...) __VA_ARGS__
+#define HW_DMEM_ED(enabled, disabled) HW_MACRO_EXPAND enabled
+static thread_local struct {
+    hw_uint usage, alloc_call;
+    hw_uint        free_call;
+    hw_uint        realloc_call;
+} MemoryInfo = {0};
+#else
+#define HW_DMEM(...)
+#define HW_DMEM_ED(enabled, disabled) HW_MACRO_EXPAND disabled
+#endif
+
 static void* _gpa_malloc(hw_Allocator *self, size_t size)
 {
+    
     (void)self;
-    HW_DEBUG(
-      total_alloc_call += 1;
-      total_alloc_size += size;
-    );
-    return HW_MALLOC(size);
+    HW_DMEM_ED((
+        hw_uint *ptr = HW_MALLOC(size + sizeof(*ptr));
+        *ptr = size;
+        MemoryInfo.alloc_call += 1;
+        MemoryInfo.usage += size;
+        return ptr + 1;
+
+        ), (return HW_MALLOC(size);)
+    )
 }
 
 static void* _gpa_realloc(hw_Allocator *self, void *ptr, size_t size)
 {
     (void)self;
-    return HW_REALLOC(ptr, size);
+    HW_DMEM_ED((
+        hw_uint *oldptr = ptr; oldptr -= 1;
+        hw_int sizediff = size - *oldptr;
+        hw_uint *newptr = HW_REALLOC(oldptr, sizeof(*oldptr) + size);
+        MemoryInfo.realloc_call += 1;
+        MemoryInfo.usage += sizediff;
+        return newptr + 1;
+    ), (return HW_REALLOC(ptr, size);))
+    
 }
 
 static void  _gpa_free(hw_Allocator *self, void *ptr)
 {
     (void)self;
-    HW_FREE(ptr);
+    HW_DMEM_ED((
+        hw_uint *_ptr = ptr; _ptr -= 1;
+        MemoryInfo.free_call += 1;
+        HW_FREE(_ptr);
+    ), (HW_FREE(ptr)));
 }
 
 void hw_Allocator_gpa_delete(hw_Allocator *allocator)
 {
     (void)allocator;
     
-    HW_DEBUG(
-        hw_float alloc_size_kb = (hw_float)total_alloc_size/1000.0;
+    HW_DMEM(
+        hw_float alloc_size_kb = (hw_float)MemoryInfo.usage/1000.0;
         HW_LOG("MEMORY USAGE: \n"
-                    "  Alloc:%lf KBs\n"
-                    "  Calls:%"PRIu64 "\n"
-                    , alloc_size_kb, total_alloc_call));
+                    "  Total Allocated:%lf KBs\n"
+                    "  Alloc Calls    :%"PRIu64 "\n"
+                    "  Realloc Calls  :%"PRIu64 "\n"
+                    "  Free Calls     :%"PRIu64 "\n"
+                    , alloc_size_kb
+                    , MemoryInfo.alloc_call
+                    , MemoryInfo.realloc_call
+                    , MemoryInfo.free_call));
 }
 
 void hw_Allocator_new_gpa(hw_Allocator *self)
@@ -829,42 +860,11 @@ void hw_Allocator_new_arena(hw_Allocator *self)
     self->delete = hw_Allocator_arena_delete;
 }
 
-/**
- * Global
- */
-#if 0
-hw_State *hw_new(void)
-{
-    hw_Allocator allocator;
-    hw_Allocator_default(&allocator);
-    hw_State *self = allocator.alloc(&allocator, sizeof(*self));
-  
-    hw_TypeSys *ts = hw_TypeSys_default_with_allocator(Allocator);
+#undef HW_DMEM
 
-    memset(self, 0, sizeof(*self));
-
-    self->tsys = ts;
-    self->insts = HW_INST_DATA;
-    self->insts_count = hw_Inst_TOTAL;
-    
-    HW_DEBUG(HW_LOG("Loading VM with %u Instructions", hw_Inst_TOTAL));
-
-    hw_Thread_init(&self->main_thread, self, 0, "main", 4);  
-
-    return self;
-}
-
-void hw_delete(hw_State *self)
-{
-    hw_TypeSys *ts = self->tsys;
-
-    hw_Thread_deinit(&self->main_thread);
-
-    HW_TYPESYS_FREE(ts, self);
-    hw_TypeSys_delete(ts);
-    HW_DEBUG(HW_LOG("VM Exit %s", ""));
-}
-#endif
+/************************************************************************
+ *                            Type System
+ ************************************************************************/
 
 hw_TypeSys *hw_TypeSys_new(hw_uint type_count, hw_Allocator *allocator)
 {
@@ -942,8 +942,6 @@ hw_VarFn hw_Type_getvt(hw_Type const *T, char const *name, hw_uint name_size)
     return NULL;
 }
 
-
-
 inline hw_uint hw_Module_calcsize(hw_Module *m)
 {
     return HW_MODULE_SIZE(m, m->fn_count, m->code_len, m->data_size, m->k_count);
@@ -1004,24 +1002,15 @@ void hw_Module_get_FnInfo(hw_Module const *mod, hw_uint fn_id, hw_FnInfo *info)
 {
     hw_code pc = *hw_Module_get_fnpc(mod, fn_id);
     hw_byte *data = mod->data + pc.getx.x32;
+    hw_u16 const *vector = HW_CAST(hw_ptr, data);
 
-    info->name_size = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
-                      data += sizeof(hw_uint);
-
-    info->mut_count = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data)); 
-                      data += sizeof(hw_uint);
-
-    info->arg_count = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
-                      data += sizeof(hw_uint);
-
-    info->stack_sz  = *HW_CAST(hw_uint *, HW_CAST(hw_ptr, data));
-                      data += sizeof(hw_uint);
-
-
+    info->name_size = vector[0];
+    info->mut_count = vector[1];
+    info->arg_count = vector[2];
+    info->stack_sz  = vector[3];
+    data += sizeof(vector);
     info->name = data; 
-                      data += info->name_size;
-
-    info->types = data;
+    info->types = data + info->name_size;
 }
 
 hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, hw_uint *fn_id)

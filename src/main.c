@@ -124,13 +124,11 @@ static void _static_checks(void)
     X(sizeof(hw_code) == WORD_SIZE);
 }
 
-hw_CStr hw_get_token_name(hw_uint token_type);
-
 void print_tokens(hw_Lexer lexer)
 {
     while(lexer.token.type != HW_LEXTOKEN_END_OF_SOURCE) {
         hw_Lexer_next(&lexer);
-        hw_CStr name = hw_get_token_name(lexer.token.type);
+        hw_CStr name = hw_LexToken_get_name(lexer.token.type);
         printf("%p %p %lu - %.*s | %.*s", (void *)lexer.at, (void *)lexer.end
             , lexer.end - lexer.at
             , (int)lexer.token.size, lexer.token.start
@@ -297,9 +295,10 @@ hw_int hw_argparse(
 
 void config_del(hw_State *hw, hw_Config *conf)
 {
-    hw_String_delete(hw, conf->cmod_so);
-    hw_String_delete(hw, conf->cmod_ccflags);
-    if(conf->mod_name) hw_String_delete(hw, conf->mod_name);
+    if(conf->cmod_so)       hw_String_delete(hw, conf->cmod_so);
+    if(conf->cmod_ccflags)  hw_String_delete(hw, conf->cmod_ccflags);
+    if(conf->mod_name)      hw_String_delete(hw, conf->mod_name);
+
     hwfn_VarArr_delete(hw
         , (hw_Var[]){[0].as_arr = conf->args}, (hw_byte[]){hw_TypeID_array}, 1);
     HW_ARR_DELETE(hw, conf->files);
@@ -377,8 +376,9 @@ static int _load_files(hw_State *hw, hw_Config *conf)
     HW_ARR_DELETE(hw, cmod_files);
 
     for (hw_u32 i = 0; i < mod_namespace->lenUsed; i++) {
-        HW_VARFN(hw, hwfn_String_delete, ([0].as_string = mod_namespace->data[i])
-                , (hw_TypeID_string),);
+        if(mod_namespace->data[i]) {
+            hw_String_delete(hw, mod_namespace->data[i]);
+        }
     }
 
     HW_ARR_DELETE(hw, mod_namespace);

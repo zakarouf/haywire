@@ -13,6 +13,7 @@
 
 #ifdef HW_DEBUG_CODE_ENABLE
 #define HW_DEBUG(...) __VA_ARGS__
+#define HW_DEBUG_ENABLE_MEMORYINFO
 #else
 #define HW_DEBUG(...)
 #endif
@@ -98,6 +99,11 @@ void hw_logstr(const char *msg, size_t const);
             (TH)->allocator.free(&(TH)->allocator, PTR)
 #endif
 
+#define HW_TPTR_REALLOC(hw, v, len)\
+    { v = HW_THREAD_REALLOC(hw, v, sizeof(*v) * len); }
+
+#define HW_TPTR_ALLOC(hw, v, len)\
+    { v = HW_THREAD_ALLOC(hw, sizeof(*v) * len); }
 
 /************************************************************************
  *                              hw_VarFn                                *
@@ -327,6 +333,16 @@ hw_u32 hw_SymTableOrd_push(hw_State *hw, hw_SymTableOrd *table
 hw_bool hw_SymTableOrd_set(hw_State *hw, hw_SymTableOrd *table
                            , hw_byte const *key, hw_u32 keysize
                            , hw_Var v, hw_byte vtid);
+
+/*--------------------- AlgDef ------------------------*/
+hw_AlgDef *hw_AlgDef_newFrom_Table(hw_State *hw, hw_SymTableOrd *st);
+void hw_AlgDef_delete(hw_State *hw, hw_AlgDef *self);
+
+/*--------------------- Struct ------------------------*/
+hw_Struct *hw_Struct_newblank(hw_State *hw, hw_u32 len);
+void hw_Struct_delete(hw_State *hw, hw_Struct *self);
+
+/*---------------------- Sum --------------------------*/
 
 /*--------------------- String ------------------------*/
 
@@ -612,8 +628,8 @@ hw_uint hw_ModuleObj_data(hw_State *hw, hw_ModuleObj *mobj
 
 hw_uint hw_ModuleObj_fndata(hw_State *hw, hw_ModuleObj *mobj
             , hw_byte const *name, hw_byte const *tids
-            , hw_u32 name_size, hw_u32 mut_count
-            , hw_u32 args_passed, hw_u32 stack_size);
+            , hw_u16 name_size, hw_u16 mut_count
+            , hw_u16 args_passed, hw_u16 stack_size);
 
 hw_uint hw_ModuleObj_knst(hw_State *hw, hw_ModuleObj *mobj
                                       , hw_Var val
@@ -653,6 +669,18 @@ hw_bool hw_compbc_compile_files(hw_State *hw, hw_ModuleArr **modarr
 hw_String* hw_compc_mod_to_c(hw_State *hw, hw_Module const *m);
 
 /************************************************************************
+ *                              Parser                                  *
+ ************************************************************************/
+
+hw_u32 hw_ParserHW_lit(hw_State *hw, hw_ParserHW *parser
+                     , hw_Var value, hw_byte type);
+hw_u32 hw_ParserHW_node(hw_State *hw, hw_ParserHW *parser);
+void hw_ParserHW_generate_ast(hw_State *hw, hw_ParserHW *parser);
+hw_bool hw_ParserHW_build(hw_State *hw, hw_ParserHW *parser
+                    , hw_byte const *source, hw_u32 source_size);
+hw_VarP hw_ParserHW_getLit(hw_ParserHW *parser, hw_u32 lit);
+
+/************************************************************************
  *                              Debug                                   *
  ************************************************************************/
 void hw_debug_Module_disasm(hw_State *hw, hw_Module const *m);
@@ -670,7 +698,6 @@ void hw_debug_print_symtable_ord(hw_State *hw, hw_SymTableOrd *table);
 void hw_debug_print_cmod(hw_State *hw, hw_CModule* cmod);
 void hw_debug_print_context(hw_byte const *source, hw_u32 source_size
                           , hw_u32 context, hw_u32 context_size);
-
 
 /************************************************************************
  *                              Section: Undef                          *

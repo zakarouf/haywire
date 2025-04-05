@@ -58,9 +58,9 @@ static void hw_compbc_ERROR(hw_CompilerBC *comp, const char *restrict fmt, ...)
 }
 
 
-static void hw_FnObj_new(hw_CompilerBC *comp)
+static void hw_FnObjBC_new(hw_CompilerBC *comp)
 {
-    hw_FnObj *fnobj = HW_THREAD_ALLOC(comp->vm_child, sizeof(*fnobj));
+    hw_FnObjBC *fnobj = HW_THREAD_ALLOC(comp->vm_child, sizeof(*fnobj));
 
     memset(fnobj, 0, sizeof(*fnobj));
     HW_ARR_NEW(comp->vm_child, fnobj->var_infos, 8);
@@ -75,13 +75,13 @@ static void hw_FnObj_new(hw_CompilerBC *comp)
     fnobj->name_size = 32;
     fnobj->name = HW_THREAD_ALLOC(comp->vm_child, fnobj->name_size);
 
-    comp->fnobj = fnobj;
+    comp->fnobjbc = fnobj;
 }
 
-static void hw_FnObj_delete(hw_CompilerBC *comp)
+static void hw_FnObjBC_delete(hw_CompilerBC *comp)
 {
-    hw_FnObj *fnobj = comp->fnobj;
-    comp->fnobj = NULL;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
+    comp->fnobjbc = NULL;
 
     for (size_t i = 0; i < fnobj->var_infos->lenUsed; i++) {
         struct hw_VarInfo *vinf = fnobj->var_infos->data + i;
@@ -99,9 +99,9 @@ static void hw_FnObj_delete(hw_CompilerBC *comp)
     HW_THREAD_FREE(comp->vm_child, fnobj);
 }
 
-static void hw_FnObj_start(hw_CompilerBC *comp, hw_byte const *name, hw_uint name_size)
+static void hw_FnObjBC_start(hw_CompilerBC *comp, hw_byte const *name, hw_uint name_size)
 {
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
     fnobj->current_fn += 1;
     fnobj->lock = 1;
 
@@ -213,13 +213,15 @@ hw_uint hw_ModuleObj_data(hw_State *hw, hw_ModuleObj *mobj, void const *data, hw
 
 hw_uint hw_ModuleObj_fndata(
     hw_State *hw, hw_ModuleObj *mobj, hw_byte const *name, hw_byte const *tids
-  , hw_u32 name_size, hw_u32 mut_count, hw_u32 args_passed, hw_u32 stack_size)
+  , hw_u16 name_size, hw_u16 mut_count, hw_u16 args_passed, hw_u16 stack_size)
 {
-    hw_uint const fninfo_index = 
-    hw_ModuleObj_data(hw, mobj, (hw_uint[]){name_size}, sizeof(hw_uint));
-    hw_ModuleObj_data(hw, mobj, (hw_uint[]){mut_count}, sizeof(hw_uint));
-    hw_ModuleObj_data(hw, mobj, (hw_uint[]){args_passed}, sizeof(hw_uint));
-    hw_ModuleObj_data(hw, mobj, (hw_uint[]){stack_size}, sizeof(hw_uint));
+    #define data(elem) hw_ModuleObj_data(hw, mobj, &elem, sizeof(elem));
+    hw_uint const fninfo_index = data(name_size); 
+                                 data(mut_count);
+                                 data(args_passed);
+                                 data(stack_size);
+    
+    #undef data
     hw_ModuleObj_data(hw, mobj, name, name_size);
 
     hw_ModuleObj_data(hw, mobj, tids, sizeof(*tids) * stack_size);
@@ -394,14 +396,14 @@ hw_CompilerBC *hw_compbc_new(hw_State *parent)
     comp->vm_child = s;
 
     comp->mobj = hw_ModuleObj_new(comp->vm_child);
-    hw_FnObj_new(comp);
+    hw_FnObjBC_new(comp);
 
     return comp;
 }
 
 void hw_compbc_delete(hw_CompilerBC *comp)
 {
-    hw_FnObj_delete(comp);
+    hw_FnObjBC_delete(comp);
     hw_ModuleObj_delete(comp->vm_child, comp->mobj);
 
     hw_State *child = comp->vm_child;
@@ -436,7 +438,7 @@ static hw_uint hw_compbc_defknst(
 int hw_compbc_deflocalvar(hw_CompilerBC *comp
         , hw_byte const *var_name, hw_uint name_size, hw_VarInfo vinf)
 {
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
     HW_ASSERTEX(fnobj->vartable->key[
         hw_SymTable_index(fnobj->vartable, var_name, name_size)] == NULL,
         "Variable :%.*s already set", (int)name_size, var_name);
@@ -453,10 +455,10 @@ static hw_uint hw_compbc_w_defn(
   , const hw_uint total_arg, const hw_uint mut_count, const hw_byte *tids
   , hw_CStr const *arg_names)
 {
-    HW_ASSERT(comp->fnobj->lock == 0);
+    HW_ASSERT(comp->fnobjbc->lock == 0);
     hw_ModuleObj *obj = comp->mobj;
-    hw_FnObj_start(comp, name, name_size);
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC_start(comp, name, name_size);
+    hw_FnObjBC *fnobj = comp->fnobjbc;
 
     HW_ASSERTEX(
         !obj->fntable->key[hw_SymTable_index(obj->fntable, name, name_size)],
@@ -487,10 +489,10 @@ static hw_uint hw_compbc_w_defn(
 
 static void _compbc_resolve_lables(hw_CompilerBC *comp)
 {
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
     HW_DEBUG(HW_LOG("Resolving %"PRIu32" Lables for %.*s"
                 , fnobj->defer_lables->lenUsed
-                , (int)comp->fnobj->name_sizeUsed, comp->fnobj->name));
+                , (int)comp->fnobjbc->name_sizeUsed, comp->fnobjbc->name));
     while (fnobj->defer_lables->lenUsed) {
         hw_DeferInst defer = HW_ARR_TOP(fnobj->defer_lables);
         hw_VarP result = _get_symbol(fnobj->lables, defer.symbol.start
@@ -530,11 +532,11 @@ static void _compbc_resolve_lables(hw_CompilerBC *comp)
 
 static void hw_compbc_w_endfn(hw_CompilerBC *comp)
 {
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
     _compbc_resolve_lables(comp);
 
     HW_ASSERT(fnobj->lock);
-    comp->fnobj->lock = 0;
+    comp->fnobjbc->lock = 0;
     HW_ASSERT(fnobj->var_infos->lenUsed == fnobj->vartable->lenUsed);
     
     hw_byte *tids = HW_THREAD_ALLOC(comp->vm_child, fnobj->var_infos->lenUsed);
@@ -562,7 +564,7 @@ static void hw_compbc_w_endfn(hw_CompilerBC *comp)
 static hw_uint hw_compbc_w_lable(
     hw_CompilerBC *comp, hw_byte const *name, hw_uint name_size)
 {
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
     hw_SymTable_set(
         comp->vm_child, &fnobj->lables
       , name, name_size
@@ -589,7 +591,7 @@ static void hw_compbc_defer_fncall(hw_CompilerBC *comp, hw_LexToken name, hw_u32
 
 static void hw_compbc_defer_lable(hw_CompilerBC *comp, hw_LexToken symbol, hw_byte operand)
 {
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
     hw_DeferInst lable = {
         .inst = comp->mobj->code->lenUsed,
         .symbol = symbol,
@@ -717,15 +719,15 @@ static hw_int _compiler_next_eval_operand(hw_CompilerBC *comp)
             { hw_int point = hw_compbc_lex_getint(comp);
             memcpy(&operand, &point, sizeof(hw_int)); }
         break; case HW_LEXTOKEN_SYMBOL: 
-            assign_operand(fnobj->vartable, "Variable", as_uint);
+            assign_operand(fnobjbc->vartable, "Variable", as_uint);
         break; case HW_LEXTOKEN_AND:{
                 hw_compbc_lex_next_expect(comp, HW_LEXTOKEN_SYMBOL);
                 hw_VarP result = _get_symbol(
-                        comp->fnobj->lables
+                        comp->fnobjbc->lables
                         , lex->token.start, lex->token.size);
                 if( result.type == hw_TypeID_nil ) {
                     hw_compbc_defer_lable(
-                        comp, lex->token, comp->fnobj->operand);
+                        comp, lex->token, comp->fnobjbc->operand);
                     operand = -1;
                 }else {
                     operand = result.value
@@ -772,7 +774,7 @@ static void _compiler_inst(hw_CompilerBC *comp)
     hw_code instruction = { 0 };
 
     #define assign_inst(get, X)\
-        { comp->fnobj->operand = DEFER_LABLE_OPERAND_##X;\
+        { comp->fnobjbc->operand = DEFER_LABLE_OPERAND_##X;\
           instruction.get.X = _compiler_next_eval_operand(comp); }
 
     switch (instdata->inst_type) {

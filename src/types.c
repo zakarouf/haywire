@@ -391,7 +391,7 @@ hw_SymTableOrd *hw_SymTableOrd_new(hw_State *hw, hw_u32 len)
 
 void hw_SymTableOrd_delete(hw_State *hw, hw_SymTableOrd *table)
 {
-    for (size_t i = 0; i < table->lenUsed; i++) {
+    for (hw_u32 i = 0; i < table->lenUsed; i++) {
         _FREE(table->keys[i]);
         hw_Type *T = hw_TypeSys_get_via_id(hw->ts, table->valT[i]);
         if (T->is_obj) {
@@ -517,4 +517,50 @@ hw_bool hw_SymTableOrd_set(hw_State *hw, hw_SymTableOrd *table
     return update;
 }
 
+/************************************************************************
+ *                              Struct
+ ************************************************************************/
+hw_Struct *hw_Struct_newblank(hw_State *hw, hw_u32 len)
+{
+    hw_Struct *self = NULL;
+    hw_uint size = sizeof(*self)
+                 +(sizeof(*self->tids) * len)
+                 +(sizeof(*self->data) * len);
+    self = HW_THREAD_ALLOC(hw, size);
+    self->data = HW_CAST(hw_Var *, self + 1);
+    self->tids = HW_CAST(hw_byte*, self->data + len);
+    self->count = len;
+    self->tag = 0;
+    return self;
+}
+
+void hw_Struct_delete(hw_State *hw, hw_Struct *self)
+{
+    HW_THREAD_FREE(hw, self);
+}
+
+/************************************************************************
+ *                              Alg Def                                 *
+ ************************************************************************/
+hw_AlgDef *hw_AlgDef_newFrom_Table(hw_State *hw, hw_SymTableOrd *st)
+{
+    hw_AlgDef *self = HW_THREAD_ALLOC(hw, sizeof(*self));
+    self->template = hw_Struct_newblank(hw, st->vlenUsed);
+    HW_TPTR_ALLOC(hw, self->members, self->template->count);
+    for (hw_u32 i = 0; i < self->template->count; i++) {
+        self->members[i] = hw_String_newFrom_data(hw, st->keys[i], st->key_size[i]);
+    }
+    return self;
+}
+
+void hw_AlgDef_delete(hw_State *hw, hw_AlgDef *self)
+{
+    for (hw_u32 i = 0; i < self->template->count; i++) {
+        hw_String_delete(hw, self->members[i]);
+    }
+
+    hw_Struct_delete(hw, self->template);
+    HW_THREAD_FREE(hw, self->members);
+    HW_THREAD_FREE(hw, self);
+}
 

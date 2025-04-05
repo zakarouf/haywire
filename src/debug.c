@@ -95,7 +95,7 @@ void hw_debug_print_mobj(hw_CompilerBC const *comp)
 
 void hw_debug_print_fnobj(hw_CompilerBC const *comp)
 {
-    hw_FnObj *fnobj = comp->fnobj;
+    hw_FnObjBC *fnobj = comp->fnobjbc;
     hw_loglnp(
         "FnObject: \n"
         "   %.*s (%"PRIu64")\n"

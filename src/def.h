@@ -141,10 +141,9 @@ typedef struct  hw_u32Arr   hw_u32Arr;
 typedef struct  hw_uintArr  hw_uintArr;
 typedef struct  hw_byteArr  hw_byteArr;
 
+typedef struct hw_AlgDef hw_AlgDef;
 typedef struct hw_Struct hw_Struct;
-typedef struct hw_StructObj hw_StructObj;
 typedef struct hw_Sum hw_Sum;
-typedef struct hw_SumDef hw_SumDef;
 
 typedef struct hw_Lexer hw_Lexer;
 typedef struct hw_LexToken hw_LexToken;
@@ -201,6 +200,7 @@ typedef void (*hw_VarFn)
 
 /************************************************************/
 
+typedef struct hw_ParserHW hw_ParserHW;
 typedef struct hw_ModuleObj hw_ModuleObj;
 typedef struct hw_CompilerBC hw_CompilerBC;
 
@@ -234,10 +234,9 @@ union hw_Var {
     hw_Error const  *as_error;
 
     /* Structs */
+    hw_AlgDef       *as_agldef;
     hw_Struct       *as_struct;
     hw_Sum          *as_sum;
-    hw_StructObj    *as_structobj;
-    hw_SumDef       *as_sumdef;
 
     /* Objects */
     hw_byteArr      *as_bytearr,   **as_bytearr_p;
@@ -350,6 +349,7 @@ struct hw_Arena {
 struct hw_LexToken {
     hw_byte const   *start;
     hw_u32          size; 
+    // NOTE: 3 Byte Padding
     hw_byte         type;
 };
 
@@ -366,6 +366,11 @@ struct hw_Lexer {
     hw_LexToken     token;
 };
 
+struct hw_AlgDef {
+    hw_Struct *template;
+    hw_String **members;
+};
+
 struct hw_Struct {
     hw_u32  count;
     hw_u32  tag;
@@ -373,19 +378,9 @@ struct hw_Struct {
     hw_Var  *data;
 };
 
-struct hw_StructObj {
-    hw_uint *tags;
-    hw_Var  *data;
-};
-
 struct hw_Sum {
     hw_uint tid:8, tag:56;
     hw_Var value;
-};
-
-struct hw_SumDef {
-    hw_Struct   *defs;
-    hw_Var      *symbols;
 };
 
 struct hw_u32Arr {
@@ -437,6 +432,7 @@ struct hw_SArr {
     hw_u32         len;
     hw_u32         lenUsed;
     hw_u32         unitsize;
+    hw_u32         reflection;
 };
 
 struct hw_VarTable {
@@ -511,13 +507,14 @@ struct hw_KvTable {
  *  passed_count = arg_count - mut_count
  *  mut args are values passed to and then return from a function;
  */
+#define HW_FUNC_NAMESIZE_MAX UINT16_MAX
 struct hw_FnInfo {
     hw_byte const *name;
     hw_byte const *types;
-    hw_uint name_size;
-    hw_uint arg_count;
-    hw_uint mut_count;
-    hw_uint stack_sz;
+    hw_u16 name_size;
+    hw_u16 arg_count;
+    hw_u16 mut_count;
+    hw_u16 stack_sz;
 };
 
 struct hw_FnInfoArr {
@@ -556,6 +553,7 @@ struct hw_Type {
     hw_byte             name[32];
     hw_byte             c_name[32];
     hw_byte             is_obj;
+    hw_byte             use_subtype;
     hw_byte             name_size;
     hw_byte             c_name_size;
 };
@@ -590,7 +588,7 @@ struct hw_CodeStruct {
 
 union hw_code {
     uint64_t                raw;
-struct hw_CodeStruct    get;
+    struct hw_CodeStruct    get;
     struct hw_CodeStructX   getx;
     struct hw_CodeStructS   gets;
 };
@@ -608,13 +606,13 @@ enum hw_InstType {
 
 typedef struct hw_InstInfo hw_InstInfo;
 struct hw_InstInfo {
+    hw_byte const *  brief;
     char const       name[16];
+    hw_u32           brief_size;
     hw_byte          name_size;
-    enum hw_InstType inst_type;
+    hw_byte          inst_type;
     hw_byte          inst_code;    
     hw_byte          no_direct;
-    hw_byte const *  brief;
-    hw_u32           brief_size;
 };
 
 struct hw_codeArr {
@@ -703,9 +701,6 @@ enum hw_ThreadStatus {
 };
 
 struct hw_State {
-    pid_t                   id;
-    hw_byte                 name[128];
-
     hw_VarList              *vstack;
     hw_FnStateArr           *fstack;
 
@@ -716,21 +711,23 @@ struct hw_State {
     void                    *stdout;
     void                    *stdin;
 
+    pid_t                   id;
+    hw_byte                 name[130];
+
     hw_byte                 name_size;
-    enum hw_ThreadStatus    status;
+    hw_byte                 status;
 };
 
 struct hw_Global {
-    hw_CStr         name;
-    hw_uint         pid;
-
-    pthread_mutex_t mutex;
 
     hw_State        *parent;
     hw_SymTableOrd  *symbols;
 
     hw_TypeSys      *tsys;
     hw_InstInfo     const *insts;
+    hw_CStr         name;
+
+    pthread_mutex_t mutex;
     hw_byte         insts_count;
 };
 
@@ -757,7 +754,7 @@ typedef struct hw_DeferInstArr hw_DeferInstArr;
 typedef struct hw_DeferInst hw_DeferInst;
 
 typedef struct hw_VarInfo hw_VarInfo;
-typedef struct hw_FnObj hw_FnObj;
+typedef struct hw_FnObjBC hw_FnObjBC;
 
 struct hw_ModuleObj {
     hw_uintArr      *fnpt;
@@ -802,7 +799,7 @@ struct hw_DeferInstArr {
     hw_u32 lenUsed;
 };
 
-struct hw_FnObj {
+struct hw_FnObjBC {
     hw_uint name_size;
     hw_uint name_sizeUsed;
     hw_uint name_hash;
@@ -822,13 +819,13 @@ struct hw_FnObj {
 };
 
 /**
- * Section: Lexer
+ * Section: Haywire ASM Compiler
  */
 struct hw_CompilerBC {
     hw_State        *vm_parent;
     hw_State        *vm_child;
 
-    hw_FnObj        *fnobj;
+    hw_FnObjBC      *fnobjbc;
     hw_ModuleObj    *mobj;
     
     hw_Lexer        lexer;   
@@ -837,6 +834,14 @@ struct hw_CompilerBC {
     hw_CStr         out_name;
 };
 
+
+typedef struct hw_TokList hw_TokList;
+struct hw_TokList {
+    hw_byte *tok;
+    hw_u32  *pos;
+    hw_u32  lenUsed;
+    hw_u32  len;
+};
 
 /**
  *  Section: Bit Field
