@@ -16,7 +16,7 @@ void hw_debug_print_context(hw_byte const *source, hw_u32 source_size
                           , hw_u32 context, hw_u32 context_size)
 {
     hw_u32 line = hw_str_calc_linecount(source, source_size);
-    hw_u32 col = hw_str_calc_column(source, source);
+    hw_u32 col = hw_str_calc_column(source + context, source);
     
     hw_u32 line_start = source_size - context;
     while(line_start > 0 && source[line_start] != '\n') { line_start -= 1; }

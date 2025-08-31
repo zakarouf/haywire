@@ -366,3 +366,13 @@ inline hw_byte const *hw_Lexer_line_start(hw_Lexer const *l)
 {
     return l->token.start - hw_Lexer_col(l);    
 }
+
+hw_bool hw_Lexer_check_sanity(hw_Lexer *l)
+{
+    if(!l) return 0;
+    if(!l->at) return 0;
+    if(!l->begin) return 0;
+    if(!l->end) return 0;
+    if(!l->token.start) return 0;
+    return 1;
+}

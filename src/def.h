@@ -141,6 +141,8 @@ typedef struct  hw_u32Arr   hw_u32Arr;
 typedef struct  hw_uintArr  hw_uintArr;
 typedef struct  hw_byteArr  hw_byteArr;
 
+typedef hw_u32Arr hw_TableHead;
+
 typedef struct hw_AlgDef hw_AlgDef;
 typedef struct hw_Struct hw_Struct;
 typedef struct hw_Sum hw_Sum;
@@ -176,6 +178,7 @@ typedef struct  hw_codeArr      hw_codeArr;
 typedef struct  hw_FnState      hw_FnState;
 typedef struct  hw_FnStateArr   hw_FnStateArr;
 
+typedef struct  hw_FnObj        hw_FnObj;
 typedef struct  hw_Module       hw_Module;
 typedef struct  hw_ModuleArr    hw_ModuleArr;
 typedef struct  hw_CModule      hw_CModule;
@@ -773,8 +776,8 @@ struct hw_ModuleObj {
 };
 
 struct hw_VarInfo {
-    hw_Var  value;
-    hw_uint unique_reff;
+    hw_u32 changed;
+    hw_u32 reff_to;
     hw_byte is_mut:1
           , is_unique:1
           , is_val_tracked:1;
@@ -816,6 +819,20 @@ struct hw_FnObjBC {
 
     hw_byte lock;
     hw_byte operand;
+};
+
+struct hw_FnObj {
+    hw_uint               name_hash;
+
+    hw_String             *name;
+    hw_SymTableOrd        *lables;
+    hw_SymTableOrd        *knst;
+    struct hw_VarInfoArr  *vinfo;
+    hw_codeArr            *code;
+    hw_ModuleObj          *parent_mod;
+
+    hw_u16                args_passed;
+    hw_u16                muts_passed;
 };
 
 /**

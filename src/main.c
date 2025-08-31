@@ -396,7 +396,11 @@ int main(int argc, char *argv[])
     _static_checks();
     _check_vm_inst(hw);
     hw_Config conf = {0};
+
     HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
+
+    hw_VarP hw_comphw_main(hw_State *parent, hw_byte const *); hw_comphw_main(hw, (void *)argv[1]); goto _L_early_exit;
+
 
     if(argc < 2) { 
         fputs(PROG_INFO, hw->stdout);

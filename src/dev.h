@@ -377,6 +377,28 @@ hw_Var hw_SymTable_get(hw_State *hw, hw_SymTable *s, hw_CStr key);
 hw_uint hw_SymTable_index(
     hw_SymTable *sym, hw_byte const *key, hw_uint key_size);
 
+/*--------------------- TableHead ------------------------*/
+void hw_TableHead_new(
+        hw_State *const hw, hw_TableHead *const table, hw_u32 len);
+void hw_TableHead_delete(hw_State *hw, hw_TableHead *table);
+
+hw_u32 hw_TableHead_get_index(
+      hw_TableHead const *const table
+    , void     const *const *keylist
+    , void     const *const key
+    , hw_uint (* const hashfn)(void const *key)
+    , hw_i32  (* const keycmp)(void const *k1, void const *k2)
+    , hw_u32 const keylist_len);
+
+inline hw_u32 hw_TableHead_get_index_bt(
+      hw_TableHead  const *const table
+    , hw_byte   const *const key
+    , hw_byte   const *const *const keylist
+    , hw_u32    const *const keysizelist
+    , hw_uint (* const hashfn)(hw_byte const *key, hw_u32 const keysz)
+    , hw_u32 const keylist_len, hw_u32 const keysize);
+
+
 /*--------------------- Array ------------------------*/
 #define HW_ARR_FOREACH(T, iterator, arr, from, upto, step)\
     for(T iterator = (arr).data + from  \
@@ -564,7 +586,6 @@ void hw_State_delete(hw_State *s);
 /************************************************************************
  *                          [State::FnStack]                            *
  ************************************************************************/
-
 inline void hw_State_fstack_push(
     hw_State *s, hw_u32 const mod_id, hw_u32 const fn_id) {
     HW_ARR_PUSH(s, s->fstack, ((hw_FnState){
@@ -598,18 +619,32 @@ void hw_State_vstack_reserve(hw_State *hw, hw_u32 const by);
 hw_u32 hw_State_vstack_push_mult(hw_State *hw, hw_u32 const by);
 hw_u32 hw_State_vstack_push(hw_State *hw, hw_Var v, hw_byte tid);
 void hw_State_vstack_pop_mult_dtor(hw_State *hw, hw_u32 const by);
-
 inline void hw_State_vstack_pop_mult(hw_State *hw, const hw_u32 by) { 
     hw->vstack->lenUsed -= by; }
-/**
- * VM
- */
+
+
+/************************************************************************
+ *                          Virtural Machine                            *
+ ************************************************************************/
 void hw_vm(hw_State *hw);
 hw_FnState* hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_id);
 
 
 /************************************************************************
- *                           Module Object                              *
+ *                           Function Object                            *
+ ************************************************************************/
+hw_FnObj *hw_FnObj_new(hw_State *hw, hw_ModuleObj *mobj);
+void hw_FnObj_delete(hw_State *hw, hw_FnObj *fnobj);
+
+void hw_FnObj_knst(hw_State *hw
+    , hw_FnObj *fnobj, hw_byte const *name, hw_u32 name_sz
+    , hw_Var value, hw_byte tid);
+
+void hw_FnObj_lable(hw_State *hw, hw_FnObj *fnobj
+    , hw_byte const *name, hw_u32 name_sz);
+
+/************************************************************************
+ *                            Module Object                             *
  ************************************************************************/
 hw_ModuleObj* hw_ModuleObj_new(hw_State *hw);
 void hw_ModuleObj_delete(hw_State *hw, hw_ModuleObj *mobj);
@@ -639,6 +674,7 @@ hw_uint hw_ModuleObj_knstcopy(hw_State *hw, hw_ModuleObj *mobj
                                           , hw_Var val
                                           , hw_byte val_tid);
 
+hw_bool hw_ModuleObj_resolve_localcalls(hw_ModuleObj *mobj);
 hw_Module *hw_Module_combine(hw_State *hw, hw_u32 mod_count
                                          , hw_Module **mods
                                          , hw_String **namespaces);

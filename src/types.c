@@ -1,6 +1,8 @@
+#include "def.h"
 #include "dev.h"
 #include "hwfn.h"
 #include "cstd.h"
+#include <string.h>
 
 #define _ALLOC(SIZE)            HW_THREAD_ALLOC(hw, SIZE)
 #define _REALLOC(PTR, SIZE)     HW_THREAD_REALLOC(hw, PTR, SIZE)
@@ -366,6 +368,62 @@ void hw_VarList_push_shallow(
     **vl = *self;
 }
 
+/*------------------------------ hw_TableHead -----------------------------*/
+
+void hw_TableHead_new(
+        hw_State *const hw, hw_TableHead *const table, hw_u32 len)
+{
+    HW_TPTR_ALLOC(hw, table->data, len);
+    memset(table->data, -1, sizeof(*table->data) * len);
+    table->len = len;
+    table->lenUsed = 0;
+}
+
+hw_u32 hw_TableHead_get_index(
+      hw_TableHead const *const table
+    , void     const *const *keylist
+    , void     const *const key
+    , hw_uint (* const hashfn)(void const *key)
+    , hw_i32  (* const keycmp)(void const *k1, void const *k2)
+    , hw_u32 const keylist_len) {
+    hw_u32 i = hashfn(key) % (hw_uint)table->len;
+    hw_u32 id = table->data[i];
+    while(id < keylist_len) {
+        if(0 == keycmp(key, keylist[id])) { return i; }
+        i += 1;
+        if(i >= table->len) { i = 0; }
+        id = table->data[i];
+    }
+    return i;
+}
+
+inline hw_u32 hw_TableHead_get_index_bt(
+      hw_TableHead  const *const table
+    , hw_byte   const *const key
+    , hw_byte   const *const *const keylist
+    , hw_u32    const *const keysizelist
+    , hw_uint (* const hashfn)(hw_byte const *key, hw_u32 const keysz)
+    , hw_u32 const keylist_len, hw_u32 const keysize) {
+
+    hw_u32 i = hashfn(key, keysize) % (hw_uint)table->len;
+    hw_u32 id = table->data[i];
+    while(id < keylist_len) {
+        if(keysizelist[i] == keylist_len
+        && key[0] == keylist[i][0]
+        && 0 == memcmp(key, keylist[i], keysize)) { return i; }
+        i += 1;
+        if(i >= table->len) { i = 0; }
+        id = table->data[i];
+    }
+    return i;
+}
+
+void hw_TableHead_delete(hw_State *hw, hw_TableHead *table)
+{
+    HW_THREAD_FREE(hw, table->data);
+    table->len = 0;
+}
+
 
 /*------------------------------- VarList --------------------------------*/
 hw_SymTableOrd *hw_SymTableOrd_new(hw_State *hw, hw_u32 len)
@@ -395,6 +453,7 @@ void hw_SymTableOrd_delete(hw_State *hw, hw_SymTableOrd *table)
         _FREE(table->keys[i]);
         hw_Type *T = hw_TypeSys_get_via_id(hw->ts, table->valT[i]);
         if (T->is_obj) {
+            HW_LOG("Deleting Object %u: %.*s", i, T->name_size, T->name);
             HW_VAR_CALLEX(hw, table->valT[i], table->vals[i]
                     , "delete", (), (),);
         }
@@ -432,6 +491,21 @@ static void _SymTableOrd_expand_data(hw_State *hw, hw_SymTableOrd *table, hw_u32
     memset(table->key_size + table->vlen-by, 0, sizeof(*table->key_size) * by);
 }
 
+hw_u32 hw_SymTableOrd_push(hw_State *hw, hw_SymTableOrd *table
+                , hw_Var v, hw_byte vtid)
+{
+    if(table->vlenUsed >= table->vlen) {
+        _SymTableOrd_expand_data(hw, table, table->vlen);
+    }
+    
+    hw_u32 top = table->vlenUsed;
+    table->vlenUsed += 1;
+
+    table->vals[top] = v;
+    table->valT[top] = vtid;
+    return top;
+}
+
 hw_u32 hw_SymTableOrd_get_index(hw_SymTableOrd *table, hw_byte const *str, hw_u32 len)
 {
     hw_u32 i = hw_hash_string_fnv(str, len) % (hw_uint)table->len;
@@ -450,21 +524,6 @@ hw_u32 hw_SymTableOrd_get_index(hw_SymTableOrd *table, hw_byte const *str, hw_u3
     }
 
     return i;
-}
-
-hw_u32 hw_SymTableOrd_push(hw_State *hw, hw_SymTableOrd *table
-                , hw_Var v, hw_byte vtid)
-{
-    if(table->vlenUsed >= table->vlen) {
-        _SymTableOrd_expand_data(hw, table, table->vlen);
-    }
-    
-    hw_u32 top = table->vlenUsed;
-    table->vlenUsed += 1;
-
-    table->vals[top] = v;
-    table->valT[top] = vtid;
-    return top;
 }
 
 hw_bool hw_SymTableOrd_setkey(hw_State *hw, hw_SymTableOrd *table
