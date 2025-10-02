@@ -596,6 +596,18 @@ union hw_code {
     struct hw_CodeStructS   gets;
 };
 
+union hw_code8 {
+    uint8_t                 raw;
+};
+
+union hw_code16 {
+    uint16_t                 raw;
+};
+
+union hw_code32 {
+    uint32_t                 raw;
+};
+
 enum hw_InstType {
     hw_InstType_nop  // [ins nil nil nil]
   , hw_InstType_a    // [ins ax nil nil]

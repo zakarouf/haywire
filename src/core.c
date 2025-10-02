@@ -1338,6 +1338,10 @@ hw_bool hw_Module_get_fn(hw_Module *m, hw_byte const *name, hw_uint name_size, h
     return 0;
 }
 
+/****************************************************************************
+ *                            Haywire State
+ ****************************************************************************/
+
 hw_Global *hw_Global_new(hw_State *parent)
 {
     hw_Global *g = HW_THREAD_ALLOC(parent, sizeof(*g));
