@@ -4,6 +4,7 @@
 #include "hwfn.h"
 #include <stdatomic.h>
 #include <stdio.h>
+#include <string.h>
 
 static void _space(hw_u32 count)
 {
@@ -195,10 +196,10 @@ void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
     hw_Module_get_FnInfo(m, fn, &info);
     fprintf(hw->stdout
             , "\n"
-              ";; function: '%.*s' (id:%"PRIu64", %"PRIu64")\n"
-              ";; args count: %"PRIu64"\n"
-              ";; muts count: %"PRIu64"\n"
-              ";; stack size: %"PRIu64"\n"
+              ";; function: '%.*s' (id:%"PRIu64", %"PRIu32")\n"
+              ";; args count: %"PRIu32"\n"
+              ";; muts count: %"PRIu32"\n"
+              ";; stack size: %"PRIu32"\n"
               ";; types: (at)%"PRIu64"\n"
               ";; data : (at)%"PRIu32"\n"
             , (int)info.name_size, info.name
@@ -218,7 +219,7 @@ void hw_debug_Module_fn_disasm(hw_State *hw, const hw_Module *m, hw_uint fn)
         fprintf(hw->stdout, " _%"PRIu64":%.*s,"
                 , i, (int)T->name_size, T->name);
     }
-    fprintf(hw->stdout, "  ) ; total(%"PRIu64") mut (%"PRIu64")",
+    fprintf(hw->stdout, "  ) ; total(%"PRIu32") mut (%"PRIu32")",
             info.arg_count, info.mut_count);
 }
 
@@ -296,9 +297,9 @@ void hw_debug_State_trace(hw_State *hw)
     hw_Module_get_FnInfo(m, f->fn, &finfo);
 
     HW_LOG("Function Name: %.*s (%d)", (int)finfo.name_size, finfo.name, (int)finfo.name_size);
-    HW_LOG("         Args: %"PRIu64, finfo.arg_count);
-    HW_LOG("         Muts: %"PRIu64, finfo.mut_count);
-    HW_LOG("        Stack: %"PRIu64, finfo.stack_sz);
+    HW_LOG("         Args: %"PRIu32, finfo.arg_count);
+    HW_LOG("         Muts: %"PRIu32, finfo.mut_count);
+    HW_LOG("        Stack: %"PRIu32, finfo.stack_sz);
     
 }
 
@@ -346,7 +347,7 @@ void hw_test_check_symtableord(hw_State *hw, hw_u32 count)
     char buffer[64] = {[63] = 0};
     for (size_t i = 0; i < count; i++) {
         snprintf(buffer, 63, "symbols_%lu", i);
-        hw_SymTableOrd_set(hw, table,(hw_byte*)buffer, strnlen(buffer, 63)
+        hw_SymTableOrd_set(hw, table,(hw_byte*)buffer, hw_strnlen(buffer, 63)
                             , (hw_Var){.as_uint = i}, hw_TypeID_int);
     }
     hw_bool *instances = HW_THREAD_ALLOC(hw, sizeof(hw_bool) * count);

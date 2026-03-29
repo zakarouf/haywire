@@ -16,7 +16,7 @@ inline hw_FnState *hw_vm_prepare_call(hw_State *hw, hw_uint mod_id, hw_uint fn_i
     f->pc = mod->fnpt[f->fn];
 
     HW_DEBUG(HW_ASSERTEX((hw_int)(f->var - info.arg_count) >= 0
-        , "Stack Underflow: %"PRIi64, (f->var - info.arg_count)));
+        , "Stack Underflow: %"PRIi32, (f->var - info.arg_count)));
     
     hw_State_vstack_push_mult(hw, info.stack_sz - info.arg_count);
     memcpy(hw->vstack->tid + f->var
@@ -38,7 +38,7 @@ static inline hw_FnState* hw_vm_prepare_localcall(hw_State *hw, hw_uint fn_id, h
     hw_Module_get_FnInfo(mod, f->fn, &info);
 
     HW_DEBUG(HW_ASSERTEX((hw_int)(f->var - info.arg_count) >= 0
-        , "Stack Underflow: %"PRIi64, (f->var - info.arg_count)));
+        , "Stack Underflow: %"PRIi32, (f->var - info.arg_count)));
 
     hw_State_vstack_push_mult(hw, info.stack_sz - info.arg_count);
 

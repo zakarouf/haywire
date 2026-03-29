@@ -241,6 +241,17 @@ void hw_String_trim(hw_String *str, hw_byte ch)
     }
 }
 
+hw_uint hw_strnlen(char const *str, hw_uint len)
+{
+    hw_uint result = 0;
+    while (len && str[result]) {
+        result += 1;
+        len -= 1;
+    }
+    return result;
+}
+
+
 hw_uint hw_str_calc_linecount(hw_byte const *str, hw_uint size)
 {
     hw_uint line_count = 0;
@@ -794,6 +805,7 @@ void hw_CModule_delete(hw_State *hw, hw_CModule *cmod)
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <errno.h>
 
 extern char **environ;
 char** hw_getenv(void)
@@ -1069,10 +1081,9 @@ hw_Arena *hw_Arena_new(hw_u32 pool_capacity)
 
 void hw_Arena_delete(hw_Arena *arena)
 {
-    hw_ArenaRegion *reg = arena->begin;
-    hw_ArenaRegion *reg_next = reg->next;
-    HW_FREE(reg);
-    reg = reg_next;
+    hw_ArenaRegion *reg_next = arena->begin->next;
+    HW_FREE(arena->begin);
+    hw_ArenaRegion *reg = reg_next;
     while(reg) {
         reg->next = reg;
         HW_FREE(reg);

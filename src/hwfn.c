@@ -188,7 +188,7 @@ DEFN(String_newFrom_deserialize) { // &self, &index, bytearray
     hw_uint index = _GET_ARG(0, as_uint);
     hw_byteArr *buffer = _GET_ARG(1, as_bytearr);
     
-    hw_u32 len;
+    hw_u32 len = 0;
     hw_byteArr_loadinc(buffer, &index, &len, sizeof(len));
     _SELF(hw_String *) = hw_String_new(hw, len + 1);
     hw_byteArr_loadinc(buffer, &index, self->data, len * sizeof(*self->data));
@@ -240,7 +240,7 @@ DEFN(String_newFrom_file) {
     HW_DEBUG(_CHECK_ARGS(2, hw_TypeID_string, hw_TypeID_string));
 
     hw_String *path = _GET_ARG(0, as_string);
-    hw_Var filesize;
+    hw_Var filesize = {0};
     hw_Var filedata = { 
         .as_ptr = hw_loadfile(hw, (void const *)path->data
                 , path->lenUsed, &filesize.as_uint)
@@ -916,10 +916,10 @@ DEFN(Module_delete) {
 
 #define _TYPEVT_MAX 8
 
-const struct {
+static const struct {
     hw_FnInfo info;
     hw_VarFn  fn;
-} static TYPEVT[hw_TypeID_TOTAL][_TYPEVT_MAX]= {
+} TYPEVT[hw_TypeID_TOTAL][_TYPEVT_MAX]= {
 
     [hw_TypeID_uint] = {
         FNINFO(uint, to_string, 1, hw_TypeID_uint, hw_TypeID_string)

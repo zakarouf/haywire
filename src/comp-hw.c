@@ -258,6 +258,7 @@ enum hw_OPERATION_PRECIDENSE {
   , hw_OP_PREC_GRP
 };
 
+/*
 static hw_bool is_operator(hw_byte tok)
 {
     switch (tok) {
@@ -267,7 +268,7 @@ static hw_bool is_operator(hw_byte tok)
         break; case HW_LEXTOKEN_SLASH: return HW_TRUE;
     }
     return HW_FALSE;
-}
+}*/
 
 
 #define ASTNode(name, ...) hw_ASThwNode_new_##name(hw, parser, __VA_ARGS__)
@@ -321,7 +322,7 @@ NodeImpl(Symbol, (hw_u32 symbol_at), .tok = symbol_at)
 
 
 static void _parser_error(hw_ParserHW *parser, const char *restrict format, ...)
-__printflike(2, 3);
+__attribute__((format(printf, 2, 3)));
 static void _parser_error(hw_ParserHW *parser, const char *restrict format, ...)
 {
     va_list vargs;
@@ -438,11 +439,13 @@ defn_parse(expr_expression)
 }
 
 
+/*
 defn_parse(global)
     //! symb main:fn(x|y) = {
     //!     
     //! }
 }
+*/
 
 #undef ASTNode
 #undef defn_parse
@@ -470,7 +473,7 @@ inline hw_VarP hw_ParserHW_getLit(hw_ParserHW *parser, hw_u32 lit) {
     return (hw_VarP) { .type = parser->lit_pool->tid[lit],
                        .value = parser->lit_pool->data[lit] };}
 
-void hw_debug_print_astexpr(hw_State *hw, hw_ParserHW *parser, hw_u32 node, hw_u32 depth)
+void hw_debug_print_astexpr(hw_State *hw, hw_ParserHW *parser, hw_u32 node_indent, hw_u32 depth)
 {
     #define prnt(fmt, ...) \
         {\
@@ -478,11 +481,11 @@ void hw_debug_print_astexpr(hw_State *hw, hw_ParserHW *parser, hw_u32 node, hw_u
             hw_loglnp(fmt, __VA_ARGS__);\
         }
 
-    if(node >= parser->ast_pool.lenUsed) {
-        prnt("ERROR: INVALID NODE ID %u", node);         
+    if(node_indent >= parser->ast_pool.lenUsed) {
+        prnt("ERROR: INVALID NODE ID %u", node_indent);         
     }
     
-    hw_ASThw expr = hw_ParserHW_getAST(parser, node);
+    hw_ASThw expr = hw_ParserHW_getAST(parser, node_indent);
     switch (expr.tag) {
         break; case hw_ASThwTAG_Literal:
             hw_debug_print_indent(depth);
@@ -511,7 +514,7 @@ void hw_debug_print_astexpr(hw_State *hw, hw_ParserHW *parser, hw_u32 node, hw_u
 
 void hw_debug_print_parserinfo(hw_ParserHW *parser)
 {
-    hw_loglnp("Parser Info", "");
+    hw_loglnp("Parser Info: %s", "Debug Parser");
     hw_loglnp("Error: %.*s", parser->emsize, parser->error_msg);
     hw_loglnp("ASTNode Count: %u", parser->ast_pool.lenUsed);
     hw_loglnp("Literal  Count: %u", parser->lit_pool->lenUsed);

@@ -246,6 +246,8 @@ hw_byte const *hw_str_file_extension(hw_byte const *str, hw_u32 str_size, hw_u32
 hw_uint hw_str_calc_linecount(hw_byte const *str, hw_uint size);
 hw_uint hw_str_calc_column(hw_byte const *at, hw_byte const *str);
 hw_uint hw_str_calc_lineend(hw_byte const *at, hw_byte const *end);
+hw_uint hw_strnlen(char const *str, hw_uint len);
+
 
 /************************************************************************
  *                      Command Line & Subprocess                       *
@@ -359,7 +361,7 @@ void hw_String_push_hexchar(hw_State *hw, hw_String **selfp, hw_byte n1, hw_byte
 hw_String* hw_String_newFrom_dataRaw(
     hw_State *hw, hw_byte const *data, hw_u32 _len);
 void hw_String_append_fmt(hw_State *hw, hw_String **buffer
-        , char const *restrict format, ...) __printflike(3, 4);
+        , char const *restrict format, ...) __attribute__((format(printf, 3, 4)));
 void hw_String_append_data(
     hw_State *hw, hw_String **selfp, hw_byte const *data, hw_u32 _len);
 

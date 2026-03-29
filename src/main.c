@@ -340,6 +340,7 @@ static int _load_files(hw_State *hw, hw_Config *conf)
             HW_ARR_PUSH(hw, mod_namespace, conf->flags.no_namespace? NULL:
                     hw_stripfile_path_ext(hw, file->data, file->lenUsed));
         } else if(check_ext("hwso")) {
+            HW_DEBUG(HW_LOG("Added CMOD '%.*s'", file->lenUsed, file->data));
             HW_ARR_PUSH(hw, cmod_files, file);
         } else {
             hw_loglnp("Unknown: filetype '%.*s', file: '%.*s'", ext_len, ext
@@ -399,9 +400,11 @@ int main(int argc, char *argv[])
 
     HW_ASSERT(hw_argparse(hw, &conf, argc, argv) == 0);
 
-    hw_VarP hw_comphw_main(hw_State *parent, hw_byte const *); hw_comphw_main(hw, (void *)argv[1]); goto _L_early_exit;
+    // Temp, currently linked up with the ast to for quick check
+        //hw_VarP hw_comphw_main(hw_State *parent, hw_byte const *);
+        //hw_comphw_main(hw, (void *)argv[1]); goto _L_early_exit;
 
-
+    
     if(argc < 2) { 
         fputs(PROG_INFO, hw->stdout);
         fputs("Use `-h`, `--help` to list all commands\n", hw->stdout);
@@ -411,10 +414,13 @@ int main(int argc, char *argv[])
         fputs((void *)HELP_TXT.data, hw->stdout);
         goto _L_early_exit;
     }
-
+    
+    /// FOR DEBUG, prints the supported IR instructions
     if(conf.flags.print_inst_info) {
         hw_debug_print_inst(hw);
     }
+
+     
     if(conf.files->lenUsed && _load_files(hw, &conf)) {
         hw_u32 mod_id = hw_Global_get_symb_id(hw->global, conf.mod_name->data, conf.mod_name->lenUsed);
         hw_Module *mod = hw_Global_get_symb_via_id(hw->global, mod_id).as_module;
@@ -476,17 +482,29 @@ int main(int argc, char *argv[])
             hw_logstr((void *)cmd->data, cmd->lenUsed);
             hw_cmd_lock((void *)cmd->data);
             hw_String_delete(hw, cmd);
-
-            if(conf.cmod_call) {
+            
+            // Will only work if compiled on run
+            if(conf.cmod_call != NULL) {
+                HW_DEBUG(HW_LOG("Trying to call '%.*s'",
+                        conf.cmod_call->lenUsed, conf.cmod_call->data));
                 hw_CModule *cmod = hw_CModule_newFrom_file(
                         hw, (void*) conf.cmod_so->data);
-                HW_DEBUG(
-                    HW_ASSERT(cmod);
-                );
-                hw_VarFn fn = hw_CModule_getfn(cmod, conf.cmod_call->data
-                                            , conf.cmod_call->lenUsed);
-                HW_DEBUG(HW_LOG("NO ARGS%s", ""));
-                fn(hw, NULL, NULL, 0);
+                if(cmod != NULL) {
+                    hw_VarFn fn = hw_CModule_getfn(cmod, conf.cmod_call->data
+                                                , conf.cmod_call->lenUsed);
+                    if(fn == hwfn_VarFn_UNREACHABLE) {
+                        HW_LOG(
+                            "Unable to Find Function '%.*s'",
+                                conf.cmod_call->lenUsed, conf.cmod_call->data);
+                    } else {
+                        HW_DEBUG(HW_LOG("NO ARGS%s", ""));
+                        fn(hw, NULL, NULL, 0);
+                    }
+                } else {
+                    HW_LOG(
+                        "Unable to load C Module '%.*s'",
+                            conf.cmod_so->lenUsed, conf.cmod_so->data);
+                }
             }
             hw_String_delete(hw, cfile);
         }

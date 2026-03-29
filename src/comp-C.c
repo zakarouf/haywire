@@ -171,7 +171,7 @@ static hw_bool _comp_fn(hw_CompilerC *comp, hw_u32 fn_id)
     _comp_fn_set_types(comp, &fn_info);
 
     if(fn_info.arg_count) {
-        appendln_fmt("memcpy(vars, args, sizeof(*args) * %"PRIu64");"
+        appendln_fmt("memcpy(vars, args, sizeof(*args) * %"PRIu32");"
                 , fn_info.arg_count);
     }
 
@@ -187,9 +187,9 @@ static hw_bool _comp_fn(hw_CompilerC *comp, hw_u32 fn_id)
     appendln_fmt("_L_return:%c", ';');
 
     if(fn_info.mut_count) {
-        appendln_fmt("memcpy(args, vars, sizeof(*args) * %"PRIu64");"
+        appendln_fmt("memcpy(args, vars, sizeof(*args) * %"PRIu32");"
                 , fn_info.mut_count);
-        appendln_fmt("memcpy(argTs, tids, sizeof(*tids) * %"PRIu64");"
+        appendln_fmt("memcpy(argTs, tids, sizeof(*tids) * %"PRIu32");"
                 , fn_info.mut_count);
     }
 
@@ -268,6 +268,7 @@ hw_String* hw_compc_mod_to_c(hw_State *hw, hw_Module const *m) {
     hw_CompilerC *comp = hw_compc_new(hw);
     comp->source = m;
 
+    appendln_fmt("/* file: %s */", "hws -> c");
     appendln_fmt("#include %s", "\"src/hw.h\"");
    
     // Const Decl
