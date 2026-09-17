@@ -392,7 +392,7 @@ hw_u32 hw_TableHead_get_index(
     , hw_i32  (* const keycmp)(void const *k1, void const *k2)
     , hw_u32 const keylist_len);
 
-inline hw_u32 hw_TableHead_get_index_bt(
+hw_u32 hw_TableHead_get_index_bt(
       hw_TableHead  const *const table
     , hw_byte   const *const key
     , hw_byte   const *const *const keylist
@@ -718,6 +718,11 @@ hw_bool hw_ParserHW_build(hw_State *hw, hw_ParserHW *parser
                     , hw_byte const *source, hw_u32 source_size);
 hw_VarP hw_ParserHW_getLit(hw_ParserHW *parser, hw_u32 lit);
 
+hw_u32 hw_ParserHW_exprlist_add_node(hw_State *hw, hw_ParserHW *parser
+                                   , hw_u32 id, hw_u32 node);
+hw_u32 hw_ParserHW_exprlist(hw_State *hw, hw_ParserHW *parser);
+const hw_u32Arr *hw_ParserHW_exprlist_get(hw_ParserHW *parser, hw_u32 id);
+
 /************************************************************************
  *                              Debug                                   *
  ************************************************************************/
@@ -736,6 +741,7 @@ void hw_debug_print_symtable_ord(hw_State *hw, hw_SymTableOrd *table);
 void hw_debug_print_cmod(hw_State *hw, hw_CModule* cmod);
 void hw_debug_print_context(hw_byte const *source, hw_u32 source_size
                           , hw_u32 context, hw_u32 context_size);
+void hw_debug_CModule_print(hw_State *hw, hw_CModule *cm);
 
 /************************************************************************
  *                              Section: Undef                          *
